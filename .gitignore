@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+
+# Rust / Tauri
+src-tauri/target
+src-tauri/gen
+
+# Local scratch scripts (the phase suites are tracked on purpose)
+*-dbg.tmp.mjs

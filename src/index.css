@@ -1,0 +1,319 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Fonts — Inter (FR default) / Noto Sans Arabic (AR + RTL)
+   Loaded via <link> in index.html (Google Fonts). Fallbacks are declared here
+   so the app still renders correctly offline.
+--------------------------------------------------------------------------- */
+@layer base {
+  html[dir='ltr'] {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  html[dir='rtl'],
+  html[lang='ar'] {
+    font-family: 'Noto Sans Arabic', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 400;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  /* Page titles */
+  h1 {
+    @apply text-h1 text-foreground;
+  }
+
+  /* Section titles */
+  h2 {
+    @apply text-h2 text-foreground;
+  }
+
+  /* Form labels */
+  label {
+    @apply text-label text-muted;
+  }
+
+  /* Keyboard focus */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary/40 ring-offset-2 ring-offset-background;
+  }
+
+  /* Native controls inherit the app font */
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  /* Subtle scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Cards */
+  .card {
+    @apply rounded-lg border border-border bg-white shadow-sm;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-btn font-medium
+           transition-colors disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary/90;
+  }
+  .btn-destructive {
+    @apply bg-destructive text-white hover:bg-destructive/90;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .badge-success {
+    @apply bg-success/10 text-success;
+  }
+  .badge-warning {
+    @apply bg-warning/10 text-warning;
+  }
+  .badge-destructive {
+    @apply bg-destructive/10 text-destructive;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Feedback animations
+--------------------------------------------------------------------------- */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(8px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Loading skeletons (Phase 7 dashboard)
+
+   A shimmering grey block: the highlight sweeps across the placeholder from the
+   start edge to the end edge, so it mirrors itself in RTL documents.
+--------------------------------------------------------------------------- */
+.skeleton {
+  @apply rounded-md bg-slate-200/70;
+  background-image: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0) 0%,
+    rgba(248, 250, 252, 0.9) 50%,
+    rgba(226, 232, 240, 0) 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 50% 100%;
+  background-position-x: -100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+[dir='rtl'] .skeleton {
+  animation-direction: reverse;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position-x: -100%;
+  }
+  100% {
+    background-position-x: 200%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Micro-interactions (Phase 8)
+
+   All of them are transform/opacity only, so they stay cheap on the modest
+   hardware a centre office tends to run, and all of them are direction
+   agnostic (no left/right), so Arabic mirrors them for free.
+--------------------------------------------------------------------------- */
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+.modal-enter {
+  animation: modalIn 0.2s ease-out;
+}
+
+.modal-exit {
+  animation: modalOut 0.15s ease-in;
+}
+
+/* Sliding underline of the tab bars (transform + width only).
+   The underline grows from the start edge of the tab, which is the right edge
+   in Arabic. */
+.tab-indicator {
+  transform-origin: left center;
+  transition:
+    transform 0.2s ease,
+    width 0.2s ease;
+  animation: tabUnderlineIn 0.2s ease-out;
+}
+
+[dir='rtl'] .tab-indicator {
+  transform-origin: right center;
+}
+
+@keyframes tabUnderlineIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* Late invoices badge: a red halo that keeps pulsing while something is late. */
+@keyframes pulse-red {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+
+.badge-alert {
+  animation: pulse-red 2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-press:active,
+  .modal-enter,
+  .modal-exit,
+  .badge-alert,
+  .tab-indicator {
+    animation: none;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Printing — only the receipt is sent to the printer
+--------------------------------------------------------------------------- */
+@media print {
+  /* Nothing of the app shell reaches the paper: the receipt preview (an inline
+     PDF) is the only visible block, pinned to the top-start corner of the
+     sheet. The modal is a portal, so it is flattened back into the page. */
+  body * {
+    visibility: hidden;
+  }
+
+  .receipt-print,
+  .receipt-print * {
+    visibility: visible;
+  }
+
+  .receipt-print {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    width: 100%;
+    height: auto !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* The inline PDF viewer is an <iframe>: without an explicit height the print
+     engine collapses it to zero. */
+  .receipt-print iframe {
+    width: 100% !important;
+    height: 260mm !important;
+    border: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  [role='dialog'] {
+    position: fixed !important;
+    inset: 0 !important;
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  [role='dialog'] > div:last-child {
+    width: 100% !important;
+    max-width: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}
