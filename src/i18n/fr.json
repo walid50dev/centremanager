@@ -598,7 +598,8 @@
     "emptyHint": "Ajoutez des jours de cours à vos groupes, ou élargissez les filtres.",
     "loading": "Chargement de l'emploi du temps…",
     "showSunday": "Afficher dimanche",
-    "free": "libre"
+    "free": "libre",
+    "tooltipGroup": "Groupe"
   },
   "enrollment": {
     "title": "Inscription",
