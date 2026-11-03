@@ -173,7 +173,7 @@ const SELECT_TEACHER: &str = "
                )
            ), ''),
            (SELECT COUNT(*) FROM groups g
-             WHERE g.teacher_id = t.id AND g.status = 'actif'),
+             WHERE g.teacher_id = t.id AND g.deleted_at IS NULL AND g.status = 'actif'),
            t.compensation_mode,
            t.compensation_value_cents,
            t.bonus_pct,
@@ -242,7 +242,7 @@ pub fn list_teachers(conn: &Connection, status: Option<&str>) -> Result<Vec<Teac
 
     let sql = format!(
         "{SELECT_TEACHER}
-         WHERE (?1 IS NULL OR COALESCE(t.status, 'actif') = ?1)
+         WHERE t.deleted_at IS NULL AND (?1 IS NULL OR COALESCE(t.status, 'actif') = ?1)
          ORDER BY t.full_name COLLATE NOCASE ASC"
     );
     let mut stmt = conn
@@ -257,7 +257,7 @@ pub fn list_teachers(conn: &Connection, status: Option<&str>) -> Result<Vec<Teac
 
 fn teacher_by_id(conn: &Connection, id: i64) -> Result<TeacherRow, String> {
     conn.query_row(
-        &format!("{SELECT_TEACHER} WHERE t.id = ?1"),
+        &format!("{SELECT_TEACHER} WHERE t.id = ?1 AND t.deleted_at IS NULL"),
         params![id],
         map_teacher,
     )

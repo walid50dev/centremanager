@@ -83,7 +83,8 @@ pub fn generate_monthly_invoices(conn: &Connection, month: i32, year: i32) -> Re
                 "SELECT e.id, e.start_date, g.monthly_fee_cents
                  FROM enrollments e
                  JOIN groups g ON g.id = e.group_id
-                 WHERE COALESCE(e.status, 'actif') = 'actif'
+                 JOIN students st ON st.id = e.student_id
+                 WHERE g.deleted_at IS NULL AND st.deleted_at IS NULL AND COALESCE(e.status, 'actif') = 'actif'
                  ORDER BY e.id",
             )
             .map_err(|err| db_err("Lecture des inscriptions", err))?;
@@ -251,7 +252,7 @@ pub fn payment_alerts_on(
              JOIN groups g      ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
-             WHERE i.period_month = ?1 AND i.period_year = ?2
+             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND i.period_month = ?1 AND i.period_year = ?2
              ORDER BY s.id, i.due_date, i.id",
         )
         .map_err(|err| db_err("Lecture des factures", err))?;
@@ -430,11 +431,15 @@ fn last_payment_of_month(
 pub fn late_payment_count_on(conn: &Connection, reference_day: NaiveDate) -> Result<i64, String> {
     conn.query_row(
         "SELECT COUNT(*)
-         FROM invoices
-         WHERE COALESCE(status, 'impayé') <> 'payé'
-           AND COALESCE(paid_amount_cents, 0) < amount_cents
-           AND COALESCE(due_date, '') <> ''
-           AND due_date < ?1",
+         FROM invoices i
+         JOIN enrollments e ON e.id = i.enrollment_id
+         JOIN students s ON s.id = e.student_id
+         JOIN groups g ON g.id = e.group_id
+         WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL
+           AND COALESCE(i.status, 'impayé') <> 'payé'
+           AND COALESCE(i.paid_amount_cents, 0) < i.amount_cents
+           AND COALESCE(i.due_date, '') <> ''
+           AND i.due_date < ?1",
         params![reference_day.format("%Y-%m-%d").to_string()],
         |row| row.get(0),
     )

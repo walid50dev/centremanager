@@ -383,14 +383,7 @@ export function ExpensesPage() {
       <ConfirmDialog
         open={Boolean(deleting)}
         title={t('expenses.deleteTitle')}
-        message={
-          deleting
-            ? t('expenses.confirmDelete', {
-                label: deleting.label,
-                amount: formatCurrency(deleting.amount_cents),
-              })
-            : ''
-        }
+        message={t('trash.confirm_delete')}
         confirmLabel={t('expenses.delete')}
         cancelLabel={t('common.cancel')}
         destructive

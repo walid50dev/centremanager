@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { trashApi, TRASH_CHANGED } from '../../services/trash';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,6 +12,7 @@ import {
   Receipt,
   Settings,
   Users,
+  Trash2,
   Wallet,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -32,6 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/payments', labelKey: 'sidebar.payments', icon: Wallet },
   // Phase 11 — the monthly charges, right after the money that comes in.
   { to: '/expenses', labelKey: 'sidebar.expenses', icon: Receipt },
+  { to: '/trash', labelKey: 'nav.trash', icon: Trash2 },
   { to: '/settings', labelKey: 'sidebar.settings', icon: Settings },
 ];
 
@@ -39,6 +43,14 @@ export function Sidebar() {
   const { t } = useTranslation();
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const [trashCount, setTrashCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void trashApi.list().then(items => { if (active) setTrashCount(items.length); }).catch(() => {}); };
+    window.addEventListener(TRASH_CHANGED, refresh);
+    void trashApi.purge().then(refresh).catch(refresh);
+    return () => { active = false; window.removeEventListener(TRASH_CHANGED, refresh); };
+  }, []);
   const latePaymentCount = useAppStore((state) => state.latePaymentCount);
 
   return (
@@ -88,6 +100,7 @@ export function Sidebar() {
                 >
                   <span className="relative flex shrink-0 items-center justify-center">
                     <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                    {item.to === '/trash' && trashCount > 0 ? <span data-testid="sidebar-trash-badge" aria-label={`${trashCount} ${t('trash.title')}`} className="absolute -top-1.5 end-0 flex h-[15px] min-w-[15px] translate-x-1/2 items-center justify-center rounded-full bg-destructive px-1 text-[9px] text-white rtl:-translate-x-1/2">{trashCount > 99 ? '99+' : trashCount}</span> : null}
                     {item.to === '/payments' && latePaymentCount > 0 ? (
                       <span
                         data-testid="sidebar-late-badge"

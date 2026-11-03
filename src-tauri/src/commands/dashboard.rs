@@ -174,19 +174,19 @@ pub fn dashboard_kpis(conn: &Connection, month: i32, year: i32) -> Result<Dashbo
 
     let total_active_students = scalar(
         conn,
-        "SELECT COUNT(*) FROM students WHERE COALESCE(status, 'actif') = 'actif'",
+        "SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'",
         &[],
     )?;
     let monthly_revenue_cents = revenue_of(conn, month, year)?;
     let theoretical_revenue_cents = theoretical_of(conn, month, year)?;
     let active_groups = scalar(
         conn,
-        "SELECT COUNT(*) FROM groups WHERE COALESCE(status, 'actif') = 'actif'",
+        "SELECT COUNT(*) FROM groups WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'",
         &[],
     )?;
     let active_teachers = scalar(
         conn,
-        "SELECT COUNT(*) FROM teachers WHERE COALESCE(status, 'actif') = 'actif'",
+        "SELECT COUNT(*) FROM teachers WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'",
         &[],
     )?;
     let prev_month_revenue_cents = revenue_of(conn, prev_month, prev_year)?;
@@ -261,7 +261,7 @@ pub fn dashboard_alerts_on(
              LEFT JOIN groups g   ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
-             WHERE COALESCE(i.status, 'impayé') <> 'payé'
+             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND COALESCE(i.status, 'impayé') <> 'payé'
                AND COALESCE(i.paid_amount_cents, 0) < i.amount_cents
                AND i.due_date IS NOT NULL
                AND date(i.due_date) BETWEEN date(?1) AND date(?2)

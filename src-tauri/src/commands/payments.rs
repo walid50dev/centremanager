@@ -62,7 +62,7 @@ pub fn record_payment(
 
     let student_exists: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ?1)",
+            "SELECT EXISTS(SELECT 1 FROM students WHERE id = ?1 AND deleted_at IS NULL)",
             params![student_id],
             |row| row.get(0),
         )

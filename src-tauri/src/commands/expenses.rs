@@ -253,7 +253,7 @@ pub fn create_expense(conn: &Connection, input: &CreateExpenseInput) -> Result<i
 /// Full row of one expense (used by the update diff and the delete snapshot).
 fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, String> {
     conn.query_row(
-        &format!("{SELECT_EXPENSE} WHERE id = ?1"),
+        &format!("{SELECT_EXPENSE} WHERE id = ?1 AND deleted_at IS NULL"),
         params![id],
         map_row,
     )
@@ -323,24 +323,9 @@ pub fn update_expense(
     log_audit(conn, "UPDATE", id, Some(Value::Object(diff).to_string()))
 }
 
-/// Delete one expense. Allowed in V1 — this is internal bookkeeping — but the
-/// deleted values are kept in the audit details so the row is recoverable.
+/// Move one expense to the reversible trash.
 pub fn delete_expense(conn: &Connection, id: i64) -> Result<(), String> {
-    let before = snapshot(conn, id)?.ok_or_else(|| "Dépense introuvable".to_string())?;
-
-    let deleted = conn
-        .execute("DELETE FROM monthly_expenses WHERE id = ?1", params![id])
-        .map_err(|err| db_err("Suppression de la dépense", err))?;
-    if deleted == 0 {
-        return Err("Dépense introuvable".to_string());
-    }
-
-    log_audit(
-        conn,
-        "DELETE",
-        id,
-        Some(json!({ "deleted": before }).to_string()),
-    )
+    super::trash::delete_to_trash(conn, "expense", id)
 }
 
 /// One month of expenses, optionally narrowed to a single category.
@@ -358,11 +343,11 @@ pub fn list_expenses(
     let category = category.map(str::trim).filter(|value| !value.is_empty());
     let sql = match category {
         Some(_) => format!(
-            "{SELECT_EXPENSE} WHERE month = ?1 AND year = ?2 AND category = ?3
+            "{SELECT_EXPENSE} WHERE deleted_at IS NULL AND month = ?1 AND year = ?2 AND category = ?3
              ORDER BY category COLLATE NOCASE ASC, label COLLATE NOCASE ASC, id ASC"
         ),
         None => format!(
-            "{SELECT_EXPENSE} WHERE month = ?1 AND year = ?2
+            "{SELECT_EXPENSE} WHERE deleted_at IS NULL AND month = ?1 AND year = ?2
              ORDER BY category COLLATE NOCASE ASC, label COLLATE NOCASE ASC, id ASC"
         ),
     };
@@ -393,7 +378,7 @@ pub fn expenses_summary(
         .prepare(
             "SELECT category, COALESCE(SUM(amount_cents), 0), COUNT(*)
              FROM monthly_expenses
-             WHERE month = ?1 AND year = ?2
+             WHERE deleted_at IS NULL AND month = ?1 AND year = ?2
              GROUP BY category
              ORDER BY SUM(amount_cents) DESC, category COLLATE NOCASE ASC",
         )
@@ -425,7 +410,7 @@ pub fn expenses_summary(
 pub fn month_total(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
     conn.query_row(
         "SELECT COALESCE(SUM(amount_cents), 0) FROM monthly_expenses
-          WHERE month = ?1 AND year = ?2",
+          WHERE deleted_at IS NULL AND month = ?1 AND year = ?2",
         params![month, year],
         |row| row.get(0),
     )
@@ -681,15 +666,10 @@ mod tests {
         delete_expense(&conn, id).unwrap();
         assert_eq!(list_expenses(&conn, 11, 2026, None).unwrap().len(), 0);
 
-        let deleted: String = conn
-            .query_row(
-                "SELECT details FROM audit_log
-                  WHERE entity_type = 'expense' AND action = 'DELETE' AND entity_id = ?1",
-                params![id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert!(deleted.contains("Facture WiFi Novembre"), "snapshot kept");
+        let deleted: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM audit_log WHERE entity_type = 'expense' AND action = 'TRASH' AND entity_id = ?1",
+            params![id], |row| row.get(0)).unwrap();
+        assert_eq!(deleted, 1);
 
         // Deleting twice is an error, not a silent success.
         assert!(delete_expense(&conn, id).is_err());

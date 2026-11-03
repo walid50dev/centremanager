@@ -1108,5 +1108,40 @@
   "keyboard": {
     "search": "Rechercher (Ctrl+K)",
     "lock": "Verrouiller (Ctrl+L)"
+  },
+  "trash": {
+    "title": "Corbeille",
+    "empty": "La corbeille est vide.",
+    "empty_action": "Vider la corbeille",
+    "restore": "Restaurer",
+    "delete": "Supprimer",
+    "delete_permanently": "Supprimer définitivement",
+    "confirm_delete": "Êtes-vous sûr ? L’élément sera déplacé vers la corbeille. Après 30 jours, il sera supprimé définitivement sauf s’il possède un historique financier.",
+    "confirm_empty": "Supprimer définitivement les éléments sans historique financier ? Les éléments financiers seront conservés.",
+    "confirm_permanent": "Supprimer définitivement cet élément ? Cette action est irréversible.",
+    "days_remaining": "Jours restants",
+    "days_count_one": "{{count}} jour",
+    "days_count_other": "{{count}} jours",
+    "type_student": "Élève",
+    "type_teacher": "Enseignant",
+    "type_group": "Groupe",
+    "type_expense": "Dépense",
+    "type": "Type",
+    "name": "Nom",
+    "deleted_at": "Date de suppression",
+    "actions": "Actions",
+    "retention": "Les éléments sont conservés 30 jours. Les historiques financiers restent protégés et restaurables.",
+    "preserved": "Conservé pour historique financier",
+    "financial_warning": "Sera conservé pour historique financier",
+    "moved": "Déplacé vers la corbeille",
+    "restored": "Élément restauré",
+    "purged": "Corbeille mise à jour",
+    "days_count_zero": "{{count}} jour",
+    "days_count_two": "{{count}} jours",
+    "days_count_few": "{{count}} jours",
+    "days_count_many": "{{count}} jours"
+  },
+  "nav": {
+    "trash": "Corbeille"
   }
 }

@@ -19,12 +19,22 @@ fn main() {
                 std::io::Error::other(err)
             })?;
 
+            let purged = commands::trash::purge_expired(&connection)
+                .map_err(std::io::Error::other)?;
+            eprintln!("[CentreManager] Corbeille : {purged} élément(s) purgé(s)");
+
             // Share the connection with future commands via `State<db::Db>`.
             app.manage(db::Db::new(connection));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::cmd_ping,
+            commands::trash::cmd_delete_to_trash,
+            commands::trash::cmd_list_trash,
+            commands::trash::cmd_restore_from_trash,
+            commands::trash::cmd_purge_trash,
+            commands::trash::cmd_delete_permanently,
+            commands::trash::cmd_empty_trash,
             // Authentication & session security
             commands::auth::cmd_check_setup,
             commands::auth::cmd_setup,

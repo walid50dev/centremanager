@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS students (
     notes TEXT,
     status TEXT DEFAULT 'actif',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT
 );
 
 -- 7. teachers
@@ -83,7 +84,8 @@ CREATE TABLE IF NOT EXISTS teachers (
     compensation_value_cents INTEGER,
     bonus_pct                REAL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TEXT
 );
 
 -- 8. teacher_subjects — n:n teachers <-> subjects
@@ -107,7 +109,8 @@ CREATE TABLE IF NOT EXISTS groups (
     room              TEXT,
     monthly_fee_cents INTEGER NOT NULL,
     capacity          INTEGER NOT NULL,
-    status            TEXT DEFAULT 'actif'
+    status            TEXT DEFAULT 'actif',
+    deleted_at        TEXT
 );
 
 -- 10. enrollments — students enrolled in groups
@@ -221,7 +224,8 @@ CREATE TABLE IF NOT EXISTS monthly_expenses (
     year         INTEGER NOT NULL,
     notes        TEXT,
     created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at   TEXT DEFAULT CURRENT_TIMESTAMP
+    updated_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+    deleted_at   TEXT
 );
 
 
