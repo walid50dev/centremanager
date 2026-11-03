@@ -5,6 +5,7 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import MoneyInput from '../ui/MoneyInput';
+import NumberInput from '../ui/NumberInput';
 import Select from '../ui/Select';
 import { toast } from '../ui/Toast';
 import { compensationApi } from '../../services/teachers';
@@ -144,31 +145,22 @@ export function CompensationConfigCard({
         />
 
         {mode === 'percentage' ? (
-          <div>
-            <label htmlFor="comp-pct" className="mb-1.5 block text-label text-muted">
-              {valueLabel}
-            </label>
-            <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-white px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
-              <input
-                id="comp-pct"
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={amountCents === 0 ? '' : amountCents / 100}
-                onChange={(event) => {
-                  const parsed = Number.parseFloat(event.target.value);
-                  setAmountCents(Number.isFinite(parsed) ? Math.round(parsed * 100) : 0);
-                }}
-                className="h-full w-full bg-transparent text-end text-body tabular-nums focus:outline-none"
-                data-testid="comp-pct"
-              />
-              <span className="text-[13px] font-medium text-muted">%</span>
-            </div>
-            {!percentageValid && amountCents > 10_000 ? (
-              <p className="mt-1 text-[13px] text-destructive">{t('teachers.validation.pctRange')}</p>
-            ) : null}
-          </div>
+          <NumberInput
+            id="comp-pct"
+            label={valueLabel}
+            data-testid="comp-pct"
+            decimals={1}
+            min={0}
+            max={100}
+            step={0.5}
+            suffix={t('common.suffix.percent')}
+            /* The percentage lives in centimes-like hundredths in the API. */
+            value={amountCents / 100}
+            onChange={(next) => setAmountCents(Math.round(next * 100))}
+            error={
+              !percentageValid && amountCents > 10_000 ? t('teachers.validation.pctRange') : undefined
+            }
+          />
         ) : (
           <MoneyInput
             label={valueLabel}
@@ -196,30 +188,19 @@ export function CompensationConfigCard({
 
         {bonusOn ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <div>
-              <label htmlFor="comp-bonus" className="mb-1.5 block text-label text-muted">
-                {t('teachers.bonusPct')}
-              </label>
-              <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-white px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
-                <input
-                  id="comp-bonus"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={bonusPct}
-                  onChange={(event) => setBonusPct(event.target.value)}
-                  className="h-full w-full bg-transparent text-end text-body tabular-nums focus:outline-none"
-                  data-testid="comp-bonus-pct"
-                />
-                <span className="text-[13px] font-medium text-muted">%</span>
-              </div>
-              {!bonusValid && !bonusEmpty ? (
-                <p className="mt-1 text-[13px] text-destructive">
-                  {t('teachers.validation.pctRange')}
-                </p>
-              ) : null}
-            </div>
+            <NumberInput
+              id="comp-bonus"
+              label={t('teachers.bonusPct')}
+              data-testid="comp-bonus-pct"
+              decimals={1}
+              min={0}
+              max={100}
+              step={0.5}
+              suffix={t('common.suffix.percent')}
+              value={bonusPct.trim() === '' ? Number.NaN : Number(bonusPct)}
+              onChange={(next) => setBonusPct(Number.isFinite(next) ? String(next) : '')}
+              error={!bonusValid && !bonusEmpty ? t('teachers.validation.pctRange') : undefined}
+            />
             <p className="self-end pb-1 text-[12px] leading-5 text-muted">
               {t('teachers.bonusHint')}
             </p>

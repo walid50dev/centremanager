@@ -48,8 +48,15 @@ export const studentsApi = {
 /** Moroccan mobile numbers: 10 digits starting with 06 or 07. */
 export const PHONE_PATTERN = /^0[67]\d{8}$/;
 
+/**
+ * Validate a Moroccan mobile number, ignoring the cosmetic separators.
+ *
+ * Students (and parents) type `06 07 12 34 56` or `06-07-12-34-56` as often as
+ * `0607123456`, so the spaces/dashes are stripped before matching — the same
+ * normalisation the Rust command (`students::normalise_phone`) performs.
+ */
 export function isValidPhone(value: string): boolean {
-  return PHONE_PATTERN.test(value.trim());
+  return PHONE_PATTERN.test(value.replace(/[\s-]/g, ''));
 }
 
 export default studentsApi;

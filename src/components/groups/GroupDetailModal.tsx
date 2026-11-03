@@ -11,7 +11,7 @@ import EnrollmentModal from '../enrollments/EnrollmentModal';
 import GroupModal from './GroupModal';
 import { groupsApi, occupancyTone } from '../../services/groups';
 import { enrollmentsApi } from '../../services/enrollments';
-import { cn, formatCurrency, formatDate } from '../../utils/format';
+import { cn, formatCurrency, formatDate, formatPhone } from '../../utils/format';
 import { groupSchedule, groupTitle } from '../../utils/schedule';
 import type { GroupDetail } from '../../types';
 
@@ -246,7 +246,7 @@ export function GroupDetailModal({ open, groupId, onClose, onRefresh }: GroupDet
                       <tr key={student.enrollment_id} className="border-t border-border">
                         <td className="px-4 py-2.5 font-medium text-foreground">{student.student_name}</td>
                         <td className="px-4 py-2.5 text-muted" dir="ltr">
-                          {student.student_phone || '—'}
+                          {formatPhone(student.student_phone)}
                         </td>
                         <td className="px-4 py-2.5 text-muted">{formatDate(student.start_date)}</td>
                         <td className="px-4 py-2.5 text-end">

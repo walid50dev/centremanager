@@ -8,6 +8,7 @@ import {
   ChevronRight,
   FilePlus2,
   RefreshCw,
+  UserPlus,
 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -18,7 +19,7 @@ import { toast } from '../components/ui/Toast';
 import { LATE_PAYMENTS_EVENT } from '../stores/appStore';
 import { invoicesApi } from '../services/invoices';
 import { currentPeriod } from '../services/payments';
-import { cn, formatCurrency, formatDate, formatDateTime } from '../utils/format';
+import { cn, formatCurrency, formatDate, formatDateTime, formatPhone } from '../utils/format';
 import { methodLabel, monthLabel } from '../utils/billing';
 import type { InvoiceAlert, PaymentAlerts } from '../types';
 
@@ -95,7 +96,7 @@ export function PaymentsPage() {
     }
   };
 
-  const startPayment = (studentId: number) => {
+  const startPayment = (studentId: number | null) => {
     setPayingStudent(studentId);
     setPaymentOpen(true);
   };
@@ -175,6 +176,16 @@ export function PaymentsPage() {
             title={t('common.refresh')}
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          {/* Phase 12: opens the wizard on its first step, where a student can
+              be searched — or created — before any invoice exists. */}
+          <Button
+            variant="secondary"
+            leftIcon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
+            onClick={() => startPayment(null)}
+            data-testid="payments-new"
+          >
+            {t('payments.newPayment')}
           </Button>
           <Button
             leftIcon={<FilePlus2 className="h-4 w-4" aria-hidden="true" />}
@@ -314,8 +325,8 @@ export function PaymentsPage() {
                           {section.rows.map((row) => (
                             <tr key={row.student_id} className="border-t border-border">
                               <td className="px-4 py-2 font-medium text-foreground">{row.student_name}</td>
-                              <td className="px-4 py-2 text-muted" dir="ltr">
-                                {row.student_phone}
+                              <td className="px-4 py-2 tabular-nums text-muted" dir="ltr">
+                                {formatPhone(row.student_phone)}
                               </td>
                               <td className="max-w-[22rem] px-4 py-2 text-muted">{row.groups || '—'}</td>
                               <td className="px-4 py-2 text-end font-semibold tabular-nums">

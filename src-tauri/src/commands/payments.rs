@@ -515,7 +515,9 @@ pub fn create_receipt(conn: &Connection, payment_id: i64) -> Result<i64, String>
 
 /// Everything printed on a receipt: frozen row + centre identity.
 pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, String> {
-    let row: Option<(String, String, i64, String, String, String, Option<i64>)> = conn
+    // (number, student, amount, date, groups, centre, payment id)
+    type ReceiptRow = (String, String, i64, String, String, String, Option<i64>);
+    let row: Option<ReceiptRow> = conn
         .query_row(
             "SELECT COALESCE(receipt_number, ''),
                     COALESCE(student_name, ''),
@@ -708,6 +710,7 @@ mod tests {
                 room: None,
                 monthly_fee_cents: fee,
                 capacity: 20,
+                schedules: None,
             },
         )
         .unwrap()

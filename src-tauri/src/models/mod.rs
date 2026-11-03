@@ -76,9 +76,10 @@ pub struct Student {
     pub date_of_birth: Option<String>,
     pub phone: Option<String>,
     pub parent_phone: Option<String>,
+    pub father_name: Option<String>,
     pub level_id: Option<i64>,
     pub branch_id: Option<i64>,
-    pub address: Option<String>,
+    pub home_address: Option<String>,
     pub notes: Option<String>,
     pub status: Option<String>,
     pub created_at: Option<String>,
@@ -285,11 +286,12 @@ pub struct StudentRow {
     pub date_of_birth: Option<String>,
     pub phone: String,
     pub parent_phone: Option<String>,
+    pub father_name: Option<String>,
     pub level_id: Option<i64>,
     pub level_name: Option<String>,
     pub branch_id: Option<i64>,
     pub branch_name: Option<String>,
-    pub address: Option<String>,
+    pub home_address: Option<String>,
     pub notes: Option<String>,
     pub status: String,
     pub created_at: String,
@@ -331,6 +333,19 @@ pub struct StudentDetail {
 // Phase 4 — groups & enrollments
 // ---------------------------------------------------------------------------
 
+/// One weekly slot of a group (Phase 13).
+///
+/// `id` is 0 for a schedule that has not been persisted yet (the payload the
+/// form sends back); the readers always fill it in.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GroupSchedule {
+    #[serde(default)]
+    pub id: i64,
+    pub day_of_week: String,
+    pub start_time: String,
+    pub end_time: String,
+}
+
 /// A group row enriched with every joined label the UI needs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupRow {
@@ -354,6 +369,13 @@ pub struct GroupRow {
     /// Active enrollments in this group.
     pub enrolled_count: i64,
     pub status: String,
+    /// Every weekly slot, in school-week order (Phase 13). Empty on a legacy row
+    /// that predates the backfill.
+    #[serde(default)]
+    pub schedules: Vec<GroupSchedule>,
+    /// Untranslated summary built from `schedules`: `"Lun 16-18, Mer 14-16"`.
+    #[serde(default)]
+    pub schedule_text: String,
 }
 
 /// A student enrolled in a group, as listed in the group sheet.
@@ -662,6 +684,14 @@ pub struct DashboardKPIs {
     pub prev_month_revenue_cents: i64,
     /// Students holding an active enrollment during the previous month.
     pub prev_month_students: i32,
+    /// Charges paid for the month (`monthly_expenses`, Phase 11).
+    pub total_expenses_cents: i64,
+    /// Payroll of the month: the sum of every configured teacher's total.
+    pub total_compensation_cents: i64,
+    /// `revenue - expenses - compensation` — the real profit of the month.
+    pub net_income_cents: i64,
+    /// Same arithmetic one month earlier, for the net-income trend arrow.
+    pub prev_month_net_income_cents: i64,
 }
 
 /// One invoice due in the ±7 day window of the dashboard.

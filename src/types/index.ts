@@ -74,6 +74,14 @@ export interface TeacherSubject {
  * Phase 4 group: every label is joined by the backend, `enrolled_count` is
  * computed from the active enrollments (never stored).
  */
+/** One weekly slot of a group (Phase 13). */
+export interface GroupSchedule {
+  id: number;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+}
+
 export interface Group {
   id: number;
   subject_id: number | null;
@@ -85,6 +93,7 @@ export interface Group {
   teacher_id: number | null;
   teacher_name: string | null;
   school_year_id: number | null;
+  /** Legacy single slot — kept for older rows, mirrors `schedules[0]`. */
   day_of_week: string;
   start_time: string;
   end_time: string;
@@ -94,6 +103,10 @@ export interface Group {
   capacity: number;
   enrolled_count: number;
   status: string;
+  /** Every weekly slot, in school-week order. */
+  schedules: GroupSchedule[];
+  /** Untranslated summary, e.g. `Lun 16-18, Mer 14-16`. */
+  schedule_text: string;
 }
 
 /** Payload for `cmd_create_group` / `cmd_update_group`. */
@@ -103,9 +116,12 @@ export interface GroupInput {
   branch_id: number | null;
   teacher_id: number | null;
   school_year_id: number;
+  /** Legacy single slot — the backend mirrors `schedules[0]` into it. */
   day_of_week: string;
   start_time: string;
   end_time: string;
+  /** The whole week; wins over the single slot when present. */
+  schedules?: GroupSchedule[];
   room: string | null;
   monthly_fee_cents: number;
   capacity: number;
@@ -273,11 +289,14 @@ export interface Student {
   date_of_birth: string | null;
   phone: string;
   parent_phone: string | null;
+  /** Father's name — identifies minors and is printed on receipts. */
+  father_name: string | null;
   level_id: number | null;
   level_name: string | null;
   branch_id: number | null;
   branch_name: string | null;
-  address: string | null;
+  /** Home address ("adresse maison"); replaced the old free-form address. */
+  home_address: string | null;
   notes: string | null;
   status: 'actif' | 'inactif';
   created_at: string;
@@ -314,11 +333,13 @@ export interface StudentDetail {
 export interface StudentInput {
   full_name: string;
   date_of_birth: string | null;
+  /** Raw digits only — the UI strips the spaces before sending. */
   phone: string;
   parent_phone: string | null;
+  father_name: string | null;
   level_id: number | null;
   branch_id: number | null;
-  address: string | null;
+  home_address: string | null;
   notes: string | null;
 }
 
@@ -564,6 +585,54 @@ export interface DashboardKPIs {
   prev_month_revenue_cents: number;
   /** Students holding an active enrollment during the previous month. */
   prev_month_students: number;
+  /** Charges of the month (`monthly_expenses`), Phase 11. */
+  total_expenses_cents: number;
+  /** Payroll of the month: the sum of every configured teacher's total. */
+  total_compensation_cents: number;
+  /** `revenue - expenses - compensation` — the real profit of the month. */
+  net_income_cents: number;
+  /** Same arithmetic one month earlier, for the net-income trend. */
+  prev_month_net_income_cents: number;
+}
+
+// ---------------------------------------------------------------------------
+// Monthly expenses (Phase 11)
+// ---------------------------------------------------------------------------
+
+/** One charge of a month: rent, WiFi, electricity, supplies… */
+export interface Expense {
+  id: number;
+  label: string;
+  amount_cents: number;
+  category: string;
+  month: number;
+  year: number;
+  notes: string | null;
+  created_at: string;
+}
+
+/** Payload of `cmd_create_expense` / `cmd_update_expense`. */
+export interface ExpenseInput {
+  label: string;
+  amount_cents: number;
+  category: string;
+  month: number;
+  year: number;
+  notes: string | null;
+}
+
+/** Totals of one category for a month. */
+export interface CategoryTotal {
+  category: string;
+  total_cents: number;
+  count: number;
+}
+
+/** Month summary returned by `cmd_get_expenses_summary`. */
+export interface ExpensesSummary {
+  total_cents: number;
+  by_category: CategoryTotal[];
+  count: number;
 }
 
 /** One invoice due in the ±7 day window of the dashboard. */
@@ -586,4 +655,28 @@ export interface RecentPayment {
   amount_cents: number;
   payment_method: string;
   created_at: string;
+}
+
+/** One block of the weekly timetable (Phase 13). */
+export interface TimetableEntry {
+  group_id: number;
+  subject_name: string;
+  level_name: string;
+  branch_name: string | null;
+  teacher_name: string | null;
+  room: string | null;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  enrolled_count: number;
+  capacity: number;
+  monthly_fee_cents: number;
+}
+
+/** Server-side filters for `cmd_get_timetable`; `null` means "all". */
+export interface TimetableFilters {
+  level_id: number | null;
+  subject_id: number | null;
+  teacher_id: number | null;
+  room: string | null;
 }

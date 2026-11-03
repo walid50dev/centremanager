@@ -484,6 +484,7 @@ mod tests {
             room: None,
             monthly_fee_cents: fee,
             capacity,
+            schedules: None,
         };
         create_group(conn, &input).unwrap()
     }

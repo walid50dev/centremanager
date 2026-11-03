@@ -1,0 +1,2059 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 93eb8d7..76a24ba 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
+ import ErrorBoundary from './components/ErrorBoundary';
+ import AppLayout from './components/layout/AppLayout';
+ import ToastViewport from './components/ui/Toast';
++import BilanPage from './pages/BilanPage';
+ import DashboardPage from './pages/DashboardPage';
+ import DevCrashPage from './pages/DevCrashPage';
+ import ExpensesPage from './pages/ExpensesPage';
+@@ -86,6 +87,15 @@ export function App() {
+               </ErrorBoundary>
+             }
+           />
++          {/* Phase 14 — the annual summary, right after the dashboard. */}
++          <Route
++            path="/bilan"
++            element={
++              <ErrorBoundary key="bilan" scope="bilan">
++                <BilanPage />
++              </ErrorBoundary>
++            }
++          />
+           <Route
+             path="/students"
+             element={
+diff --git a/src/components/layout/Sidebar.tsx b/src/components/layout/Sidebar.tsx
+index 4ed059a..8ae33af 100644
+--- a/src/components/layout/Sidebar.tsx
++++ b/src/components/layout/Sidebar.tsx
+@@ -1,6 +1,7 @@
+ import { NavLink } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+ import {
++  BarChart3,
+   BookOpen,
+   Calendar,
+   GraduationCap,
+@@ -24,6 +25,8 @@ interface NavItem {
+ 
+ export const NAV_ITEMS: NavItem[] = [
+   { to: '/', labelKey: 'sidebar.dashboard', icon: LayoutDashboard, end: true },
++  // Phase 14 — the annual summary, one click from the dashboard.
++  { to: '/bilan', labelKey: 'sidebar.bilan', icon: BarChart3 },
+   { to: '/students', labelKey: 'sidebar.students', icon: Users },
+   { to: '/groups', labelKey: 'sidebar.groups', icon: BookOpen },
+   // Phase 13 — the week at a glance, next to the groups it is built from.
+diff --git a/src/components/settings/RentreeWizardModal.tsx b/src/components/settings/RentreeWizardModal.tsx
+new file mode 100644
+index 0000000..7b67f56
+--- /dev/null
++++ b/src/components/settings/RentreeWizardModal.tsx
+@@ -0,0 +1,647 @@
++import { useCallback, useEffect, useMemo, useState } from 'react';
++import { useTranslation } from 'react-i18next';
++import { AlertTriangle, CheckCircle2, GraduationCap, Rocket } from 'lucide-react';
++import Button from '../ui/Button';
++import Input from '../ui/Input';
++import Modal from '../ui/Modal';
++import { toast } from '../ui/Toast';
++import { schoolYearsApi } from '../../services/settings';
++import { rentreeApi } from '../../services/schoolYear';
++import { cn, formatCurrency, formatDate } from '../../utils/format';
++import type {
++  RentreeGroupSummary,
++  RentreePreview,
++  RentreeResult,
++  RentreeStudentSummary,
++  SchoolYear,
++} from '../../types';
++
++export interface RentreeWizardModalProps {
++  open: boolean;
++  onClose: () => void;
++  /** Called after a successful transition so the settings page can refresh. */
++  onDone?: () => void;
++}
++
++type Step = 1 | 2 | 3 | 4;
++
++/** `2024-2025` → `2025-2026`; falls back to the calendar. */
++function suggestLabel(years: SchoolYear[]): string {
++  const starts = years
++    .map((year) => Number((year.start_date ?? '').slice(0, 4)))
++    .filter((value) => Number.isFinite(value) && value > 2000);
++  const base = starts.length > 0 ? Math.max(...starts) : new Date().getFullYear();
++  return `${base + 1}-${base + 2}`;
++}
++
++function suggestStart(years: SchoolYear[]): string {
++  const label = suggestLabel(years);
++  return `${label.slice(0, 4)}-09-01`;
++}
++
++function suggestEnd(years: SchoolYear[]): string {
++  const label = suggestLabel(years);
++  return `${label.slice(5, 9)}-06-30`;
++}
++
++/**
++ * “Nouvelle rentrée” — the four-step school-year transition.
++ *
++ * 1. the new year (label + dates, validated before anything else);
++ * 2. the groups to carry over (pre-ticked);
++ * 3. the students to re-enroll (pre-ticked, searchable) and the date of the
++ *    new enrollments;
++ * 4. a summary with the *estimated* number of enrollments and invoices, then
++ *    the result of the single transaction the backend runs.
++ *
++ * Nothing is written before step 4: the first three steps only read.
++ */
++export function RentreeWizardModal({ open, onClose, onDone }: RentreeWizardModalProps) {
++  const { t } = useTranslation();
++
++  const [step, setStep] = useState<Step>(1);
++  const [years, setYears] = useState<SchoolYear[]>([]);
++  const [preview, setPreview] = useState<RentreePreview | null>(null);
++  const [loading, setLoading] = useState(false);
++  const [submitting, setSubmitting] = useState(false);
++  const [result, setResult] = useState<RentreeResult | null>(null);
++  const [error, setError] = useState<string | null>(null);
++
++  const [label, setLabel] = useState('');
++  const [startDate, setStartDate] = useState('');
++  const [endDate, setEndDate] = useState('');
++  const [enrollmentDate, setEnrollmentDate] = useState('');
++  const [groupIds, setGroupIds] = useState<number[]>([]);
++  const [studentIds, setStudentIds] = useState<number[]>([]);
++  const [search, setSearch] = useState('');
++
++  const reset = useCallback(
++    (yearList: SchoolYear[]) => {
++      setStep(1);
++      setResult(null);
++      setError(null);
++      setSearch('');
++      setLabel(suggestLabel(yearList));
++      setStartDate(suggestStart(yearList));
++      setEndDate(suggestEnd(yearList));
++      setEnrollmentDate(suggestStart(yearList));
++      setGroupIds([]);
++      setStudentIds([]);
++    },
++    [],
++  );
++
++  // Load the current year + everything it holds when the wizard opens.
++  useEffect(() => {
++    if (!open) return;
++    let active = true;
++    setLoading(true);
++    setPreview(null);
++    schoolYearsApi
++      .list()
++      .then(async (yearList) => {
++        if (!active) return;
++        setYears(yearList);
++        reset(yearList);
++        const current = yearList.find((year) => year.is_active) ?? yearList[0] ?? null;
++        if (!current) {
++          setError(t('rentree.noYear'));
++          return;
++        }
++        const data = await rentreeApi.preview(current.id);
++        if (!active) return;
++        setPreview(data);
++        // Everything is opt-in but pre-ticked: the director unticks what stays behind.
++        setGroupIds(data.active_groups.map((group) => group.id));
++        setStudentIds(data.active_students.map((student) => student.id));
++      })
++      .catch((caught: unknown) => {
++        if (!active) return;
++        setError(caught instanceof Error ? caught.message : String(caught));
++      })
++      .finally(() => {
++        if (active) setLoading(false);
++      });
++    return () => {
++      active = false;
++    };
++    // `reset` and `t` are stable enough for one opening.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [open]);
++
++  const groups: RentreeGroupSummary[] = preview?.active_groups ?? [];
++  const students: RentreeStudentSummary[] = preview?.active_students ?? [];
++
++  const visibleStudents = useMemo(() => {
++    const needle = search.trim().toLowerCase();
++    if (!needle) return students;
++    return students.filter(
++      (student) =>
++        student.full_name.toLowerCase().includes(needle) ||
++        student.phone.includes(needle) ||
++        (student.level_name ?? '').toLowerCase().includes(needle),
++    );
++  }, [search, students]);
++
++  const selectedGroups = useMemo(
++    () => groups.filter((group) => groupIds.includes(group.id)),
++    [groupIds, groups],
++  );
++
++  /** Enrollments the current selection will create, and their first invoices. */
++  const estimate = useMemo(() => {
++    let enrollments = 0;
++    let cents = 0;
++    students
++      .filter((student) => studentIds.includes(student.id))
++      .forEach((student) => {
++        student.group_ids.forEach((groupId) => {
++          if (!groupIds.includes(groupId)) return;
++          enrollments += 1;
++          cents += groups.find((group) => group.id === groupId)?.monthly_fee_cents ?? 0;
++        });
++      });
++    return {
++      enrollments,
++      invoices: enrollments,
++      cents,
++      students: students.filter((student) => studentIds.includes(student.id)).length,
++    };
++  }, [groupIds, groups, studentIds, students]);
++
++  // -- step 1 validation ----------------------------------------------------
++  const step1Error = useMemo(() => {
++    if (!label.trim()) return t('settings.schoolYear.labelRequired');
++    if (years.some((year) => (year.label ?? '').trim() === label.trim())) {
++      return t('settings.schoolYear.exists');
++    }
++    if (!startDate || !endDate) return t('settings.schoolYear.datesRequired');
++    if (endDate <= startDate) return t('settings.schoolYear.invalidDates');
++    return null;
++  }, [endDate, label, startDate, t, years]);
++
++  const step3Error = useMemo(() => {
++    if (!/^\d{4}-\d{2}-\d{2}$/.test(enrollmentDate)) return t('rentree.invalidDate');
++    if (studentIds.length > 0 && enrollmentDate < startDate) {
++      return t('rentree.dateBeforeYear');
++    }
++    return null;
++  }, [enrollmentDate, startDate, studentIds.length, t]);
++
++  const toggleGroup = (id: number) =>
++    setGroupIds((current) =>
++      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
++    );
++
++  const toggleStudent = (id: number) =>
++    setStudentIds((current) =>
++      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
++    );
++
++  const handleConfirm = async () => {
++    setSubmitting(true);
++    setError(null);
++    try {
++      const summary = await rentreeApi.execute({
++        new_label: label.trim(),
++        new_start: startDate,
++        new_end: endDate,
++        group_ids: groupIds,
++        student_ids: studentIds,
++        enrollment_date: enrollmentDate,
++      });
++      setResult(summary);
++      onDone?.();
++      toast.success(t('rentree.successToast', { year: label.trim() }));
++    } catch (caught) {
++      const message = caught instanceof Error ? caught.message : String(caught);
++      setError(message);
++      toast.error(message);
++    } finally {
++      setSubmitting(false);
++    }
++  };
++
++  const stepTitles = [
++    t('rentree.step1'),
++    t('rentree.step2'),
++    t('rentree.step3'),
++    t('rentree.step4'),
++  ];
++
++  const footer = result ? (
++    <Button onClick={onClose} data-testid="rentree-close">
++      {t('common.close')}
++    </Button>
++  ) : (
++    <>
++      <Button variant="secondary" onClick={onClose} disabled={submitting}>
++        {t('common.cancel')}
++      </Button>
++      {step > 1 ? (
++        <Button
++          variant="secondary"
++          onClick={() => setStep((current) => (current - 1) as Step)}
++          disabled={submitting}
++          data-testid="rentree-previous"
++        >
++          {t('common.previous')}
++        </Button>
++      ) : null}
++      {step < 4 ? (
++        <Button
++          onClick={() => setStep((current) => (current + 1) as Step)}
++          disabled={
++            (step === 1 && Boolean(step1Error)) ||
++            (step === 2 && groupIds.length === 0) ||
++            (step === 3 && (Boolean(step3Error) || studentIds.length === 0))
++          }
++          data-testid="rentree-next"
++        >
++          {t('common.next')}
++        </Button>
++      ) : (
++        <Button
++          onClick={() => void handleConfirm()}
++          loading={submitting}
++          disabled={submitting}
++          data-testid="rentree-confirm"
++        >
++          {t('rentree.confirm')}
++        </Button>
++      )}
++    </>
++  );
++
++  return (
++    <Modal
++      open={open}
++      onClose={submitting ? () => undefined : onClose}
++      size="xl"
++      testId="rentree-wizard"
++      title={
++        <span className="flex items-center gap-2">
++          <Rocket className="h-4 w-4 text-primary" aria-hidden="true" />
++          {t('rentree.title')}
++        </span>
++      }
++      description={result ? t('rentree.result.subtitle') : stepTitles[step - 1]}
++      footer={footer}
++    >
++      {loading ? (
++        <p className="py-8 text-center text-[13px] text-muted">{t('common.loading')}</p>
++      ) : result ? (
++        // ------------------------------------------------------- result ----
++        <div className="space-y-4 py-2 text-center" data-testid="rentree-result">
++          <CheckCircle2 className="mx-auto h-12 w-12 text-success" aria-hidden="true" />
++          <div>
++            <p className="text-h2 font-semibold text-foreground">{t('rentree.result.title')}</p>
++            <p className="mt-1 text-[13px] text-muted">
++              {t('rentree.result.yearCreated', { year: label.trim() })}
++            </p>
++          </div>
++          <ul className="mx-auto grid max-w-lg gap-2 text-start text-[13px]">
++            <li className="flex items-center justify-between rounded-md border border-border px-3 py-2">
++              <span className="text-muted">{t('rentree.result.groups')}</span>
++              <span className="font-semibold text-foreground" data-testid="rentree-result-groups">
++                {result.groups_created}
++              </span>
++            </li>
++            <li className="flex items-center justify-between rounded-md border border-border px-3 py-2">
++              <span className="text-muted">{t('rentree.result.students')}</span>
++              <span className="font-semibold text-foreground" data-testid="rentree-result-students">
++                {result.students_reenrolled}
++              </span>
++            </li>
++            <li className="flex items-center justify-between rounded-md border border-border px-3 py-2">
++              <span className="text-muted">{t('rentree.result.enrollments')}</span>
++              <span
++                className="font-semibold text-foreground"
++                data-testid="rentree-result-enrollments"
++              >
++                {result.enrollments_created}
++              </span>
++            </li>
++            <li className="flex items-center justify-between rounded-md border border-border px-3 py-2">
++              <span className="text-muted">{t('rentree.result.invoices')}</span>
++              <span className="font-semibold text-foreground" data-testid="rentree-result-invoices">
++                {result.invoices_generated}
++              </span>
++            </li>
++          </ul>
++        </div>
++      ) : error && !preview ? (
++        <p className="py-8 text-center text-[13px] text-destructive" role="alert">
++          {error}
++        </p>
++      ) : (
++        <div className="space-y-4">
++          {/* step indicator */}
++          <ol className="flex flex-wrap items-center gap-2 text-[12px]" data-testid="rentree-steps">
++            {stepTitles.map((title, index) => {
++              const number = (index + 1) as Step;
++              return (
++                <li
++                  key={title}
++                  className={cn(
++                    'flex items-center gap-1.5 rounded-full border px-2.5 py-1',
++                    number === step
++                      ? 'border-primary/40 bg-primary/10 font-medium text-primary'
++                      : number < step
++                        ? 'border-success/30 bg-success/10 text-success'
++                        : 'border-border text-muted',
++                  )}
++                >
++                  <span className="font-semibold">{number}</span>
++                  <span>{title}</span>
++                </li>
++              );
++            })}
++          </ol>
++
++          {error ? (
++            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive" role="alert">
++              {error}
++            </p>
++          ) : null}
++
++          {/* -------------------------------------------------- step 1 ---- */}
++          {step === 1 ? (
++            <div className="space-y-4" data-testid="rentree-step-1">
++              <div className="grid gap-3 sm:grid-cols-3">
++                <Input
++                  label={t('rentree.yearLabel')}
++                  required
++                  value={label}
++                  onChange={(event) => setLabel(event.target.value)}
++                  placeholder="2025-2026"
++                  data-testid="rentree-label"
++                  error={label ? undefined : t('settings.schoolYear.labelRequired')}
++                />
++                <Input
++                  label={t('rentree.startDate')}
++                  required
++                  type="date"
++                  value={startDate}
++                  onChange={(event) => {
++                    const next = event.target.value;
++                    // The enrollment date follows the start date until the
++                    // director types their own.
++                    setEnrollmentDate((current) => (current === startDate ? next : current));
++                    setStartDate(next);
++                  }}
++                  data-testid="rentree-start"
++                />
++                <Input
++                  label={t('rentree.endDate')}
++                  required
++                  type="date"
++                  value={endDate}
++                  onChange={(event) => setEndDate(event.target.value)}
++                  data-testid="rentree-end"
++                />
++              </div>
++              {step1Error ? (
++                <p className="text-[13px] text-destructive" role="alert" data-testid="rentree-error">
++                  {step1Error}
++                </p>
++              ) : null}
++              <div className="rounded-md border border-border bg-background px-3 py-2 text-[13px] text-muted">
++                {t('rentree.currentYear', {
++                  year: preview?.current_year.label ?? '—',
++                  start: formatDate(preview?.current_year.start_date),
++                  end: formatDate(preview?.current_year.end_date),
++                })}
++              </div>
++            </div>
++          ) : null}
++
++          {/* -------------------------------------------------- step 2 ---- */}
++          {step === 2 ? (
++            <div className="space-y-3" data-testid="rentree-step-2">
++              <div className="flex flex-wrap items-center justify-between gap-2">
++                <p className="text-[13px] text-muted">{t('rentree.groupsHint')}</p>
++                <div className="flex gap-2">
++                  <Button
++                    size="sm"
++                    variant="ghost"
++                    onClick={() => setGroupIds(groups.map((group) => group.id))}
++                    data-testid="rentree-groups-all"
++                  >
++                    {t('rentree.selectAll')}
++                  </Button>
++                  <Button
++                    size="sm"
++                    variant="ghost"
++                    onClick={() => setGroupIds([])}
++                    data-testid="rentree-groups-none"
++                  >
++                    {t('rentree.deselectAll')}
++                  </Button>
++                </div>
++              </div>
++
++              <ul className="divide-y divide-border rounded-md border border-border">
++                {groups.length === 0 ? (
++                  <li className="px-3 py-6 text-center text-[13px] text-muted">
++                    {t('rentree.noGroups')}
++                  </li>
++                ) : null}
++                {groups.map((group) => (
++                  <li key={group.id}>
++                    <label
++                      className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-background"
++                      data-testid={`rentree-group-${group.id}`}
++                    >
++                      <input
++                        type="checkbox"
++                        className="h-4 w-4 accent-primary"
++                        checked={groupIds.includes(group.id)}
++                        onChange={() => toggleGroup(group.id)}
++                        data-testid={`rentree-group-${group.id}-toggle`}
++                      />
++                      <span className="min-w-0 flex-1">
++                        <span className="block truncate text-[13px] font-medium text-foreground" dir="auto">
++                          {group.subject_name} — {group.level_name}
++                          {group.teacher_name ? (
++                            <span className="font-normal text-muted"> ({group.teacher_name})</span>
++                          ) : null}
++                        </span>
++                        <span className="mt-0.5 block text-[12px] text-muted">
++                          {group.schedule_text || '—'} · {formatCurrency(group.monthly_fee_cents)}
++                        </span>
++                      </span>
++                      <span className="shrink-0 text-[12px] text-muted">
++                        {t('rentree.enrolledShort', { count: group.enrolled_count })}
++                      </span>
++                    </label>
++                  </li>
++                ))}
++              </ul>
++
++              <p className="text-[13px] font-medium text-foreground" data-testid="rentree-groups-count">
++                {t('rentree.groupsCount', { selected: groupIds.length, total: groups.length })}
++              </p>
++            </div>
++          ) : null}
++
++          {/* -------------------------------------------------- step 3 ---- */}
++          {step === 3 ? (
++            <div className="space-y-3" data-testid="rentree-step-3">
++              <div className="flex flex-wrap items-center justify-between gap-2">
++                <p className="max-w-[420px] text-[13px] text-muted">{t('rentree.studentsHint')}</p>
++                <div className="flex gap-2">
++                  <Button
++                    size="sm"
++                    variant="ghost"
++                    onClick={() => setStudentIds(students.map((student) => student.id))}
++                    data-testid="rentree-students-all"
++                  >
++                    {t('rentree.selectAll')}
++                  </Button>
++                  <Button
++                    size="sm"
++                    variant="ghost"
++                    onClick={() => setStudentIds([])}
++                    data-testid="rentree-students-none"
++                  >
++                    {t('rentree.deselectAll')}
++                  </Button>
++                </div>
++              </div>
++
++              <div className="grid gap-3 sm:grid-cols-2">
++                <Input
++                  placeholder={t('rentree.searchStudent')}
++                  value={search}
++                  onChange={(event) => setSearch(event.target.value)}
++                  aria-label={t('rentree.searchStudent')}
++                  data-testid="rentree-student-search"
++                />
++                <Input
++                  label={t('rentree.enrollmentDate')}
++                  type="date"
++                  value={enrollmentDate}
++                  onChange={(event) => setEnrollmentDate(event.target.value)}
++                  data-testid="rentree-enrollment-date"
++                  error={step3Error ?? undefined}
++                />
++              </div>
++
++              <ul className="max-h-[280px] divide-y divide-border overflow-y-auto rounded-md border border-border">
++                {visibleStudents.length === 0 ? (
++                  <li className="px-3 py-6 text-center text-[13px] text-muted">
++                    {t('rentree.noStudents')}
++                  </li>
++                ) : null}
++                {visibleStudents.map((student) => (
++                  <li key={student.id}>
++                    <label
++                      className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-background"
++                      data-testid={`rentree-student-${student.id}`}
++                    >
++                      <input
++                        type="checkbox"
++                        className="h-4 w-4 accent-primary"
++                        checked={studentIds.includes(student.id)}
++                        onChange={() => toggleStudent(student.id)}
++                        data-testid={`rentree-student-${student.id}-toggle`}
++                      />
++                      <span className="min-w-0 flex-1">
++                        <span className="block truncate text-[13px] font-medium text-foreground" dir="auto">
++                          {student.full_name}
++                          {student.level_name ? (
++                            <span className="font-normal text-muted"> · {student.level_name}</span>
++                          ) : null}
++                        </span>
++                        <span className="mt-0.5 block truncate text-[12px] text-muted" dir="auto">
++                          {student.current_groups || '—'}
++                        </span>
++                      </span>
++                    </label>
++                  </li>
++                ))}
++              </ul>
++
++              <p className="text-[13px] font-medium text-foreground" data-testid="rentree-students-count">
++                {t('rentree.studentsCount', {
++                  selected: studentIds.length,
++                  total: students.length,
++                })}
++              </p>
++
++              <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-[13px] text-foreground">
++                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
++                <span>
++                  {t('rentree.warning')}{' '}
++                  <span className="font-semibold" data-testid="rentree-estimate">
++                    {t('rentree.estimatedTotal')}: {formatCurrency(estimate.cents)} ·{' '}
++                    {t('rentree.estimatedInvoices', { count: estimate.invoices })}
++                  </span>
++                </span>
++              </div>
++            </div>
++          ) : null}
++
++          {/* -------------------------------------------------- step 4 ---- */}
++          {step === 4 ? (
++            <div className="space-y-3" data-testid="rentree-step-4">
++              <ul className="divide-y divide-border rounded-md border border-border text-[13px]">
++                <li className="flex items-center justify-between gap-3 px-3 py-2">
++                  <span className="text-muted">{t('rentree.newYear')}</span>
++                  <span className="font-medium text-foreground" data-testid="rentree-summary-year">
++                    {label.trim()} ({formatDate(startDate)} → {formatDate(endDate)})
++                  </span>
++                </li>
++                <li className="flex items-center justify-between gap-3 px-3 py-2">
++                  <span className="text-muted">{t('rentree.result.groups')}</span>
++                  <span className="font-medium text-foreground" data-testid="rentree-summary-groups">
++                    {groupIds.length}
++                  </span>
++                </li>
++                <li className="flex items-center justify-between gap-3 px-3 py-2">
++                  <span className="text-muted">{t('rentree.result.students')}</span>
++                  <span className="font-medium text-foreground" data-testid="rentree-summary-students">
++                    {estimate.students}
++                  </span>
++                </li>
++                <li className="flex items-center justify-between gap-3 px-3 py-2">
++                  <span className="text-muted">{t('rentree.result.enrollments')}</span>
++                  <span
++                    className="font-medium text-foreground"
++                    data-testid="rentree-summary-enrollments"
++                  >
++                    {estimate.enrollments}
++                  </span>
++                </li>
++                <li className="flex items-center justify-between gap-3 px-3 py-2">
++                  <span className="text-muted">{t('rentree.result.invoices')}</span>
++                  <span className="font-medium text-foreground" data-testid="rentree-summary-invoices">
++                    {estimate.invoices} · {formatCurrency(estimate.cents)}
++                  </span>
++                </li>
++                <li className="flex items-center justify-between gap-3 px-3 py-2">
++                  <span className="text-muted">{t('rentree.enrollmentDate')}</span>
++                  <span className="font-medium text-foreground">
++                    {formatDate(enrollmentDate)}
++                  </span>
++                </li>
++              </ul>
++
++              <div className="flex items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-[12px] text-muted">
++                <GraduationCap className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
++                <span>{t('rentree.confirmHint')}</span>
++              </div>
++
++              {selectedGroups.length === 0 || estimate.enrollments === 0 ? (
++                <p className="text-[12px] text-warning">{t('rentree.nothingToEnroll')}</p>
++              ) : null}
++            </div>
++          ) : null}
++        </div>
++      )}
++    </Modal>
++  );
++}
++
++export default RentreeWizardModal;
+diff --git a/src/components/settings/SchoolYearSection.tsx b/src/components/settings/SchoolYearSection.tsx
+index 0260bca..a1394cd 100644
+--- a/src/components/settings/SchoolYearSection.tsx
++++ b/src/components/settings/SchoolYearSection.tsx
+@@ -1,10 +1,11 @@
+ import { useCallback, useEffect, useState } from 'react';
+ import { useTranslation } from 'react-i18next';
+-import { CalendarDays, Check, Plus } from 'lucide-react';
++import { CalendarDays, Check, Plus, Rocket } from 'lucide-react';
+ import Badge from '../ui/Badge';
+ import Button from '../ui/Button';
+ import Input from '../ui/Input';
+ import Select from '../ui/Select';
++import RentreeWizardModal from './RentreeWizardModal';
+ import SettingsSection from './SettingsSection';
+ import { toast } from '../ui/Toast';
+ import { schoolYearsApi } from '../../services/settings';
+@@ -24,6 +25,7 @@ export function SchoolYearSection() {
+   const [formError, setFormError] = useState<string | null>(null);
+   const [submitting, setSubmitting] = useState(false);
+   const [activatingId, setActivatingId] = useState<number | null>(null);
++  const [rentreeOpen, setRentreeOpen] = useState(false);
+ 
+   const load = useCallback(async () => {
+     try {
+@@ -108,6 +110,26 @@ export function SchoolYearSection() {
+             }}
+           />
+ 
++          {/* Phase 14 — the annual transition: copy groups, re-enroll, fresh
++              invoices, all in one transaction. Only meaningful with a year. */}
++          {activeYear ? (
++            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-3">
++              <div className="min-w-0">
++                <p className="text-[13px] font-medium text-foreground">
++                  {t('rentree.title')}
++                </p>
++                <p className="mt-0.5 text-[12px] text-muted">{t('rentree.sectionHint')}</p>
++              </div>
++              <Button
++                onClick={() => setRentreeOpen(true)}
++                leftIcon={<Rocket className="h-4 w-4" aria-hidden="true" />}
++                data-testid="rentree-open"
++              >
++                {t('rentree.title')}
++              </Button>
++            </div>
++          ) : null}
++
+           <ul className="mt-4 divide-y divide-border rounded-md border border-border">
+             {years.length === 0 && (
+               <li className="px-4 py-6 text-center text-[13px] text-muted">
+@@ -151,29 +173,33 @@ export function SchoolYearSection() {
+                 variant="secondary"
+                 onClick={() => setFormOpen(true)}
+                 leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
++                data-testid="school-year-new"
+               >
+                 {t('settings.schoolYear.new')}
+               </Button>
+             ) : (
+-              <div className="rounded-md border border-border bg-background p-4">
++              <div className="rounded-md border border-border bg-background p-4" data-testid="school-year-form">
+                 <div className="grid gap-3 sm:grid-cols-3">
+                   <Input
+                     label={t('settings.schoolYear.label')}
+                     placeholder={t('settings.schoolYear.labelPlaceholder')}
+                     value={label}
+                     onChange={(event) => setLabel(event.target.value)}
++                    data-testid="school-year-label"
+                   />
+                   <Input
+                     type="date"
+                     label={t('settings.schoolYear.startDate')}
+                     value={startDate}
+                     onChange={(event) => setStartDate(event.target.value)}
++                    data-testid="school-year-start"
+                   />
+                   <Input
+                     type="date"
+                     label={t('settings.schoolYear.endDate')}
+                     value={endDate}
+                     onChange={(event) => setEndDate(event.target.value)}
++                    data-testid="school-year-end"
+                   />
+                 </div>
+                 {formError && (
+@@ -182,7 +208,12 @@ export function SchoolYearSection() {
+                   </p>
+                 )}
+                 <div className="mt-3 flex gap-2">
+-                  <Button onClick={handleCreate} loading={submitting} size="sm">
++                  <Button
++                    onClick={handleCreate}
++                    loading={submitting}
++                    size="sm"
++                    data-testid="school-year-create"
++                  >
+                     {t('settings.schoolYear.create')}
+                   </Button>
+                   <Button
+@@ -201,6 +232,11 @@ export function SchoolYearSection() {
+           </div>
+         </>
+       )}
++      <RentreeWizardModal
++        open={rentreeOpen}
++        onClose={() => setRentreeOpen(false)}
++        onDone={() => void load()}
++      />
+     </SettingsSection>
+   );
+ }
+diff --git a/src/i18n/ar.json b/src/i18n/ar.json
+index 4c79443..6d84ba9 100644
+--- a/src/i18n/ar.json
++++ b/src/i18n/ar.json
+@@ -14,7 +14,8 @@
+     "expand": "توسيع القائمة",
+     "latePayments": "فواتير متأخرة",
+     "expenses": "المصاريف",
+-    "timetable": "جدول الحصص"
++    "timetable": "جدول الحصص",
++    "bilan": "الحصيلة"
+   },
+   "common": {
+     "save": "حفظ",
+@@ -257,7 +258,8 @@
+       "activated": "تم تفعيل السنة الدراسية ✓",
+       "labelRequired": "التسمية مطلوبة",
+       "datesRequired": "تاريخا البداية والنهاية مطلوبان",
+-      "invalidDates": "يجب أن يكون تاريخ النهاية بعد تاريخ البداية"
++      "invalidDates": "يجب أن يكون تاريخ النهاية بعد تاريخ البداية",
++      "exists": "هذه السنة الدراسية موجودة بالفعل"
+     },
+     "levels": {
+       "description": "الابتدائي والإعدادي والثانوي — مع شعب الثانوي.",
+@@ -368,6 +370,49 @@
+     "expenseCategoriesHint": "تغذّي هذه الفئات نموذج المصاريف. حذف فئة لا يؤثر على المصاريف المسجّلة سابقًا: تبقى محتفظة باسمها ولونها.",
+     "categoryExists": "الفئة «{{name}}» موجودة بالفعل"
+   },
++  "rentree": {
++    "title": "دخول مدرسي جديد",
++    "sectionHint": "نسخ المجموعات إلى السنة الموالية، إعادة تسجيل التلاميذ وإنشاء الفواتير الأولى.",
++    "step1": "السنة الجديدة",
++    "step2": "المجموعات",
++    "step3": "التلاميذ",
++    "step4": "التأكيد",
++    "yearLabel": "اسم السنة الدراسية",
++    "startDate": "تاريخ البداية",
++    "endDate": "تاريخ النهاية",
++    "currentYear": "السنة الحالية: {{year}} ({{start}} ← {{end}})",
++    "groupsHint": "المجموعات المنسوخة تحتفظ بنفس المادة والمستوى والأستاذ والتوقيت والثمن.",
++    "groupsCount": "{{selected}} مجموعة مختارة من {{total}}",
++    "enrolledShort": "{{count}} تلميذ",
++    "studentsHint": "كل تلميذ سيُعاد تسجيله في نفس المجموعات المنقولة، وستُنشأ فواتير جديدة.",
++    "studentsCount": "{{selected}} تلميذ مختار من {{total}}",
++    "searchStudent": "البحث عن تلميذ…",
++    "enrollmentDate": "تاريخ التسجيل",
++    "warning": "كل إعادة تسجيل تُنشئ فاتورة الشهر الأول.",
++    "estimatedTotal": "المجموع المقدر",
++    "estimatedInvoices": "{{count}} فاتورة",
++    "newYear": "السنة الجديدة",
++    "confirmHint": "لا شيء يُحذف: السنة السابقة تبقى كاملة للحصيلة.",
++    "nothingToEnroll": "لا إعادة تسجيل: التلاميذ المختارون ليسوا في أي من المجموعات المنقولة.",
++    "confirm": "تأكيد الدخول المدرسي",
++    "noYear": "لا توجد سنة دراسية نشطة: أنشئ واحدة أولاً.",
++    "noGroups": "لا توجد مجموعة نشطة لهذه السنة.",
++    "noStudents": "لا يوجد تلميذ مسجل هذه السنة.",
++    "invalidDate": "تاريخ التسجيل غير صالح",
++    "dateBeforeYear": "يجب أن يكون تاريخ التسجيل داخل السنة الدراسية الجديدة",
++    "selectAll": "تحديد الكل",
++    "deselectAll": "إلغاء تحديد الكل",
++    "successToast": "تم تسجيل دخول {{year}}",
++    "result": {
++      "title": "انتهى الدخول المدرسي",
++      "subtitle": "ملخص الدخول المدرسي",
++      "yearCreated": "تم إنشاء السنة {{year}} وتنشيطها.",
++      "groups": "المجموعات المنقولة",
++      "students": "التلاميذ المعاد تسجيلهم",
++      "enrollments": "التسجيلات المنشأة",
++      "invoices": "الفواتير المنشأة"
++    }
++  },
+   "students": {
+     "new": "+ تلميذ جديد",
+     "newShort": "تلميذ جديد",
+@@ -1138,6 +1183,35 @@
+       "configured_other": "{{count}} أستاذ مُهيّأ"
+     }
+   },
++  "bilan": {
++    "title": "الحصيلة السنوية",
++    "selectYear": "اختر سنة دراسية",
++    "dateRange": "البيانات محسوبة من {{start}} إلى {{end}}",
++    "kpi": {
++      "students": "التلاميذ المسجلون",
++      "groups": "المجموعات",
++      "revenue": "المداخيل",
++      "collectionRate": "نسبة التحصيل",
++      "salaries": "الأجور المؤداة",
++      "expenses": "المصاريف",
++      "netIncome": "الربح الصافي",
++      "theoretical": "المتوقع"
++    },
++    "monthly": "التفصيل الشهري",
++    "month": "الشهر",
++    "revenue": "المداخيل",
++    "salaries": "الأجور",
++    "expenses": "المصاريف",
++    "net": "الصافي",
++    "total": "المجموع",
++    "topGroups": "أكثر المجموعات ربحية",
++    "topStudents": "أفضل المؤدين",
++    "enrolledCount": "{{count}} تلميذ",
++    "noGroups": "لا توجد مجموعة في هذه السنة",
++    "noStudents": "لا توجد مدفوعات في هذه السنة",
++    "empty": "لا توجد بيانات لهذه السنة الدراسية",
++    "emptyHint": "يجب أن تحتوي السنة على تسجيلات ومدفوعات لعرض الحصيلة."
++  },
+   "error": {
+     "title": "حدث خطأ",
+     "message": "تعذر عرض هذه الصفحة. بياناتك سليمة.",
+diff --git a/src/i18n/fr.json b/src/i18n/fr.json
+index bc4a64d..0122ef4 100644
+--- a/src/i18n/fr.json
++++ b/src/i18n/fr.json
+@@ -14,7 +14,8 @@
+     "expand": "Développer le menu",
+     "latePayments": "Factures en retard",
+     "expenses": "Frais",
+-    "timetable": "Emploi du temps"
++    "timetable": "Emploi du temps",
++    "bilan": "Bilan"
+   },
+   "common": {
+     "save": "Enregistrer",
+@@ -257,7 +258,8 @@
+       "activated": "Année scolaire activée ✓",
+       "labelRequired": "Le libellé est obligatoire",
+       "datesRequired": "Les dates de début et de fin sont obligatoires",
+-      "invalidDates": "La date de fin doit être postérieure à la date de début"
++      "invalidDates": "La date de fin doit être postérieure à la date de début",
++      "exists": "Cette année scolaire existe déjà"
+     },
+     "levels": {
+       "description": "Primaire, collège et lycée — avec les branches du lycée.",
+@@ -368,6 +370,49 @@
+     "expenseCategoriesHint": "Ces catégories alimentent le formulaire de dépense. Retirer une catégorie ne touche pas aux dépenses déjà enregistrées : elles gardent leur nom et leur couleur.",
+     "categoryExists": "La catégorie « {{name}} » existe déjà"
+   },
++  "rentree": {
++    "title": "Nouvelle rentrée",
++    "sectionHint": "Copier les groupes dans l'année suivante, réinscrire les élèves et générer les premières factures.",
++    "step1": "Nouvelle année",
++    "step2": "Groupes",
++    "step3": "Élèves",
++    "step4": "Confirmation",
++    "yearLabel": "Libellé de l'année",
++    "startDate": "Date de début",
++    "endDate": "Date de fin",
++    "currentYear": "Année en cours : {{year}} ({{start}} → {{end}})",
++    "groupsHint": "Les groupes copiés gardent la même matière, niveau, enseignant, horaire et tarif.",
++    "groupsCount": "{{selected}} groupes sélectionnés sur {{total}}",
++    "enrolledShort": "{{count}} élève(s)",
++    "studentsHint": "Chaque élève sera réinscrit dans les mêmes groupes reconduits. De nouvelles factures seront générées.",
++    "studentsCount": "{{selected}} élèves sélectionnés sur {{total}}",
++    "searchStudent": "Rechercher un élève…",
++    "enrollmentDate": "Date d'inscription",
++    "warning": "Chaque réinscription génère la facture du premier mois.",
++    "estimatedTotal": "Total estimé",
++    "estimatedInvoices": "{{count}} facture(s)",
++    "newYear": "Nouvelle année",
++    "confirmHint": "Rien n'est supprimé : l'année précédente reste intacte pour le bilan.",
++    "nothingToEnroll": "Aucune réinscription : les élèves sélectionnés ne sont dans aucun des groupes reconduits.",
++    "confirm": "Confirmer la rentrée",
++    "noYear": "Aucune année scolaire active : créez-en une d’abord.",
++    "noGroups": "Aucun groupe actif pour cette année.",
++    "noStudents": "Aucun élève inscrit cette année.",
++    "invalidDate": "Date d'inscription invalide",
++    "dateBeforeYear": "La date d'inscription doit être dans la nouvelle année scolaire",
++    "selectAll": "Tout sélectionner",
++    "deselectAll": "Tout désélectionner",
++    "successToast": "Rentrée {{year}} enregistrée",
++    "result": {
++      "title": "Rentrée terminée",
++      "subtitle": "Récapitulatif de la rentrée",
++      "yearCreated": "L'année {{year}} a été créée et activée.",
++      "groups": "Groupes reconduits",
++      "students": "Élèves réinscrits",
++      "enrollments": "Inscriptions créées",
++      "invoices": "Factures générées"
++    }
++  },
+   "students": {
+     "new": "+ Nouvel élève",
+     "newShort": "Nouvel élève",
+@@ -1082,6 +1127,35 @@
+       "configured_other": "{{count}} enseignants configurés"
+     }
+   },
++  "bilan": {
++    "title": "Bilan annuel",
++    "selectYear": "Choisir une année scolaire",
++    "dateRange": "Données calculées du {{start}} au {{end}}",
++    "kpi": {
++      "students": "Élèves inscrits",
++      "groups": "Groupes",
++      "revenue": "Revenus",
++      "collectionRate": "Taux de recouvrement",
++      "salaries": "Salaires versés",
++      "expenses": "Frais",
++      "netIncome": "Bénéfice net",
++      "theoretical": "Théorique"
++    },
++    "monthly": "Détail mensuel",
++    "month": "Mois",
++    "revenue": "Revenus",
++    "salaries": "Salaires",
++    "expenses": "Frais",
++    "net": "Net",
++    "total": "Total",
++    "topGroups": "Groupes les plus rentables",
++    "topStudents": "Meilleurs payeurs",
++    "enrolledCount": "{{count}} élève(s)",
++    "noGroups": "Aucun groupe sur cette année",
++    "noStudents": "Aucun paiement sur cette année",
++    "empty": "Aucune donnée pour cette année scolaire",
++    "emptyHint": "L'année doit avoir des inscriptions et des paiements pour afficher un bilan."
++  },
+   "error": {
+     "title": "Une erreur est survenue",
+     "message": "Cette page n'a pas pu s'afficher. Vos données sont intactes.",
+diff --git a/src/pages/BilanPage.tsx b/src/pages/BilanPage.tsx
+new file mode 100644
+index 0000000..860b45f
+--- /dev/null
++++ b/src/pages/BilanPage.tsx
+@@ -0,0 +1,426 @@
++import { useCallback, useEffect, useMemo, useState } from 'react';
++import { useTranslation } from 'react-i18next';
++import {
++  BarChart3,
++  BookOpen,
++  Building2,
++  Gem,
++  Percent,
++  Star,
++  Trophy,
++  Target,
++  TrendingUp,
++  Users,
++  Wallet,
++} from 'lucide-react';
++import Button from '../components/ui/Button';
++import Card from '../components/ui/Card';
++import EmptyState from '../components/ui/EmptyState';
++import Select from '../components/ui/Select';
++import GroupDetailModal from '../components/groups/GroupDetailModal';
++import { toast } from '../components/ui/Toast';
++import { schoolYearsApi } from '../services/settings';
++import { bilanApi } from '../services/schoolYear';
++import { cn, formatCurrency, formatDate } from '../utils/format';
++import type { BilanData, SchoolYear } from '../types';
++
++/**
++ * “Bilan annuel” (`/bilan`, Phase 14).
++ *
++ * One read-only screen per school year: the eight headline numbers, the month
++ * by month table (with a stacked bar drawn in CSS — no chart library), the most
++ * profitable groups and the best payers. The year selector defaults to the
++ * active year; any other year can be replayed.
++ */
++export function BilanPage() {
++  const { t } = useTranslation();
++
++  const [years, setYears] = useState<SchoolYear[]>([]);
++  const [yearId, setYearId] = useState<string>('');
++  const [data, setData] = useState<BilanData | null>(null);
++  const [loading, setLoading] = useState(true);
++  const [detailGroupId, setDetailGroupId] = useState<number | null>(null);
++
++  // School years first: the default is the active one, else the most recent.
++  useEffect(() => {
++    let active = true;
++    schoolYearsApi
++      .list()
++      .then((rows) => {
++        if (!active) return;
++        setYears(rows);
++        const initial = rows.find((year) => year.is_active) ?? rows[0] ?? null;
++        setYearId(initial ? String(initial.id) : '');
++      })
++      .catch((error: unknown) => {
++        toast.error(error instanceof Error ? error.message : String(error));
++        setLoading(false);
++      });
++    return () => {
++      active = false;
++    };
++  }, []);
++
++  const load = useCallback(async (id: string) => {
++    if (!id) {
++      setData(null);
++      setLoading(false);
++      return;
++    }
++    setLoading(true);
++    try {
++      setData(await bilanApi.get(Number(id)));
++    } catch (error) {
++      toast.error(error instanceof Error ? error.message : String(error));
++      setData(null);
++    } finally {
++      setLoading(false);
++    }
++  }, []);
++
++  useEffect(() => {
++    void load(yearId);
++  }, [load, yearId]);
++
++  const refresh = useCallback(() => void load(yearId), [load, yearId]);
++
++  const monthName = useCallback(
++    (month: number, fallback: string) => t(`common.months.${month}`, { defaultValue: fallback }),
++    [t],
++  );
++
++  /** Largest absolute monthly total, used to scale the CSS bars. */
++  const maxMonthly = useMemo(() => {
++    const rows = data?.monthly_breakdown ?? [];
++    return rows.reduce(
++      (max, row) => Math.max(max, row.revenue_cents, row.expenses_cents + row.compensation_cents),
++      0,
++    );
++  }, [data]);
++
++  const netPositive = (data?.net_income_cents ?? 0) >= 0;
++  const rate = data?.collection_rate ?? 0;
++
++  const kpis = data
++    ? [
++        {
++          key: 'students',
++          icon: <Users className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.students'),
++          value: String(data.total_students),
++          tone: 'text-foreground',
++          testId: 'bilan-kpi-students',
++        },
++        {
++          key: 'groups',
++          icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.groups'),
++          value: String(data.total_groups),
++          tone: 'text-foreground',
++          testId: 'bilan-kpi-groups',
++        },
++        {
++          key: 'revenue',
++          icon: <Wallet className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.revenue'),
++          value: formatCurrency(data.total_revenue_cents),
++          tone: 'text-success',
++          testId: 'bilan-kpi-revenue',
++        },
++        {
++          key: 'rate',
++          icon: <Percent className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.collectionRate'),
++          value: `${rate.toFixed(2).replace('.00', '')} %`,
++          tone: rate >= 80 ? 'text-success' : rate >= 50 ? 'text-warning' : 'text-destructive',
++          testId: 'bilan-kpi-rate',
++        },
++        {
++          key: 'salaries',
++          icon: <TrendingUp className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.salaries'),
++          value: formatCurrency(data.total_compensation_cents),
++          tone: 'text-warning',
++          testId: 'bilan-kpi-salaries',
++        },
++        {
++          key: 'expenses',
++          icon: <Building2 className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.expenses'),
++          value: formatCurrency(data.total_expenses_cents),
++          tone: 'text-destructive',
++          testId: 'bilan-kpi-expenses',
++        },
++        {
++          key: 'net',
++          icon: <Gem className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.netIncome'),
++          value: formatCurrency(data.net_income_cents),
++          tone: netPositive ? 'text-success' : 'text-destructive',
++          testId: 'bilan-kpi-net',
++        },
++        {
++          key: 'theoretical',
++          icon: <Target className="h-4 w-4" aria-hidden="true" />,
++          label: t('bilan.kpi.theoretical'),
++          value: formatCurrency(data.total_theoretical_cents),
++          tone: 'text-primary',
++          testId: 'bilan-kpi-theoretical',
++        },
++      ]
++    : [];
++
++  const hasData =
++    Boolean(data) &&
++    (data!.total_groups > 0 || data!.total_students > 0 || data!.monthly_breakdown.some((row) => row.revenue_cents > 0 || row.expenses_cents > 0));
++
++  return (
++    <div className="space-y-5">
++      {/* ------------------------------------------------------------- header */}
++      <div className="flex flex-wrap items-end justify-between gap-3">
++        <div>
++          <h1 className="flex items-center gap-2 text-h1 text-foreground">
++            <BarChart3 className="h-5 w-5 text-primary" aria-hidden="true" />
++            {t('bilan.title')}
++          </h1>
++          <p className="mt-0.5 text-[13px] text-muted">
++            {data
++              ? t('bilan.dateRange', {
++                  start: formatDate(data.year.start_date),
++                  end: formatDate(data.year.end_date),
++                })
++              : t('bilan.selectYear')}
++          </p>
++        </div>
++        <div className="w-[220px]">
++          <Select
++            aria-label={t('bilan.selectYear')}
++            value={yearId}
++            onChange={(event) => setYearId(event.target.value)}
++            data-testid="bilan-year"
++            options={years.map((year) => ({ value: year.id, label: year.label ?? '' }))}
++          />
++        </div>
++      </div>
++
++      {loading ? <p className="text-[13px] text-muted">{t('common.loading')}</p> : null}
++
++      {!loading && data && !hasData ? (
++        <Card>
++          <div data-testid="bilan-empty">
++            <EmptyState
++              icon={<BarChart3 className="h-5 w-5" aria-hidden="true" />}
++              title={t('bilan.empty')}
++              description={t('bilan.emptyHint')}
++            />
++          </div>
++        </Card>
++      ) : null}
++
++      {!loading && data && hasData ? (
++        <>
++          {/* ------------------------------------------------------- KPIs -- */}
++          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="bilan-kpis">
++            {kpis.map((kpi) => (
++              <Card key={kpi.key} className="p-4">
++                <p className="flex items-center gap-1.5 text-[12px] font-medium text-muted">
++                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
++                    {kpi.icon}
++                  </span>
++                  {kpi.label}
++                </p>
++                <p
++                  className={cn('mt-2 text-[20px] font-semibold', kpi.tone)}
++                  data-testid={kpi.testId}
++                >
++                  {kpi.value}
++                </p>
++              </Card>
++            ))}
++          </div>
++
++          {/* ------------------------------------------- monthly breakdown -- */}
++          <Card className="overflow-hidden">
++            <div className="border-b border-border px-4 py-3">
++              <h2 className="text-h2 text-foreground">{t('bilan.monthly')}</h2>
++            </div>
++            <div className="overflow-x-auto">
++              <table className="w-full min-w-[620px] text-[13px]" data-testid="bilan-monthly">
++                <thead>
++                  <tr className="border-b border-border text-start text-[12px] text-muted">
++                    <th className="px-4 py-2 text-start font-medium">{t('bilan.month')}</th>
++                    <th className="px-4 py-2 text-end font-medium">{t('bilan.revenue')}</th>
++                    <th className="px-4 py-2 text-end font-medium">{t('bilan.salaries')}</th>
++                    <th className="px-4 py-2 text-end font-medium">{t('bilan.expenses')}</th>
++                    <th className="px-4 py-2 text-end font-medium">{t('bilan.net')}</th>
++                    <th className="w-[180px] px-4 py-2 text-start font-medium">{''}</th>
++                  </tr>
++                </thead>
++                <tbody>
++                  {data.monthly_breakdown.map((row) => {
++                    const outflows = row.expenses_cents + row.compensation_cents;
++                    const revenueWidth = maxMonthly > 0 ? (row.revenue_cents / maxMonthly) * 100 : 0;
++                    const outflowWidth = maxMonthly > 0 ? (outflows / maxMonthly) * 100 : 0;
++                    return (
++                      <tr
++                        key={`${row.year}-${row.month}`}
++                        className="border-b border-border/60 last:border-0"
++                        data-testid={`bilan-month-${row.month}`}
++                        data-year={row.year}
++                      >
++                        <td className="px-4 py-2 text-foreground">
++                          {monthName(row.month, row.month_name)}
++                        </td>
++                        <td className="px-4 py-2 text-end text-success">
++                          {formatCurrency(row.revenue_cents)}
++                        </td>
++                        <td className="px-4 py-2 text-end text-warning">
++                          {formatCurrency(row.compensation_cents)}
++                        </td>
++                        <td className="px-4 py-2 text-end text-destructive">
++                          {formatCurrency(row.expenses_cents)}
++                        </td>
++                        <td
++                          className={cn(
++                            'px-4 py-2 text-end font-medium',
++                            row.net_cents >= 0 ? 'text-success' : 'text-destructive',
++                          )}
++                          data-testid={`bilan-month-net-${row.month}`}
++                        >
++                          {formatCurrency(row.net_cents)}
++                        </td>
++                        <td className="px-4 py-2">
++                          {/* CSS-only stacked bar: revenue in green, outflows in red. */}
++                          <span className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
++                            <span
++                              className="h-full rounded-full bg-success/70"
++                              style={{ width: `${revenueWidth}%` }}
++                            />
++                            <span
++                              className="h-full rounded-full bg-destructive/70"
++                              style={{ width: `${outflowWidth}%` }}
++                            />
++                          </span>
++                        </td>
++                      </tr>
++                    );
++                  })}
++                </tbody>
++                <tfoot>
++                  <tr className="bg-background font-semibold" data-testid="bilan-total-row">
++                    <td className="px-4 py-2 text-foreground">{t('bilan.total')}</td>
++                    <td className="px-4 py-2 text-end text-success">
++                      {formatCurrency(data.total_revenue_cents)}
++                    </td>
++                    <td className="px-4 py-2 text-end text-warning">
++                      {formatCurrency(data.total_compensation_cents)}
++                    </td>
++                    <td className="px-4 py-2 text-end text-destructive">
++                      {formatCurrency(data.total_expenses_cents)}
++                    </td>
++                    <td
++                      className={cn(
++                        'px-4 py-2 text-end',
++                        netPositive ? 'text-success' : 'text-destructive',
++                      )}
++                      data-testid="bilan-total-net"
++                    >
++                      {formatCurrency(data.net_income_cents)}
++                    </td>
++                    <td className="px-4 py-2" />
++                  </tr>
++                </tfoot>
++              </table>
++            </div>
++          </Card>
++
++          {/* ---------------------------------------- top groups / students -- */}
++          <div className="grid gap-4 lg:grid-cols-2">
++            <Card className="overflow-hidden">
++              <div className="border-b border-border px-4 py-3">
++                <h2 className="flex items-center gap-2 text-h2 text-foreground">
++                  <Trophy className="h-4 w-4 text-warning" aria-hidden="true" />
++                  {t('bilan.topGroups')}
++                </h2>
++              </div>
++              <ul className="divide-y divide-border" data-testid="bilan-top-groups">
++                {data.top_groups.length === 0 ? (
++                  <li className="px-4 py-6 text-center text-[13px] text-muted">
++                    {t('bilan.noGroups')}
++                  </li>
++                ) : null}
++                {data.top_groups.map((group, index) => (
++                  <li key={group.group_id}>
++                    <Button
++                      variant="ghost"
++                      onClick={() => setDetailGroupId(group.group_id)}
++                      className="flex h-auto w-full items-center gap-3 rounded-none px-4 py-2.5 text-start"
++                      data-testid={`bilan-top-group-${group.group_id}`}
++                    >
++                      <span className="w-5 shrink-0 text-[13px] font-semibold text-muted">
++                        {index + 1}.
++                      </span>
++                      <span className="min-w-0 flex-1">
++                        <span className="block truncate text-[13px] font-medium text-foreground" dir="auto">
++                          {group.name}
++                        </span>
++                        <span className="text-[12px] text-muted">
++                          {t('bilan.enrolledCount', { count: group.enrolled_count })}
++                        </span>
++                      </span>
++                      <span className="shrink-0 text-[13px] font-semibold text-success">
++                        {formatCurrency(group.revenue_cents)}
++                      </span>
++                    </Button>
++                  </li>
++                ))}
++              </ul>
++            </Card>
++
++            <Card className="overflow-hidden">
++              <div className="border-b border-border px-4 py-3">
++                <h2 className="flex items-center gap-2 text-h2 text-foreground">
++                  <Star className="h-4 w-4 text-primary" aria-hidden="true" />
++                  {t('bilan.topStudents')}
++                </h2>
++              </div>
++              <ul className="divide-y divide-border" data-testid="bilan-top-students">
++                {data.top_students.length === 0 ? (
++                  <li className="px-4 py-6 text-center text-[13px] text-muted">
++                    {t('bilan.noStudents')}
++                  </li>
++                ) : null}
++                {data.top_students.map((student, index) => (
++                  <li
++                    key={student.student_id}
++                    className="flex items-center gap-3 px-4 py-2.5"
++                    data-testid={`bilan-top-student-${student.student_id}`}
++                  >
++                    <span className="w-5 shrink-0 text-[13px] font-semibold text-muted">
++                      {index + 1}.
++                    </span>
++                    <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" dir="auto">
++                      {student.name}
++                    </span>
++                    <span className="shrink-0 text-[13px] font-semibold text-foreground">
++                      {formatCurrency(student.total_paid_cents)}
++                    </span>
++                  </li>
++                ))}
++              </ul>
++            </Card>
++          </div>
++        </>
++      ) : null}
++
++      <GroupDetailModal
++        open={detailGroupId !== null}
++        groupId={detailGroupId}
++        onClose={() => setDetailGroupId(null)}
++        onRefresh={refresh}
++      />
++    </div>
++  );
++}
++
++export default BilanPage;
+diff --git a/src/services/schoolYear.ts b/src/services/schoolYear.ts
+new file mode 100644
+index 0000000..b64e1c4
+--- /dev/null
++++ b/src/services/schoolYear.ts
+@@ -0,0 +1,33 @@
++import { api, isTauri } from './api';
++import { devInvoke } from './settingsDevBackend';
++import type { BilanData, RentreeInput, RentreePreview, RentreeResult } from '../types';
++
++/**
++ * Typed wrappers for the Phase 14 commands
++ * (`src-tauri/src/commands/rentree.rs`, `bilan.rs`).
++ *
++ * In a browser (`npm run dev`, no Tauri IPC) the calls are served by the
++ * development store in `settingsDevBackend.ts`.
++ */
++const USE_DEV_BACKEND = import.meta.env.DEV && !isTauri();
++
++async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
++  if (USE_DEV_BACKEND) return devInvoke(cmd, args) as Promise<T>;
++  return api<T>(cmd, args);
++}
++
++export const rentreeApi = {
++  /** Groups, students and teachers of the year that is about to be closed. */
++  preview: (currentYearId: number) =>
++    call<RentreePreview>('cmd_get_rentree_preview', { currentYearId }),
++
++  /** One transaction: new year, copied groups, fresh enrollments + invoices. */
++  execute: (data: RentreeInput) => call<RentreeResult>('cmd_execute_rentree', { data }),
++};
++
++export const bilanApi = {
++  /** Every number of one school year. */
++  get: (yearId: number) => call<BilanData>('cmd_get_bilan', { yearId }),
++};
++
++export default rentreeApi;
+diff --git a/src/services/settingsDevBackend.ts b/src/services/settingsDevBackend.ts
+index 0ef31b6..7cc3dad 100644
+--- a/src/services/settingsDevBackend.ts
++++ b/src/services/settingsDevBackend.ts
+@@ -5,10 +5,20 @@ import type {
+   EnrolledStudent,
+   EnrollmentInput,
+   FinancialSummary,
++  BilanData,
+   Group,
+   GroupDetail,
+   GroupInput,
+   GroupSchedule,
++  MonthlyBreakdown,
++  RentreeGroupSummary,
++  RentreeInput,
++  RentreePreview,
++  RentreeResult,
++  RentreeStudentSummary,
++  RentreeTeacherSummary,
++  TopGroup,
++  TopStudent,
+   InvoiceAlert,
+   Level,
+   PaginatedPayments,
+@@ -758,7 +768,7 @@ function logAudit(
+   action: string,
+   entityId: number,
+   details: string | null,
+-  entityType: 'student' | 'group' | 'enrollment' | 'teacher' | 'expense' = 'student',
++  entityType: 'student' | 'group' | 'enrollment' | 'teacher' | 'expense' | 'school_year' = 'student',
+ ): void {
+   store.auditLog.push({
+     id: store.nextAuditId++,
+@@ -2352,6 +2362,178 @@ function buildDemoStore(previous: DevStore): DevStore {
+   return store;
+ }
+ 
++// ---------------------------------------------------------------------------
++// Phase 14 — annual summary (mirror of `commands/bilan.rs`)
++// ---------------------------------------------------------------------------
++
++const FRENCH_MONTHS = [
++  'Janvier',
++  'Février',
++  'Mars',
++  'Avril',
++  'Mai',
++  'Juin',
++  'Juillet',
++  'Août',
++  'Septembre',
++  'Octobre',
++  'Novembre',
++  'Décembre',
++];
++
++/** `YYYY-MM-DD` of a timestamp or date string. */
++const isoDay = (value: string | null | undefined): string => (value ?? '').slice(0, 10);
++
++const inRange = (day: string, from: string, to: string): boolean => day >= from && day <= to;
++
++/** Months of a year range, capped at 24 like the Rust side. */
++function monthsBetween(from: string, to: string): Array<{ month: number; year: number }> {
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return [];
++  const [startYear, startMonth] = from.split('-').map(Number);
++  const months: Array<{ month: number; year: number }> = [];
++  let year = startYear;
++  let month = startMonth;
++  while (months.length < 24) {
++    const first = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
++    if (first > to) break;
++    months.push({ month, year });
++    if (month === 12) {
++      month = 1;
++      year += 1;
++    } else {
++      month += 1;
++    }
++  }
++  return months;
++}
++
++/** Every number of one school year, computed exactly like `bilan.rs`. */
++function computeBilan(store: DevStore, year: SchoolYear): BilanData {
++  const from = (year.start_date ?? '').slice(0, 10) || `${new Date().getFullYear()}-01-01`;
++  const to = (year.end_date ?? '').slice(0, 10) || `${new Date().getFullYear()}-12-31`;
++
++  const yearGroups = store.groups.filter((group) => group.school_year_id === year.id);
++  const yearGroupIds = new Set(yearGroups.map((group) => group.id));
++  const yearEnrollments = store.enrollments.filter((enrollment) =>
++    yearGroupIds.has(enrollment.group_id),
++  );
++
++  const totalStudents = new Set(yearEnrollments.map((enrollment) => enrollment.student_id)).size;
++
++  const monthInRange = (month: number | null, monthYear: number | null): boolean => {
++    if (month === null || monthYear === null) return false;
++    const first = `${String(monthYear).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
++    return first >= from && first <= to;
++  };
++  // Invoices billed inside the range — the same twelve months as the revenue,
++  // so the collection rate can never pass 100 % because of an older year.
++  const theoretical = store.invoices
++    .filter((invoice) =>
++      monthInRange(invoice.period_month ?? null, invoice.period_year ?? null),
++    )
++    .reduce((sum, invoice) => sum + invoice.amount_cents, 0);
++
++  const paymentsInRange = store.payments.filter((payment) =>
++    inRange(isoDay(payment.created_at), from, to),
++  );
++  const revenue = paymentsInRange.reduce((sum, payment) => sum + payment.amount_cents, 0);
++
++  const compensation = store.teacherSettlements
++    .filter((settlement) => monthInRange(settlement.month ?? null, settlement.year ?? null))
++    .reduce((sum, settlement) => sum + settlement.amount_cents, 0);
++  const expenses = store.expenses
++    .filter((expense) => monthInRange(expense.month ?? null, expense.year ?? null))
++    .reduce((sum, expense) => sum + expense.amount_cents, 0);
++
++  const monthly_breakdown: MonthlyBreakdown[] = monthsBetween(from, to).map(({ month, year: y }) => {
++    const revenue_cents = paymentsInRange
++      .filter((payment) => {
++        const [paymentYear, paymentMonth] = isoDay(payment.created_at).split('-').map(Number);
++        return paymentYear === y && paymentMonth === month;
++      })
++      .reduce((sum, payment) => sum + payment.amount_cents, 0);
++    const expenses_cents = store.expenses
++      .filter((expense) => expense.month === month && expense.year === y)
++      .reduce((sum, expense) => sum + expense.amount_cents, 0);
++    const compensation_cents = store.teacherSettlements
++      .filter((settlement) => settlement.month === month && settlement.year === y)
++      .reduce((sum, settlement) => sum + settlement.amount_cents, 0);
++    return {
++      month,
++      year: y,
++      month_name: FRENCH_MONTHS[month - 1] ?? '',
++      revenue_cents,
++      expenses_cents,
++      compensation_cents,
++      net_cents: revenue_cents - compensation_cents - expenses_cents,
++    };
++  });
++
++  const top_groups: TopGroup[] = yearGroups
++    .map((group) => {
++      const enrollmentIds = new Set(
++        store.enrollments
++          .filter((enrollment) => enrollment.group_id === group.id)
++          .map((enrollment) => enrollment.id),
++      );
++      const invoiceIds = new Set(
++        store.invoices
++          .filter((invoice) => enrollmentIds.has(invoice.enrollment_id))
++          .map((invoice) => invoice.id),
++      );
++      const revenue_cents = paymentsInRange
++        .filter((payment) => payment.invoice_id !== null && invoiceIds.has(payment.invoice_id))
++        .reduce((sum, payment) => sum + payment.amount_cents, 0);
++      const row = groupRow(store, group);
++      return {
++        group_id: group.id,
++        name: row.branch_name
++          ? `${row.subject_name} — ${row.level_name} ${row.branch_name}`
++          : `${row.subject_name} — ${row.level_name}`,
++        revenue_cents,
++        enrolled_count: store.enrollments.filter(
++          (enrollment) => enrollment.group_id === group.id && enrollment.status === 'actif',
++        ).length,
++      };
++    })
++    .sort((a, b) => b.revenue_cents - a.revenue_cents || a.name.localeCompare(b.name, 'fr'))
++    .slice(0, 5);
++
++  const paidByStudent = new Map<number, number>();
++  paymentsInRange.forEach((payment) => {
++    if (payment.student_id === null) return;
++    paidByStudent.set(
++      payment.student_id,
++      (paidByStudent.get(payment.student_id) ?? 0) + payment.amount_cents,
++    );
++  });
++  const top_students: TopStudent[] = [...paidByStudent.entries()]
++    .map(([studentId, total]) => ({
++      student_id: studentId,
++      name: store.students.find((student) => student.id === studentId)?.full_name ?? '—',
++      total_paid_cents: total,
++    }))
++    .sort((a, b) => b.total_paid_cents - a.total_paid_cents || a.name.localeCompare(b.name, 'fr'))
++    .slice(0, 10);
++
++  const net = revenue - compensation - expenses;
++  return {
++    year,
++    total_students: totalStudents,
++    total_groups: yearGroups.length,
++    total_revenue_cents: revenue,
++    total_theoretical_cents: theoretical,
++    collection_rate:
++      theoretical > 0 ? Math.round((revenue / theoretical) * 10_000) / 100 : 0,
++    total_compensation_cents: compensation,
++    total_expenses_cents: expenses,
++    net_income_cents: net,
++    monthly_breakdown,
++    top_groups,
++    top_students,
++  };
++}
++
+ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
+   await delay();
+   const store = load();
+@@ -2793,6 +2975,235 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
+       return undefined;
+     }
+ 
++    // -- Rentrée & Bilan (Phase 14) ----------------------------------------
++    case 'cmd_get_rentree_preview': {
++      const yearId = asNumber(args, 'currentYearId');
++      const year = store.schoolYears.find((entry) => entry.id === yearId);
++      if (!year) throw new Error('Année scolaire introuvable');
++
++      const active = (group: Group) => (group.status ?? 'actif') === 'actif';
++      const yearGroups = store.groups.filter((group) => group.school_year_id === yearId);
++
++      const active_groups: RentreeGroupSummary[] = yearGroups
++        .filter(active)
++        .map((group) => {
++          const row = groupRow(store, group);
++          return {
++            id: row.id,
++            subject_name: row.subject_name,
++            level_name: row.level_name,
++            teacher_name: row.teacher_name,
++            schedule_text: row.schedule_text,
++            monthly_fee_cents: row.monthly_fee_cents,
++            enrolled_count: row.enrolled_count,
++          };
++        })
++        .sort(
++          (a, b) =>
++            a.subject_name.localeCompare(b.subject_name, 'fr') ||
++            a.level_name.localeCompare(b.level_name, 'fr') ||
++            a.id - b.id,
++        );
++
++      const yearGroupIds = new Set(yearGroups.map((group) => group.id));
++
++      const active_students: RentreeStudentSummary[] = store.students
++        .filter((student) => student.status === 'actif')
++        .map((student) => {
++          const groupIds = [
++            ...new Set(
++              store.enrollments
++                .filter(
++                  (enrollment) =>
++                    enrollment.student_id === student.id &&
++                    enrollment.status === 'actif' &&
++                    yearGroupIds.has(enrollment.group_id),
++                )
++                .map((enrollment) => enrollment.group_id),
++            ),
++          ].sort((a, b) => a - b);
++          if (groupIds.length === 0) return null;
++          const labels = groupIds
++            .map((id) => {
++              const group = store.groups.find((entry) => entry.id === id);
++              if (!group) return null;
++              const subject =
++                store.subjects.find((entry) => entry.id === group.subject_id)?.name ?? '—';
++              const level = store.levels.find((entry) => entry.id === group.level_id)?.name ?? '—';
++              return `${subject} — ${level}`;
++            })
++            .filter((label): label is string => label !== null);
++          return {
++            id: student.id,
++            full_name: student.full_name,
++            phone: student.phone,
++            level_name: store.levels.find((entry) => entry.id === student.level_id)?.name ?? null,
++            current_groups: labels.join(', '),
++            group_ids: groupIds,
++          };
++        })
++        .filter((student): student is RentreeStudentSummary => student !== null)
++        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'));
++
++      const active_teachers: RentreeTeacherSummary[] = store.teachers
++        .filter((teacher) => teacher.status === 'actif')
++        .map((teacher) => ({
++          id: teacher.id,
++          full_name: teacher.full_name,
++          group_count: yearGroups.filter(
++            (group) => group.teacher_id === teacher.id && active(group),
++          ).length,
++        }))
++        .filter((teacher) => teacher.group_count > 0)
++        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'));
++
++      const preview: RentreePreview = {
++        current_year: year,
++        active_groups,
++        active_students,
++        active_teachers,
++      };
++      return clone(preview);
++    }
++
++    case 'cmd_execute_rentree': {
++      const data = (args?.data ?? {}) as Partial<RentreeInput>;
++      const label = String(data.new_label ?? '').trim();
++      const startDate = String(data.new_start ?? '');
++      const endDate = String(data.new_end ?? '');
++      const enrollmentDate = String(data.enrollment_date ?? '');
++      const groupIds = Array.isArray(data.group_ids) ? data.group_ids : [];
++      const studentIds = Array.isArray(data.student_ids) ? data.student_ids : [];
++
++      if (!label) throw new Error("Le libellé de l'année scolaire est obligatoire");
++      validateDateRange(startDate, endDate);
++      if (!/^\d{4}-\d{2}-\d{2}$/.test(enrollmentDate)) {
++        throw new Error("Date d'inscription invalide (format attendu AAAA-MM-JJ)");
++      }
++      if (groupIds.length === 0 && studentIds.length === 0) {
++        throw new Error('Sélectionnez au moins un groupe ou un élève');
++      }
++      if (store.schoolYears.some((year) => year.label === label)) {
++        throw new Error('Cette année scolaire existe déjà');
++      }
++      groupIds.forEach((id) => {
++        if (!store.groups.some((group) => group.id === id)) {
++          throw new Error(`Groupe introuvable (${id})`);
++        }
++      });
++
++      // Everything is applied to a copy: a failure anywhere leaves the store
++      // exactly as it was (the Rust side uses a SQL transaction).
++      const draft = clone(store);
++      const previous =
++        [...draft.schoolYears].sort((a, b) =>
++          Number(b.is_active) - Number(a.is_active) ||
++          (b.start_date ?? '').localeCompare(a.start_date ?? ''),
++        )[0] ?? null;
++      const previousYearId = previous?.id ?? 0;
++
++      // 1. the new year, and only it, is active
++      const newYear: SchoolYear = {
++        id: draft.nextYearId++,
++        label,
++        start_date: startDate,
++        end_date: endDate,
++        is_active: true,
++      };
++      draft.schoolYears = draft.schoolYears.map((year) => ({ ...year, is_active: false }));
++      draft.schoolYears.push(newYear);
++
++      // 2. the groups, with their week
++      const groupMap = new Map<number, number>();
++      groupIds.forEach((oldId) => {
++        const source = draft.groups.find((group) => group.id === oldId);
++        // Inactive groups cannot take enrollments: skipped, not fatal.
++        if (!source || (source.status ?? 'actif') !== 'actif') return;
++        const schedules = sortSchedules(source.schedules).map((slot) => ({
++          ...slot,
++          id: draft.nextScheduleId++,
++        }));
++        const copy: Group = {
++          ...clone(source),
++          id: draft.nextGroupId++,
++          school_year_id: newYear.id,
++          schedules,
++          schedule_text: scheduleText(schedules),
++          enrolled_count: 0,
++        };
++        draft.groups.push(copy);
++        groupMap.set(oldId, copy.id);
++      });
++
++      // 3. the students, re-enrolled group by group
++      let studentsReenrolled = 0;
++      let enrollmentsCreated = 0;
++      let invoicesGenerated = 0;
++
++      studentIds.forEach((studentId) => {
++        // A deactivated student is not re-enrolled.
++        if (draft.students.find((student) => student.id === studentId)?.status !== 'actif') return;
++        const current = draft.enrollments.filter(
++          (enrollment) =>
++            enrollment.student_id === studentId &&
++            enrollment.status === 'actif' &&
++            draft.groups.some(
++              (group) => group.id === enrollment.group_id && group.school_year_id === previousYearId,
++            ),
++        );
++        let createdForStudent = 0;
++        current.forEach((enrollment) => {
++          const newGroupId = groupMap.get(enrollment.group_id);
++          if (newGroupId === undefined) return;
++          const invoicesBefore = draft.invoices.length;
++          enrollOne(draft, studentId, newGroupId, enrollmentDate);
++          const invoicesAfter = draft.invoices.length;
++          invoicesGenerated += invoicesAfter - invoicesBefore;
++          enrollmentsCreated += 1;
++          createdForStudent += 1;
++          enrollment.status = 'terminé';
++          enrollment.end_date = enrollmentDate;
++        });
++        if (createdForStudent > 0) studentsReenrolled += 1;
++      });
++
++      // 4. one audit row for the whole operation
++      logAudit(
++        draft,
++        'RENTREE',
++        newYear.id,
++        JSON.stringify({
++          label,
++          start_date: startDate,
++          end_date: endDate,
++          previous_year_id: previousYearId,
++          enrollment_date: enrollmentDate,
++          groups_created: groupMap.size,
++          students_reenrolled: studentsReenrolled,
++          enrollments_created: enrollmentsCreated,
++          invoices_generated: invoicesGenerated,
++        }),
++        'school_year',
++      );
++
++      save(draft);
++      const result: RentreeResult = {
++        new_year_id: newYear.id,
++        groups_created: groupMap.size,
++        students_reenrolled: studentsReenrolled,
++        enrollments_created: enrollmentsCreated,
++        invoices_generated: invoicesGenerated,
++      };
++      return result;
++    }
++
++    case 'cmd_get_bilan': {
++      const yearId = asNumber(args, 'yearId');
++      const year = store.schoolYears.find((entry) => entry.id === yearId);
++      if (!year) throw new Error('Année scolaire introuvable');
++      return clone(computeBilan(store, year));
++    }
++
+     // -- Weekly timetable (Phase 13) ---------------------------------------
+     case 'cmd_get_group_schedules': {
+       const groupId = asNumber(args, 'groupId');
+diff --git a/src/types/index.ts b/src/types/index.ts
+index 11fbc10..453ebb3 100644
+--- a/src/types/index.ts
++++ b/src/types/index.ts
+@@ -680,3 +680,99 @@ export interface TimetableFilters {
+   teacher_id: number | null;
+   room: string | null;
+ }
++
++// ---------------------------------------------------------------------------
++// Phase 14 — Rentrée (school year transition) & Bilan (annual summary)
++// ---------------------------------------------------------------------------
++
++/** One group of the current year, offered in step 2 of the wizard. */
++export interface RentreeGroupSummary {
++  id: number;
++  subject_name: string;
++  level_name: string;
++  teacher_name: string | null;
++  schedule_text: string;
++  monthly_fee_cents: number;
++  enrolled_count: number;
++}
++
++/** One student holding an active enrollment this year (step 3). */
++export interface RentreeStudentSummary {
++  id: number;
++  full_name: string;
++  phone: string;
++  level_name: string | null;
++  /** Readable list: `"Mathématiques — Tronc Commun, …"`. */
++  current_groups: string;
++  /** Ids behind `current_groups`, used for the estimate. */
++  group_ids: number[];
++}
++
++export interface RentreeTeacherSummary {
++  id: number;
++  full_name: string;
++  group_count: number;
++}
++
++export interface RentreePreview {
++  current_year: SchoolYear;
++  active_groups: RentreeGroupSummary[];
++  active_students: RentreeStudentSummary[];
++  active_teachers: RentreeTeacherSummary[];
++}
++
++/** Payload of `cmd_execute_rentree`. */
++export interface RentreeInput {
++  new_label: string;
++  new_start: string;
++  new_end: string;
++  group_ids: number[];
++  student_ids: number[];
++  enrollment_date: string;
++}
++
++export interface RentreeResult {
++  new_year_id: number;
++  groups_created: number;
++  students_reenrolled: number;
++  enrollments_created: number;
++  invoices_generated: number;
++}
++
++export interface MonthlyBreakdown {
++  month: number;
++  year: number;
++  month_name: string;
++  revenue_cents: number;
++  expenses_cents: number;
++  compensation_cents: number;
++  net_cents: number;
++}
++
++export interface TopGroup {
++  group_id: number;
++  name: string;
++  revenue_cents: number;
++  enrolled_count: number;
++}
++
++export interface TopStudent {
++  student_id: number;
++  name: string;
++  total_paid_cents: number;
++}
++
++export interface BilanData {
++  year: SchoolYear;
++  total_students: number;
++  total_groups: number;
++  total_revenue_cents: number;
++  total_theoretical_cents: number;
++  collection_rate: number;
++  total_compensation_cents: number;
++  total_expenses_cents: number;
++  net_income_cents: number;
++  monthly_breakdown: MonthlyBreakdown[];
++  top_groups: TopGroup[];
++  top_students: TopStudent[];
++}

@@ -253,11 +253,28 @@
   animation: pulse-red 2s infinite;
 }
 
+/* Dropdown popup (CreatableSelect): a short fade + slide from the trigger. */
+@keyframes popupIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.popup-enter {
+  animation: popupIn 0.12s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn-press:active,
   .modal-enter,
   .modal-exit,
   .badge-alert,
+  .popup-enter,
   .tab-indicator {
     animation: none;
     transform: none;

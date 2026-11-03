@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Plus } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import Textarea from '../ui/Textarea';
 import { toast } from '../ui/Toast';
+import QuickCreateSubject from '../quick-create/QuickCreateSubject';
 import { subjectsApi } from '../../services/settings';
 import { isValidTeacherPhone, teachersApi } from '../../services/teachers';
 import { cn } from '../../utils/format';
@@ -65,6 +66,7 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [quickSubject, setQuickSubject] = useState(false);
   const [loadedDetail, setLoadedDetail] = useState<number[] | null>(null);
 
   // Re-seed the form whenever the modal opens for a different teacher.
@@ -75,6 +77,12 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
     setSubmitting(false);
     setLoadedDetail(null);
   }, [open, teacher]);
+
+  /** Reloaded after a quick-create so the new subject appears unchecked. */
+  const loadSubjects = useCallback(async () => {
+    const rows = await subjectsApi.list();
+    setSubjects(rows.filter((subject) => subject.is_active));
+  }, []);
 
   // Subjects (active only) for the checkbox grid.
   useEffect(() => {
@@ -197,7 +205,8 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
   };
 
   return (
-    <Modal
+    <>
+      <Modal
       open={open}
       onClose={onClose}
       size="lg"
@@ -290,7 +299,18 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
               ))}
             </div>
           )}
-          <p className="mt-1 text-[12px] text-muted">{t('teachers.subjectsHint')}</p>
+          <div className="mt-1.5 flex items-center justify-between gap-3">
+            <p className="text-[12px] text-muted">{t('teachers.subjectsHint')}</p>
+            <button
+              type="button"
+              onClick={() => setQuickSubject(true)}
+              data-testid="teacher-subject-create"
+              className="flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/5"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('teachers.newSubject')}
+            </button>
+          </div>
         </fieldset>
 
         <Textarea
@@ -304,7 +324,24 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
 
         <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
       </form>
-    </Modal>
+      </Modal>
+
+      {quickSubject ? (
+        <QuickCreateSubject
+          onClose={() => setQuickSubject(false)}
+          onCreated={async (subject) => {
+            setQuickSubject(false);
+            await loadSubjects();
+            // The new subject is ticked straight away: that is why it was created.
+            setForm((previous) =>
+              previous.subjectIds.includes(subject.id)
+                ? previous
+                : { ...previous, subjectIds: [...previous.subjectIds, subject.id] },
+            );
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

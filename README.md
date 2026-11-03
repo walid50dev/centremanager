@@ -14,7 +14,57 @@ Desktop application (Windows) for managing tutoring centres in Morocco — stude
 
 **Phase 8** delivers **printed receipts** — the receipt is now a real PDF rendered with `@react-pdf/renderer`, in two layouts (A4 or 80 mm thermal), previewed inline, downloadable and printable — plus the **final UI polish**: a per-route error boundary, `Ctrl/Cmd+K`, `Ctrl/Cmd+L` and `Escape` shortcuts, a pulsing late-payment badge on *Paiements*, toast stacking and press/modal animations.
 
+**Phase 10** refines the two most-used forms: a student now carries the **father's name** (`Nom du père`) and a **home address** (`Adresse maison`, which replaced the old free-form address) — carried over from an existing database by a rename, never a data loss — and every phone number is displayed as `06 07 12 34 56` while staying stored as ten raw digits. All `<input type="number">` were replaced by a single **`NumberInput`** component (grouped thousands, clamped min/max, hold-to-repeat +/- buttons inside the border, no spinners and no wheel-to-change), with `MoneyInput` rebuilt on top of it so centimes stay exact.
+
 **Phase 9** makes it a **release**: every one of the twenty edge cases is now covered by a test (14 new Rust tests plus a 42-assertion browser suite), *Paramètres → Sauvegarde* grows a one-click **demo data** seeder (15 students, 5 teachers, 8 groups, two months of invoices at ~60 % collection, activities and settlements), and the packaging is final — identifier `com.centremanager.app` (a V1.0 database is migrated automatically), production **CSP**, version **1.1.0**, **NSIS** installer in French and Arabic, 1280 × 800 window.
+
+**Phase 11** closes the last gap between *revenue* and *profit*: a new **Frais** page records the centre's monthly charges (rent, WiFi, electricity, water, the assistant, supplies — the categories are editable in *Paramètres*), each row coloured by category and audited, and the dashboard grows a sixth card — **💎 Total Net** = revenue − expenses − teacher payroll — green in profit, red in loss, amber on break-even, with the three amounts in its tooltip and its trend against the previous month. Expenses are internal tracking, so they can be edited and deleted in V1 (the audit log keeps the snapshot). Since **V1.6.0** each charge also carries **its own date** — a date picker in the form, a *Date* column in the list, newest first — so a charge can be recorded late or back-dated.
+
+**Phase 12** removes the last dead end in the forms: every dropdown that points at another entity — teacher, subject, level, group, student, expense category — now ends with **“+ Nouveau…”**. Choosing it opens a *minimal* quick-create dialog **on top of** the form (no navigation, no lost input); the new record is created, the dropdown refreshes, and it is selected. One level of nesting is allowed and enforced (`z-50` form → `z-60` quick-create → `z-70` nested), so the stack can never grow a third dialog.
+
+| A dropdown that can create: “+ Nouveau…” under the options | Quick-create above the group form (z-60) | …the created teacher is selected |
+| --- | --- | --- |
+| ![Creatable dropdown](docs/screenshots/phase12-01-creatable-dropdown.png) | ![Quick subject](docs/screenshots/phase12-02-quick-subject.png) | ![Quick teacher](docs/screenshots/phase12-03-quick-teacher.png) |
+
+| New student straight from the payment wizard | Nested: subject created from the group wizard (z-70) | Group wizard, step 2 |
+| --- | --- | --- |
+| ![Quick student](docs/screenshots/phase12-04-quick-student.png) | ![Nested](docs/screenshots/phase12-05-nested.png) | ![Quick group](docs/screenshots/phase12-06-quick-group.png) |
+
+| An empty list still offers “+ Nouveau…” | Arabic / RTL dropdown | …and the Arabic quick-create |
+| --- | --- | --- |
+| ![Empty](docs/screenshots/phase12-07-empty.png) | ![Arabic dropdown](docs/screenshots/phase12-08-arabic.png) | ![Arabic modal](docs/screenshots/phase12-09-arabic-modal.png) |
+
+**Phase 13** makes a group *weekly*: it now meets on as many days as it likes, each with its own
+hours (`group_schedules`, the 19th table, one row per day), and a new **Emploi du temps** page
+draws the whole week on one grid — subject-coloured blocks that span their real duration, sticky
+day and hour rails, four server-side filters (niveau, matière, enseignant, salle) that combine,
+a click-through to the group sheet, and a day-tab layout on a phone. The legacy
+`day_of_week/start_time/end_time` columns are kept (nothing is dropped in V1) and mirrored from
+the first day, so every older read path still works and pre-Phase 13 groups appear unchanged.
+
+| The week on one grid | Days of the week in the group form | The same card, now multi-day |
+| --- | --- | --- |
+| ![Timetable](docs/screenshots/phase13-01-timetable.png) | ![Week editor](docs/screenshots/phase13-03-group-week.png) | ![Multi-day card](docs/screenshots/phase13-04-multiday-card.png) |
+
+| Filters that combine (and an empty week) | Quick-create: days + “same hours” | Phone: one day at a time |
+| --- | --- | --- |
+| ![Empty state](docs/screenshots/phase13-02-empty-state.png) | ![Quick create days](docs/screenshots/phase13-06-quick-create-days.png) | ![Mobile](docs/screenshots/phase13-07-mobile.png) |
+
+| Click a block → the group sheet | Arabic / RTL, Monday still on the left | …and the Arabic week editor |
+| --- | --- | --- |
+| ![Block detail](docs/screenshots/phase13-05-block-detail.png) | ![Arabic timetable](docs/screenshots/phase13-08-arabic.png) | ![Arabic week](docs/screenshots/phase13-09-arabic-week.png) |
+
+| Frais du mois | New expense | Delete with confirmation |
+| --- | --- | --- |
+| ![Expenses page](docs/screenshots/phase11-01-expenses-page.png) | ![Expense modal](docs/screenshots/phase11-02-expense-modal.png) | ![Delete](docs/screenshots/phase11-04-delete-confirm.png) |
+
+| Total Net on the dashboard | Expenses categories, in *Paramètres* | Frais, Arabic / RTL |
+| --- | --- | --- |
+| ![Net card](docs/screenshots/phase11-05-dashboard-net.png) | ![Categories](docs/screenshots/phase11-03-settings-categories.png) | ![Expenses AR](docs/screenshots/phase11-07-expenses-ar.png) |
+
+| Zero net = break-even (amber) |
+| --- |
+| ![Break-even](docs/screenshots/phase11-06-dashboard-zero.png) |
 
 | Fill the app with demo data (real window) | Confirmation (real window) | …then it is a full centre (real window) |
 | --- | --- | --- |
@@ -51,6 +101,31 @@ Desktop application (Windows) for managing tutoring centres in Morocco — stude
 | Settings — centre | Levels & lycée branches | Backup |
 | --- | --- | --- |
 | ![Settings](docs/screenshots/tauri-settings-01-center-saved.png) | ![Levels](docs/screenshots/tauri-settings-04-branches.png) | ![Backup](docs/screenshots/tauri-settings-10-backup.png) |
+
+**Phase 14** closes the year. *Paramètres → Année scolaire* grows one prominent button —
+**Nouvelle rentrée** — that opens a four-step wizard: the new year (label and dates, refused when
+the label already exists or the end is not after the start), the groups to carry over (all
+pre-ticked, with their whole week, teacher, fee and capacity), the students to re-enroll
+(searchable, all pre-ticked, with the date of the new enrollments) and a recap. `Confirmer la
+rentrée` runs **one transaction**: create and activate the year, copy the chosen groups with their
+weekly schedules, give every chosen student a *fresh* enrollment in the copy of each group they were
+in — a new start date and its first invoice, through the same `enroll_on` as the enrollment wizard —
+close the old enrollments (`terminé`) and write one `RENTREE` audit row. Nothing is deleted and
+nothing is guessed: a student who was not in a group is not put in one, and an inactive student is
+never re-enrolled.
+
+> **The *Bilan* page shipped with 1.5.0 and was removed on request.** The frontend (page, route,
+> sidebar entry, service call, types, dev-backend mock, `bilan.*` translations) is gone; the Rust
+> command `cmd_get_bilan` is deliberately kept in place, unused and unexposed, in case the page comes
+> back. `/bilan` now falls through to the dashboard.
+
+| The wizard, step 2 | Students to re-enroll | …and the result |
+| --- | --- | --- |
+| ![Rentrée groups](docs/screenshots/phase14-02-rentree-groups.png) | ![Rentrée students](docs/screenshots/phase14-03-rentree-students.png) | ![Rentrée result](docs/screenshots/phase14-05-rentree-result.png) |
+
+| The recap before confirming | Arabic / RTL wizard |
+| --- | --- |
+| ![Rentrée recap](docs/screenshots/phase14-04-rentree-recap.png) | ![Rentrée AR](docs/screenshots/phase14-06-rentree-ar.png) |
 
 ---
 
@@ -101,7 +176,7 @@ npm run dev          # http://localhost:1420
 | `npm run tauri dev` | Desktop app in development with HMR |
 | `npm run tauri build` | Windows NSIS installer (`CentreManager_1.1.0_x64-setup.exe`) |
 | `npm run check:i18n` | Fails if a `t('key')` used in `src/` has no entry in `fr.json` / `ar.json` |
-| `cargo test` (in `src-tauri/`) | 150 Rust tests (schema, WAL, FK, auth, throttle, settings, reference data, students, groups, enrollments, invoices, payments, teachers, compensation, activities, dashboard, late-payment count, backup, demo seed, the twenty edge cases) |
+| `cargo test` (in `src-tauri/`) | 190 Rust tests (schema, WAL, FK, auth, throttle, settings, reference data, students, groups, enrollments, invoices, payments, teachers, compensation, activities, dashboard, late-payment count, backup, demo seed, the twenty edge cases) |
 | `python3 tools/generate_icons.py` | Regenerate app icons (PNG/ICO/ICNS) |
 
 ## Project structure
@@ -356,7 +431,7 @@ edit) and `pages/StudentDetailPage.tsx` (record sheet, route `/students/:id`).
 | Search | name **or** phone, case-insensitive partial match (`LIKE %term%`), debounced **300 ms** — typing does not fire a query per keystroke |
 | Niveau | `Tous les niveaux` + the 12 seeded levels |
 | Statut | `Tous` / `Actifs` / `Inactifs`, **defaults to `Actifs`** |
-| Table | Nom complet · Niveau (`level_name — branch_name`, `—` when unset) · Téléphone · Statut badge · Date inscription |
+| Table | Nom complet (+ `Père : …` underneath when set) · Niveau (`level_name — branch_name`, `—` when unset) · Téléphone (`06 07 12 34 56`) · Statut badge · Date inscription |
 | Row click | navigates to the student's sheet (whole row is a button, keyboard accessible) |
 | Loading | 5 skeleton rows, so the table never jumps |
 | Empty | illustration + `Aucun élève trouvé`; when filters are active the copy changes to `Aucun élève ne correspond à ces filtres.` and a `Réinitialiser les filtres` button appears |
@@ -368,12 +443,14 @@ Query shape (`cmd_get_students`): a single statement with `LEFT JOIN levels` /
 
 ### The form
 
-Two-column grid: nom complet\* · date de naissance · téléphone\* · téléphone parent ·
-niveau · branche (disabled until a level is picked, then filtered to that level's
-branches) · adresse (textarea) · notes (textarea). Validation is inline and runs on
-blur + on submit, so the red message sits under the offending field; `Enregistrer`
-stays disabled while the form is invalid or unchanged. Toasts: `Élève ajouté ✓` /
-`Élève modifié ✓`.
+Two-column grid (Phase 10 layout): nom complet\* (full width) · **nom du père** · date de
+naissance · téléphone\* · téléphone parent · niveau · branche (disabled until a level is
+picked, then filtered to that level's branches) · **adresse maison** (textarea, full
+width) · notes (textarea, full width). Validation is inline and runs on blur + on
+submit, so the red message sits under the offending field; `Enregistrer` stays disabled
+while the form is invalid or unchanged. Toasts: `Élève ajouté ✓` / `Élève modifié ✓`.
+Phones are typed freely (`0607123456`, `06 07 12 34 56`, `06-07-12-34-56`) and grouped
+on blur; validation always runs on the ten stripped digits (see *Phase 10*).
 
 Only **nom complet** and **téléphone** are mandatory, which is what the "create with
 required fields only" case requires; the other five columns accept `NULL` in the schema
@@ -387,7 +464,7 @@ Back arrow, name + status badge, `Niveau — Branche` under the title, and
 
 | Tab | Content |
 | --- | --- |
-| Informations | two-column definition list of every field + `Inscrit le` / `Dernière modification` |
+| Informations | two-column definition list of every field (nom complet · nom du père · date de naissance · téléphone · téléphone parent · niveau · branche · adresse maison · notes) + `Inscrit le` / `Dernière modification`, phones rendered grouped in a `dir="ltr"` run |
 | Inscriptions | empty state — filled in Phase 4 |
 | Finances | empty state — filled in Phase 5 |
 | Historique | timeline of `audit_log` (last 50, newest first): green dot = création, blue = modification, orange = changement de statut; the JSON payload is rendered as readable lines, ids resolved to level/branch names and dates formatted |
@@ -1262,9 +1339,14 @@ The SQLite file is created on first launch in the OS app-data directory:
 
 Every connection is opened with `journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000`, `synchronous=NORMAL`. `run_migrations()` executes `schema.sql` (embedded with `include_str!`), so the schema is applied — idempotently — on every launch.
 
-### The 17 tables
+### The 19 tables
 
-`settings`, `school_years`, `levels`, `branches`, `subjects`, `students`, `teachers`, `teacher_subjects`, `groups`, `enrollments`, `invoices`, `payments`, `receipts`, `teacher_activities`, `teacher_compensation`, `teacher_settlements`, `audit_log`.
+`settings`, `school_years`, `levels`, `branches`, `subjects`, `students`, `teachers`, `teacher_subjects`, `groups`, `group_schedules` (Phase 13), `enrollments`, `invoices`, `payments`, `receipts`, `teacher_activities`, `teacher_compensation`, `teacher_settlements`, `monthly_expenses` (Phase 11, `expense_date` since Phase 15), `audit_log`.
+
+`group_schedules(group_id, day_of_week, start_time, end_time)` is `UNIQUE(group_id, day_of_week)`
+and cascades on delete. `groups.day_of_week/start_time/end_time` stay in the table — V1 never drops
+a column — and are kept equal to the **first** day of the week by the backend, so receipts, exports
+and any older query keep reading a sensible slot.
 
 Money is always `i64` **centimes**. `center_name` and `admin_password_hash` are deliberately **not** seeded: their absence is what triggers the first-launch setup screen.
 
@@ -1275,7 +1357,7 @@ Money is always `i64` **centimes**. `center_name` and `admin_password_hash` are 
 | Route | Page | Shell |
 | --- | --- | --- |
 | `/login` | `LoginPage` (setup card on first launch, then login card) | none |
-| `/`, `/students`, `/students/:id`, `/groups`, `/teachers`, `/payments`, `/settings` | page shells | `ProtectedRoute` → `AppLayout` (Sidebar + Header + `<Outlet/>`) |
+| `/`, `/students`, `/students/:id`, `/groups`, `/timetable`, `/teachers`, `/payments`, `/expenses`, `/settings` | page shells | `ProtectedRoute` → `AppLayout` (Sidebar + Header + `<Outlet/>`) |
 
 `ProtectedRoute`: `!isSetup` → `/login`; `!isAuthenticated` → `/login`; `isLocked` → **no redirect**, the overlay is rendered over the still-mounted route.
 
@@ -1424,8 +1506,11 @@ The whole centre lives in one file:
    calls `print()`). A native print bridge is V2.
 5. **Restore is manual**: the file is swapped while the app is closed. There is no in-app
    automated restore, on purpose — replacing an open SQLite file is a data-loss risk.
-6. **One active school year at a time**, with no year-end rollover wizard and no multi-year
-   comparison; past years stay in the database but must be looked at one by one.
+6. **One active school year at a time.** The year-end rollover (*Nouvelle rentrée*) copies the
+   groups and re-enrolls the students you tick, but it carries nothing else over: no pro-rata, no
+   automatic promotion to the next level, no transfer of an unpaid balance to the new year. Past
+   years are never deleted, but V1 no longer has an annual summary screen: the *Bilan* page was
+   removed, so a closed year is read through its payments and expenses pages.
 7. **Local data only**: one database file on one PC. No sync, no network share, no
    multi-workstation use — sharing the file over a network drive is not supported.
 8. **One password, no user accounts**: everybody who opens the app shares the same session.
@@ -1436,6 +1521,147 @@ The whole centre lives in one file:
    receipts, and no payroll export (CSV/Excel).
 
 ## Version History
+
+### V1.6.0 — 3 November 2026
+
+**A charge now has a date.** The monthly-expense form gains a **Date de la dépense** field
+(`type="date"`, today by default, editable) and the table a **Date** column, so a charge can be
+recorded late — or dated in the past on purpose — instead of always being stamped "today".
+
+| Backend | |
+| --- | --- |
+| `monthly_expenses.expense_date` | `TEXT NOT NULL DEFAULT (date('now'))`, ISO `YYYY-MM-DD`; existing databases get it through `ALTER TABLE` + a backfill from `created_at`, plus `idx_expenses_date` |
+| `MonthlyExpense` / `ExpenseRow` | new `expense_date: String` |
+| `CreateExpenseInput` | new `expense_date: Option<String>` — `None` (or blank) means today; strict ISO is enforced (`2026-1-5`, `2026-02-30`, `2023-02-29`, a full timestamp are all refused) |
+| `cmd_get_expenses` | returns the date and sorts by it, **newest first** (then category, label, id) |
+| `cmd_update_expense` | a payload without a date keeps the stored one |
+| `cmd_delete_expense` | unchanged, and its audit snapshot now includes the date |
+
+| Frontend | |
+| --- | --- |
+| `ExpensesPage` | a **Date** column first in the table, printed `DD/MM/YYYY` (fr) or `YYYY/MM/DD` (ar); after a back-dated save the page follows the charge to its month |
+| `ExpenseModal` | date picker labelled *Date de la dépense* / *تاريخ المصروف*, today by default, required; the accounting period is read off the date |
+| types / mock / i18n | `expense_date` in `Expense` and `ExpenseInput`, mirrored in the dev backend (validation, seeding, sorting, old stores upgraded), four new keys in both languages |
+
+Verification: `cargo test` **197 / 0**, `fmt` + `clippy` clean, `tsc` clean, `check:i18n` **757 /
+757**, `vite build` **655.49 kB (181.09 kB gzip)**, browser suite **39 / 0** with 0 console errors,
+regressions **64 / 85 / 67 / 75 / 68** unchanged.
+
+### V1.5.1 — 3 November 2026
+
+**The *Bilan* page is gone.** Removed on request: `BilanPage.tsx`, its `/bilan` route and
+`ErrorBoundary`, the sidebar entry and its `BarChart3` icon, `bilanApi` in
+`src/services/schoolYear.ts`, the four Bilan-only types (`BilanData`, `MonthlyBreakdown`,
+`TopGroup`, `TopStudent`), the `cmd_get_bilan` mock and `computeBilan` helper in
+`src/services/settingsDevBackend.ts`, and the `bilan` block (18 keys) plus `sidebar.bilan` in both
+languages — 964 → **946 leaf keys**, `rentree.confirmHint` reworded in fr and ar so no sentence
+still points at the page.
+
+| Kept, on purpose | Why |
+| --- | --- |
+| `src-tauri/src/commands/bilan.rs`, its six tests, `cmd_get_bilan` in `mod.rs` and `main.rs` | the backend was not to be touched; the command is compiled, registered and unexposed |
+| the 19 tables, the schema, the migrations | a UI removal must never become a data migration |
+| everything rentrée | `rentreeApi`, `Rentree*` types, `RentreeWizardModal`, the two commands, their mock and translations are untouched |
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **190 passed, 0 failed** — unchanged, `commands::bilan` included |
+| `cargo fmt --check` / `cargo clippy --all-targets` | clean, **0 warnings** |
+| `tsc --noEmit` / `vite build` | clean, **653.92 kB (180.61 kB gzip)**, CSS 41.68 kB — **12.97 kB of JS and 0.42 kB of CSS lighter** |
+| `npm run check:i18n` | fr **753** / ar **753** keys used, all present (was 778) |
+| Browser suite Phase 14 | **85 assertions, 0 failed, 0 console errors** — the sidebar's eight entries, no *Bilan*, `/bilan` falling through to the dashboard, the wizard end to end, the Arabic pass |
+| Regression | Phase 13 **67 / 0** (back to “eight links”), Phase 12 **75 / 0**, Phase 11 **64 / 0**, Phase 10 **68 / 0** |
+| Repair kit | `remove-bilan.mjs` reproduces the change byte for byte; the installer now installs Phase 14 *and* removes Bilan; `check-phase14` **36 / 0** |
+
+### V1.5.0 — 1 November 2026
+
+* **`cmd_get_rentree_preview` / `cmd_execute_rentree`** (`src-tauri/src/commands/rentree.rs`): the
+  preview returns the active year with its groups (`schedule_text`, headcount, fee, teacher), its
+  enrolled students (with the groups they are in) and its teachers; the execution is **one
+  transaction** that creates and activates the new year, copies the selected groups with their
+  `group_schedules`, re-enrolls the selected students in the copies of the groups they were in
+  (through `enroll_on`, so each gets its first invoice), closes the old enrollments and writes a
+  single `RENTREE` audit row. Inactive students and groups are skipped, never guessed into a group.
+* **`cmd_get_bilan`** (`src-tauri/src/commands/bilan.rs`): one school year folded into totals
+  (students, groups, revenue, theoretical, collection rate, payroll, expenses, net), twelve monthly
+  rows with `month_name`, the top-five groups by money received and the top-ten payers. Money is
+  scoped to the year's date range, invoices to their billing month inside it. **Kept, but no longer
+  reachable from the UI** — see the removal note above.
+* **`RentreeWizardModal`**: four steps — year (suggestions from the last `start_date`, duplicate
+  label and reversed dates refused), groups (all pre-ticked, select/deselect all, `Y/Z` count),
+  students (search, all pre-ticked, enrollment date defaulting to the new start date, warning and
+  estimated invoice total) and recap — then a success card with the four counts. It is opened from a
+  prominent button in *Paramètres → Année scolaire*, visible only while a year is active.
+* **`BilanPage` (`/bilan`)** — eight KPI cards, the month-by-month table with its total row and
+  CSS-only bars, the top-five groups and the top-ten payers, a year selector and an empty state,
+  second in the sidebar. **Removed afterwards on request**: the page, its route, its sidebar entry,
+  its service call, its types, its dev-backend mock and its `bilan.*` translations are gone; only
+  the Rust command above remains.
+* **No new table**: 19 before, 19 after. `school_years`, `groups`, `group_schedules`, `enrollments`,
+  `invoices`, `payments`, `teacher_settlements`, `monthly_expenses` and `audit_log` are all reused.
+
+### V1.4.0 — 1 November 2026
+
+* **`group_schedules`** (`src-tauri/src/db/schema.sql`, the 19th table): one row per weekday per
+  group, `UNIQUE(group_id, day_of_week)`, cascading on delete, with `idx_schedules_group` and
+  `idx_schedules_day`. `run_migrations()` backfills it from the legacy columns of an existing
+  database (`INSERT OR IGNORE … SELECT`), and the old `groups` columns are kept and mirrored from
+  the first day — V1 never drops a column.
+* **Four new commands** (`src-tauri/src/commands/schedules.rs`): `cmd_set_group_schedules`
+  (replace a whole week in one transaction, validated), `cmd_get_group_schedules`,
+  `cmd_get_timetable` (every active slot joined with subject, level, branch, teacher, room,
+  headcount and fee; four optional ANDed filters; ordered by day then start) and
+  `cmd_get_timetable_rooms`. `GroupRow` gained `schedules` and `schedule_text` (batched in one
+  query), and `cmd_create_group`/`cmd_update_group` accept a whole week — falling back to the
+  single legacy slot when they only get one.
+* **Seven-day editor** in the group form: a Lun → Dim row of checkboxes, each with its own start
+  and end time (greyed out until ticked), a live summary underneath, and per-day validation
+  (`atLeastOneDay`, `endAfterStartDay`). The card now reads `📅 Lun 16-18 · Mer 14-16 · Ven 16-18`,
+  or the familiar `Lundi 16:00–18:00` when a group still meets once. `QuickCreateGroup` follows
+  with day chips and a **Horaires identiques** toggle (on: one range for every ticked day; off:
+  one row per day).
+* **New page `/timetable` — “Emploi du temps”**, between *Groupes* and *Enseignants*: a weekly
+  CSS-grid timetable with sticky day and hour rails, blocks that span their real duration in the
+  subject's colour, lane-splitting for overlapping classes, four server-side filters + reset, a
+  debounced (200 ms) refetch, a Sunday toggle, a click-through to the group sheet, a hover tooltip,
+  day tabs below `md`, and an empty state that keeps the rails visible.
+
+### V1.3.0 — 1 November 2026
+
+* **`CreatableSelect`** (`src/components/ui/CreatableSelect.tsx`): every dropdown that links to
+  another entity now ends with **“+ Nouveau…”** after a separator. Keyboard (arrows, Enter,
+  Escape, Home/End), click-outside, optional search — client-side, or server-side through
+  `onSearch` — RTL-correct, with the create row sticky so a long list never hides it.
+* **Six quick-create dialogs** (`src/components/quick-create/`): teacher, subject, level,
+  student, group (two steps) and expense category. Each creates the record, closes, hands the
+  new object back, and the parent refreshes and selects it — the parent form keeps everything
+  already typed.
+* **Depth control**: `Modal` gained a `zIndex` prop (default 50) whose backdrop darkens with each
+  level, so a quick-create sits at `z-60` and a nested one at `z-70`; simple dialogs use plain
+  selects, which makes a third dialog impossible rather than merely discouraged.
+* **New entries**: *Paiements → Encaisser un paiement* opens the wizard on its search step
+  (where a student can now be created on the spot), *Enseignants* gained **+ Nouvelle matière**
+  under the subject checkboxes, and the enrollment wizard gained **+ Nouveau groupe /
+  + Nouvel élève**.
+
+### V1.2.0 — 1 November 2026
+
+* **Monthly expenses**: a new **Frais** page (between *Paiements* and *Paramètres*) records the
+  centre's charges month by month — label, amount in centimes, category, optional notes — with a
+  month/year selector, a total in red, per-category mini cards with their own colours and icons,
+  a category filter, and full edit/delete (expenses are internal tracking, so they *can* be
+  deleted; every mutation is audited with a snapshot). `monthly_expenses` is the 18th table.
+* **Editable categories**: *Paramètres → Catégories de dépenses* adds and removes the tags the
+  expense form offers; the seven defaults (Loyer, WiFi, Électricité, Eau, Assistance,
+  Fournitures, Autre) are seeded on a new database, and a renamed or removed category never
+  orphans an existing row.
+* **Total Net**: the dashboard now answers the question the owner actually asks — six KPI cards,
+  the sixth being **💎 Total Net** = monthly revenue − expenses − payroll, green in profit, red in
+  loss, amber on break-even, with its trend against the previous month and the three amounts in
+  its tooltip. The payroll used is the *calculated* one, so the card is right even before the
+  teachers are paid.
+* The demo seeder fills twelve expenses across the current and previous month, so the new page
+  and the net card are meaningful on a freshly seeded database.
 
 ### V1.1.0 — 1 November 2026
 
@@ -1484,6 +1710,263 @@ listed only where one was written for that phase.
 | 7 — dashboard | 132 | — | ✅ | 5 KPIs vs previous month, échéances ±7 days, payroll card |
 | 8 — receipts & polish | 133 | 65 assertions | ✅ | A4 + thermal PDFs, error boundary, shortcuts, badge, toasts |
 | **9 — demo data, twenty edge cases, packaging** | **150** | **42 assertions** | ✅ | demo seeder, 20/20 edge cases, CSP verified by rendering a receipt, V1.0 database migrated |
+| **10 — father name, home address, numeric inputs** | **155** | **68 assertions** | ✅ | `nom du père` + `adresse maison` (renaming migration), phones grouped then stored raw, one `NumberInput` everywhere |
+| **11 — monthly expenses & total net** | **165** | **64 assertions** | ✅ | `monthly_expenses` (18th table) + editable categories, Frais page, `Total Net = revenus − frais − salaires` card in three colours |
+| **12 — creatable dropdowns everywhere** | **165** | **75 assertions** | ✅ | one `CreatableSelect` in six forms, six quick-create dialogs, one level of nesting (`z-50 → 60 → 70`), parent form never lost |
+| **13 — multi-day groups & weekly timetable** | **176** | **67 assertions** | ✅ | `group_schedules` (19th table) + in-place backfill, seven-day editor, `Emploi du temps` grid (spanning, colours, lanes, filters, mobile tabs), legacy columns mirrored |
+| **14 — rentrée** | **190** | **85 assertions** | ✅ | one-transaction year rollover (year + copied groups + fresh enrollments + invoices + audit), four-step wizard; the *Bilan* page was removed afterwards (the Rust command stays, unexposed), still 19 tables |
+| **15 — the date of an expense** | **197** | **39 assertions** | ✅ | `monthly_expenses.expense_date` (ISO, back-datable, `ALTER TABLE` + backfill), date column in the list, date picker in the form, still 19 tables |
+
+### Phase 15 — the date of a monthly expense
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **197 passed, 0 failed** — 7 new: `commands::expenses` (a charge keeps an explicit date and the list comes back **newest first**; a missing or blank date falls back to today; eight malformed dates are refused and a leap day is accepted; an update can move the date and is audited; an update that omits the date **keeps** the stored one; a hand-written row with an empty date still reads back as a day) and `db` (an older `monthly_expenses` gains the column, is backfilled from `created_at`, loses nothing and gets `idx_expenses_date`) |
+| `cargo fmt --check` / `cargo clippy --all-targets` | clean, **0 warnings** |
+| `npx tsc --noEmit` / `vite build` | clean, **655.49 kB (181.09 kB gzip)**, CSS 41.68 kB (8.03 kB gzip) — the date column and its formatter cost 1.57 kB |
+| `npm run check:i18n` | fr **757** / ar **757** keys, all present (`expenses.date`, `expenses.columns.date`, `expenses.hints.date`, `expenses.validation.dateRequired`) |
+| Browser suite (`node phase15-e2e.tmp.mjs`) | **39 assertions, 0 failed, 0 console errors** — the Date column first in the table, every row printing `DD/MM/YYYY`, the rendered order descending, the form defaulting to today (not disabled), a charge saved with an explicit day (stored, period derived, audited), a **back-dated** charge landing in its own month and the page following it there, an edit moving the date, an empty date refused with its message, the dashboard net card unchanged, and the Arabic pass (`التاريخ`, `تاريخ المصروف`, dates printed `YYYY/MM/DD`) |
+| Regression | Phase 11 **64 / 0**, Phase 14 **85 / 0**, Phase 13 **67 / 0**, Phase 12 **75 / 0**, Phase 10 **68 / 0** |
+| Database | still **19 tables**: one column added to `monthly_expenses`, plus `idx_expenses_date` |
+| Screenshots | `docs/screenshots/phase15-01…05` — the *Date* column, the date picker on today, a dated row, a back-dated charge in its own month, the Arabic form |
+
+Design notes worth keeping:
+
+* **The date decides the period.** `month`/`year` remain the accounting period the summary and the
+  dashboard add up, and the form derives them **from the chosen date** — so a rent entered late for
+  October really lands in October, and the page switches to that month after the save so the new row
+  is not hidden behind the selector. The command still takes `month`/`year` explicitly, so nothing
+  else that calls it changes.
+* **`ALTER TABLE` cannot use `DEFAULT (date('now'))`.** SQLite refuses a non-constant default in
+  `ADD COLUMN` (*“Cannot add a column with non-constant default”*), so an existing database gets
+  `TEXT NOT NULL DEFAULT ''` and every row is backfilled with `date(created_at)` — the day the
+  charge was recorded, the best available guess. A fresh database is created from `schema.sql` with
+  the real default. The app always writes the date itself, and the read path
+  (`COALESCE(NULLIF(expense_date,''), date(created_at), date('now'))`) normalises any leftover, so
+  the two shapes behave identically.
+* **An update that says nothing about the date keeps it.** Only the create path defaults to today;
+  a caller that edits the amount alone must not silently re-date a charge.
+* **Arabic reads dates year-first.** `formatDateLocalized()` prints `05/11/2026` in French and
+  `2026/11/05` in Arabic — same day, in the order the language expects; `formatDate()` (the rest of
+  the app) is untouched.
+* **What the money math sees is unchanged.** `month_total()`, the summary, the bilan and the
+  dashboard still scope by `(month, year)`; `expense_date` is a display and ordering field, never a
+  filter, so no historical figure moves.
+
+### Phase 14 — the rentrée
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **190 passed, 0 failed** — 14 new: `commands::rentree` (the preview lists groups, students and teachers of the active year with their schedule text and headcount; a full run copies the groups *and* their `group_schedules`, re-enrolls each student in the copy of every group he was in, generates one invoice per fresh enrollment and closes the old ones with `end_date = enrollment_date`; only the ticked groups/students travel; capacity is enforced on the copies; an inactive student is neither offered nor re-enrolled; the four validation messages; an unknown year is refused; a failure mid-way rolls the whole year back — the new `school_years` row included) and `commands::bilan` (an empty year returns ten zeroed months from September to June; a year with data folds revenue / payroll / expenses / theoretical / net and ranks groups and students; another year's money and structure never leak in; the top lists cap at 10 and 5; months cross the year boundary) |
+| `cargo fmt --check` / `cargo clippy --all-targets` / `cargo build` | clean, **0 warnings** |
+| `npx tsc --noEmit` / `vite build` | clean, **653.92 kB (180.61 kB gzip)**, CSS 41.68 kB (8.03 kB gzip) — the wizard and its service cost ~21 kB raw; removing *Bilan* took 12.97 kB of JS and 0.42 kB of CSS out of the bundle |
+| `npm run check:i18n` | fr **753** / ar **753** keys, all present (`rentree.*` — title, the four step names, the two validation messages, the estimate, the result block) |
+| Browser suite | **85 assertions, 0 failed, 0 console errors** — the sidebar (eight links, the timetable still between groups and teachers, no *Bilan* entry, no `nav-bilan`), `/bilan` falling through to the dashboard without hitting the error boundary, the wizard end to end (suggestions, duplicate label refused, end-before-start refused, all groups pre-ticked, deselect/select all, student search, enrollment date before the year refused, estimate, recap, confirm), everything the transaction wrote (2 years, one active, groups copied with fee/capacity/teacher/week, old groups untouched, no enrollment deleted, old ones closed on the enrollment date, fresh ones active on it, one invoice per enrollment, a single `RENTREE` audit row with its JSON summary, the inactive student re-enrolled nowhere), the settings list refreshing behind the modal, and the Arabic pass (eight Arabic links, no Arabic *Bilan*, translated wizard) |
+| Regression | Phase 13 **67 / 0**, Phase 12 **75 / 0**, Phase 11 **64 / 0**, Phase 10 **68 / 0**, Phase 9 **42 / 0** |
+| Database | no schema change at all: the 19 tables of V1.4.0 are the 19 tables of V1.5.0 |
+| Real window | the debug binary (version 1.5.0) starts against the migrated database with no error |
+
+Design notes worth keeping:
+
+* **The rentrée is one transaction, or nothing.** `cmd_execute_rentree` wraps the year, the copies,
+  the enrollments and the invoices in a single `unchecked_transaction`; any error — a full group, a
+  duplicate label — drops all of it, so a director can never be left with a half-migrated year.
+  The dev backend does the same by working on a deep copy of its store and saving it at the very end.
+* **Copying is explicit, never guessed.** Groups and students are checkbox lists that start
+  pre-ticked, and a student is only ever re-enrolled in the copy of a group he was *already* in —
+  which is exactly the director's request: the student's information carries over, the enrollment
+  starts fresh. Nobody is dropped into a group by approximation, and an inactive student or group
+  is silently skipped rather than aborting the run.
+* **Re-enrollment reuses `enroll_on`.** Capacity, the duplicate check, the first invoice and the
+  `ENROLL` audit row all behave exactly as they do in the enrollment wizard, because it is the same
+  function (`pub(crate)` since this phase). The rentrée adds one `RENTREE` row on top, with the
+  counts in its JSON.
+* **The old year is frozen, not cleaned.** Old enrollments are closed with `status = 'terminé'` and
+  `end_date = enrollment_date`; old invoices, payments, groups and receipts are never touched, so a
+  closed year still reads exactly as it did.
+* **Removing *Bilan* left the backend alone.** `bilan.rs` and `cmd_get_bilan` are still compiled,
+  registered and covered by their six tests: deleting a UI must not touch the schema or the
+  bookkeeping, and the command costs nothing while nothing calls it. The removal touched seven
+  frontend files and two translation files, and shrank the bundle by 12.97 kB.
+
+### Phase 13 — multi-day groups and the weekly timetable
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **176 passed, 0 failed** — 11 new: the seven of `commands::schedules` (three-day week stored in week order + legacy columns following the first day, the four validation messages, replace-not-append, create/update carrying a whole week, the timetable with every filter ANDed, inactive groups excluded, rooms of active groups only, `ON DELETE CASCADE`) plus one in `db` (`group_schedules` is the 19th table, and a pre-Phase 13 database is backfilled in place, idempotently) |
+| `cargo fmt --check` / `cargo clippy --all-targets` / `cargo build` | clean, **0 warnings** |
+| `npx tsc --noEmit` / `vite build` | clean, **634.96 kB (176.28 kB gzip)**, CSS 41.48 kB (7.99 kB gzip) — the page, the week editor and the schedule helpers cost ~21 kB raw |
+| `npm run check:i18n` | fr **713** / ar **713** keys, all present (`timetable.*` — title, description, the four filters + reset, the seven day names and their short forms, summary, empty/emptyHint, loading, showSunday — plus `groups.schedules/schedulesHint/sameHours`, three `groups.validation.*` messages and `sidebar.timetable`) |
+| Browser suite | **67 assertions, 0 failed, 0 console errors** — sidebar order (eight links, timetable between groups and teachers), the grid (six columns, Sunday opt-in, Monday left of Tuesday, blocks spanning rows, subject tint, content), filters that AND, the empty state over a live grid, the reset button, a three-day group created and persisted (week order, legacy mirror, per-day hours), the card summary, editing the week (prefill, no-day refusal, per-day reversed hours refusal, replace), the timetable following the edit, lane-splitting for two classes sharing a slot, click-through to the group sheet, the quick-create group (day chips, `Horaires identiques` on/off), the phone day tabs, and the Arabic pass (translated title/labels, Monday still the left-most column, RTL week editor) |
+| Regression | Phase 12 **75 / 0**, Phase 11 **64 / 0**, Phase 10 **68 / 0**, Phase 9 **42 / 0** — none of them changed |
+| Real database | the Phase 12 file (18 tables) opened by the new binary migrates in place: **19 tables**, `group_schedules` created with its two indexes, and a group written the old way (`Mercredi 14:00–16:00`) came back as one schedule row without touching its columns |
+| Real window | the debug binary (version 1.4.0) starts against that migrated database with no error; the screenshots above come from the browser suite, which runs the same components against the development backend |
+
+Design notes worth keeping:
+
+* **One row per day, and the old columns still win.** `cmd_set_group_schedules` deletes and
+  re-inserts the week of one group inside a single transaction, then copies the *first* day into
+  `groups.day_of_week/start_time/end_time`. Nothing else in the app had to change: invoicing,
+  enrollment and payroll read `groups`, and they see a valid slot.
+* **The week is validated once, in Rust and in the dev backend.** At least one day, a known
+  weekday, `end > start` per day, no duplicate day (the `UNIQUE(group_id, day_of_week)` constraint
+  would otherwise surface as a raw SQLite error). Both implementations return the same French
+  message, so the browser suite and the real app fail identically.
+* **`GroupRow` gained `schedules` + `schedule_text` without touching `map_group`.** The 18 SQL
+  columns keep their positions; a single extra query reads every schedule row for the page and
+  attaches them in memory, so listing a hundred groups costs two queries, not a hundred and one.
+* **The grid is data-driven.** Hour rows run from the earliest start to the latest end of what is
+  actually on screen, one row per 30 minutes, so a 17:30 class starts at 17:30 rather than at the
+  hour. Overlapping classes in the same column are packed into lanes instead of being drawn on top
+  of each other — a real centre does run two groups at 16:00 in two rooms.
+* **Monday on the left, in Arabic too.** The grid (and the week editor, and the quick-create day
+  chips) carry `dir="ltr"` while their labels keep `dir="auto"`: the week is mirrored as text but
+  never reversed, and time ranges are wrapped in bidi isolates so `16:00–18:00` does not print as
+  `18:00–16:00` in an RTL page.
+* **No week pagination.** `cmd_get_timetable` deliberately has no `week_start`: the schedule is a
+  *recurring* week (`group_schedules` has no dates), so "next week" would be the same grid. The
+  optional parameter was dropped from the signature rather than accepted and ignored.
+* **Sunday is opt-in.** Most Moroccan centres close on Sunday, so the column is hidden and a
+  checkbox brings it back — but a Sunday class is still stored if one is ever needed.
+
+### Phase 12 — a dropdown that can create what it is missing
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **165 passed, 0 failed** — no Rust change: this phase is pure frontend, and the six creation commands (`cmd_create_teacher`, `cmd_create_subject`, `cmd_create_level`, `cmd_create_student`, `cmd_create_group`, `cmd_set_expense_categories`) already existed and are reused as-is |
+| `cargo fmt --check` / `cargo clippy --all-targets` / `cargo build` | clean, **0 warnings** |
+| `npx tsc --noEmit` / `vite build` | clean, **614.26 kB (170.48 kB gzip)**, CSS 40.36 kB (7.79 kB gzip) — the component, six dialogs and the copy cost ~29 kB raw |
+| `npm run check:i18n` | fr **701** / ar **701** keys, all present (`common.createNew/creating/create/noOptions/clear/quickCreate`, the whole `quickCreate.*` block, `teachers.newSubject`, `enrollment.newGroup/newStudent`, `payments.newPayment`, `expenses.categoryPlaceholder`) |
+| Browser suite | **75 assertions, 0 failed, 0 console errors** — the component itself (options, separator, sticky create row, primary colour, plus icon, search filtering, arrows/Enter/Escape, empty list, RTL icon side), six quick-create flows (subject, level, teacher, student, group, category), the parent form keeping every typed value through the detour, auto-selection, audit rows, duplicate refusal, cancel-without-changes, and the `z-50 → 60 → 70` stack |
+| Regression | Phase 11 **64 / 0**, Phase 10 **68 / 0**, Phase 9 **42 / 0** — the previous suites pass unchanged apart from the one `selectOption` that now clicks the new component |
+| Real window | the debug binary (version 1.3.0) starts against the existing 18-table database with no error; the screenshots above come from the browser suite, which runs the same components against the development backend |
+
+Design notes worth keeping:
+
+* **Why a custom component.** A native `<select>` cannot carry an action that is not a
+  value, and the create row must sit *inside* the listbox (last item) while staying visible
+  when the list scrolls — hence a button trigger, a portal popup positioned from the
+  trigger's rectangle (a modal body's `overflow-y-auto` would clip an absolutely positioned
+  list), and a `sticky` last row.
+* **One level of nesting, by construction.** Quick-create dialogs of *simple* entities
+  (subject, level, teacher, student, category) use plain `Select`s for their own linked
+  fields — there is nothing left to create from them. Only `QuickCreateGroup` needs
+  dropdowns with `+ Nouveau`, and it opens them at `z-70`; those dialogs are the simple ones,
+  so the recursion stops there. `CreatableSelect` also ships a `disableCreate` prop for a
+  caller that wants a plain dropdown.
+* **The parent form is never unmounted.** Quick-create dialogs are siblings of the modal, not
+  children of its `<form>`: submitting one cannot submit the other, and every keystroke of the
+  parent survives (asserted: fee `450`, capacity `14`, student name, …).
+* **Returned objects, not ids.** The commands return the new id; the dialog reads the row back
+  (`cmd_get_teacher_options`, `cmd_get_student_detail`, `cmd_get_group_detail`, …) so the
+  parent can select a real object — and so the dropdown is consistent with what a reload shows.
+* **Enrollment wizard.** It keeps its rich multi-select list (one enrollment can cover several
+  groups); the quick-create is a `+ Nouveau groupe` / `+ Nouvel élève` button in the same step,
+  and a student created there is *pinned* at the top of the candidate list so the selection is
+  visible.
+
+### Phase 11 — monthly expenses and the real profit
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **165 passed, 0 failed** — 10 new tests: the seven of `commands::expenses` (centimes stored + `CREATE` audit, validation of label/amount/month/year, month and category filters, per-category summary, audited update *and* delete, the category list surviving a restart, its defaults on a fresh database) and two on the dashboard (`net = revenue − expenses − payroll` with a percentage **and** a fixed compensation; a negative net stays month-scoped) |
+| `cargo fmt --check` / `cargo clippy --all-targets` / `cargo build` | clean, **0 warnings** |
+| `npx tsc --noEmit` / `vite build` | clean, **585.14 kB (162.44 kB gzip)**, CSS 40.07 kB (7.71 kB gzip) — the Frais page, its modal and the sixth card cost ~28 kB raw |
+| `npm run check:i18n` | fr **643** / ar **643** keys, all present (the whole `expenses.*` block (page, modal, empty state, toasts, the seven category names), `dashboard.kpi.netIncome/netTooltip/netPositive/netNegative/netZero`, `settings.expenseCategories*` and `sidebar.expenses`) |
+| Browser suite | **64 assertions, 0 failed, 0 console errors** — sidebar order, month/category filters, create (`3 500` → `3 500.00` DH, stored as `350000` centimes), edit, delete with confirmation, the audit rows, a custom category added in *Paramètres* and immediately offered by the form, persistence across a reload, the six-card grid (3 × 2), the tooltip arithmetic, the three colours of `Total Net`, and the Arabic pass (RTL layout, translated category names, amounts kept LTR) |
+| Regression | Phase 10 suite **68 / 0**, Phase 9 suite **42 / 0** — untouched |
+| Real database | the Phase 10 file (17 tables) opened by the new binary migrates in place: **18 tables**, `idx_expenses_month_year` + `idx_expenses_category` created, `expense_categories` seeded with the seven defaults, no data lost |
+| Real window | the Frais page and the Total Net card are screenshots of the app itself — see the gallery at the top |
+
+Design notes worth keeping:
+
+* **One number to rule the card.** `net_income_cents` is computed once in `dashboard.rs` from
+  the three fields that already existed (`monthly_revenue_cents`, `month_total()` of the
+  expenses, and the payroll the compensation module already returns), so the frontend never
+  re-derives a total and the tooltip cannot drift from the value above it.
+* **The payroll is the *calculated* one**, reused from `compensation_summary` — not the settled
+  rows. A month where the director has not paid the teachers yet still shows the real net.
+* **Categories live in `settings`** (`expense_categories`, a JSON array, seeded with the seven
+  defaults). Removing a category never touches past rows: they keep their stored name, and the
+  badge falls back to a hashed colour from a six-entry palette for names it does not know.
+* **Expenses are deletable and audited.** `cmd_delete_expense` hard-deletes — internal
+  tracking, not a financial record — but writes the whole row into `audit_log.details` first.
+* **RTL.** Category badges are inline-flex tags, the table columns use logical properties
+  (`ms-`/`pe-`), and percentages are wrapped in Unicode isolates (`U+2066…U+2069`) so Arabic
+  keeps them on the same side as the sentence instead of pushing them to the far edge.
+
+### Phase 10 — father name, home address and one numeric input
+
+| Gate | Result |
+| --- | --- |
+| `cargo test` | **155 passed, 0 failed** — 5 new tests: the two renaming migrations (`address` → `home_address`, `email` → `home_address`, data preserved, idempotent), the fresh-database shape, phone separators stripped before validation *and* storage, and a father-name / home-address round trip through the audit trail |
+| `cargo fmt --check` / `cargo clippy --all-targets` / `cargo build` | clean, **0 warnings** (clippy included — four pre-existing lints in `dashboard.rs`, `groups.rs`, `payments.rs`, `edge_cases.rs` were cleaned on the way) |
+| `npx tsc --noEmit` / `vite build` | clean, **556.72 kB (155.74 kB gzip)**, CSS 33.92 kB (6.85 kB gzip) — the `NumberInput` costs ~5 kB raw |
+| `npm run check:i18n` | fr **593** / ar **593** keys, all present (`students.fatherName`, `students.homeAddress`, `students.phonePlaceholder`, `common.suffix.*`) |
+| Browser suite (`node phase10-e2e.tmp.mjs`, dev backend, headless) | **68 assertions, 0 failures**, 0 console errors, 0 React warnings |
+| Phase 0–9 regression (`node phase9-e2e.tmp.mjs`, headed) | **42 assertions, 0 failures** (one expectation updated: the phone is now grouped), 4 expected console errors — identical to the Phase 9 baseline |
+| Release binary (`cargo build --release`, `CARGO_BUILD_JOBS=1`) | **built and launched**: `target/release/centremanager`, **6 960 840 bytes (6.6 MiB)**, database created at `~/.local/share/com.centremanager.app/centremanager.db` |
+| Real-database migration (release binary, Xvfb) | the `students` table was renamed back to its Phase 9 shape (`home_address` → `address`, `father_name` dropped) and a student `Ancien Eleve` inserted; the next launch leaves `home_address = '5 rue Atlas, Casablanca'`, `notes = 'Migré'` **intact** and adds `father_name` |
+
+**The student fields.** `students.address` became `students.home_address` ("Adresse
+maison") and `students.father_name` ("Nom du père") was added. `run_migrations` gains
+`upgrade_student_columns`, which handles the three shapes found in the wild with a
+`PRAGMA table_info` probe:
+
+| Database | What happens |
+| --- | --- |
+| V1.0 sketch with `email` | `ALTER TABLE students RENAME COLUMN email TO home_address`, then `father_name` added — values kept |
+| Phase 3–9 with `address` | same rename from `address`, data kept, then `father_name` added |
+| Fresh database | `schema.sql` already has both columns; the upgrade is a no-op |
+
+The rename is wrapped in an `if renamed.is_err()` fallback (`ADD COLUMN home_address` +
+`UPDATE … SET home_address = address`) so a very old SQLite cannot lose the data either.
+`CreateStudentInput` / `UpdateStudentInput` / `StudentRow` carry the two fields, the
+`SELECT` lists `home_address` in the old `address` slot, and the audit trail stores the
+new key — the student *Historique* tab maps `home_address` to its label automatically.
+
+**Phones.** Storage stays exactly ten raw digits; everything else is presentation:
+
+* Rust — `normalise_phone()` drops `' '`, `'-'`, U+00A0, U+202F, `'.'`, `'('`, `')'`
+  before `is_valid_phone()` (`/^0[67]\d{8}$/`) runs, and the command stores the
+  normalised value. So `06 07 12 34 56` and `06-07-12-34-56` are the same student
+  record as `0607123456`, and a wrong length is still rejected.
+* Frontend — `formatPhone()` (`06 07 12 34 56`, raw input when it is not ten digits,
+  an em dash when empty) and `stripPhone()` live in `utils/format.ts`; `isValidPhone()`
+  strips the same separators. Applied to the list, the record sheet (`tel:` links keep
+  the raw digits), the payment modal (student picker + selected student), the payments
+  page, the group sheet, the enrollment wizard, the teacher sheet and the student form
+  itself (formatted on blur, stripped on submit). Every phone sits in a `dir="ltr"`
+  run, so `06 07 12 34 56` stays grouped and left-to-right in Arabic too.
+
+**`NumberInput` (`components/ui/NumberInput.tsx`).** One component for every numeric
+field — a `type="text"` input with `inputMode="decimal"`, never `type="number"`:
+
+| Behaviour | Detail |
+| --- | --- |
+| Display | raw value while focused (easy to edit), grouped with a space on blur (`1234567` → `1 234 567`, `1234.5` with `decimals={2}` → `1 234.50`) |
+| Typing | characters filtered as typed, decimal count enforced (`decimals`), comma accepted as a decimal separator |
+| Bounds | `min` / `max` clamped on blur; arrow keys and the +/- buttons clamp the same way |
+| Buttons | +/- inside the border, one `step` per click, hold to repeat every **100 ms**, hidden when `disabled` or `step = 0`, disabled at the bound |
+| Extras | `suffix` muted and non-selectable, `prefix`, `label` / `hint` / `error` / `required`, `aria-*`, no spinner, **the mouse wheel never changes the value** |
+| RTL | the control carries `dir="ltr"` (digits + buttons keep their order) while the suffix and buttons move to the left edge in Arabic |
+
+Sites migrated: group fee (`decimals 2`, `DH`, `min 0`, `step 50`) and capacity
+(integer, `élèves`, `min 1`), teacher compensation amount and `bonus_pct`
+(`decimals 1`, `%`, `0–100`), activity hours (`decimals 1`, `h`, `step 0.5`) and
+sessions (integer), settlement and payment amounts. The settings lock timeout was
+already a `<select>`, and it stays one. `MoneyInput` is now a thin wrapper
+(`decimals 2`, `DH`, `min 0`) keeping the centimes ↔ dirhams conversion
+(`Math.round(value * 100)`), so a settlement typed as `1 234.50` is stored as
+**123 450** centimes — asserted in the browser suite.
+
+| Students list — father name + grouped phone | Record sheet — `Nom du père`, `Adresse maison` | Student form, Arabic / RTL |
+| --- | --- | --- |
+| ![Students](docs/screenshots/phase10-02-students-list.png) | ![Student sheet](docs/screenshots/phase10-03-student-detail.png) | ![Form AR](docs/screenshots/phase10-08-student-modal-ar.png) |
+
+| Group form — `NumberInput` fee + capacity | Teacher compensation — percentages | Payment amount (`MoneyInput`) |
+| --- | --- | --- |
+| ![Group modal](docs/screenshots/phase10-04-group-modal.png) | ![Compensation](docs/screenshots/phase10-05-compensation.png) | ![Payment](docs/screenshots/phase10-08-payment.png) |
 
 ### Phase 9 — edge cases, demo data and packaging
 

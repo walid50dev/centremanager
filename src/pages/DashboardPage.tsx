@@ -6,6 +6,7 @@ import {
   BookOpen,
   CalendarCheck,
   CalendarClock,
+  Gem,
   GraduationCap,
   HandCoins,
   TrendingUp,
@@ -37,10 +38,41 @@ import { cn, formatCurrency, formatDate } from '../utils/format';
 import type { AlertItem, DashboardKPIs, RecentPayment, TeacherCompSummary } from '../types';
 
 /**
+ * Colours of the net-income card.
+ *
+ * Green when the centre made money, red when it lost some, amber on the exact
+ * break-even — the specification's three states.
+ */
+const NET_TONE = {
+  positive: { value: 'text-success', icon: 'bg-success/10 text-success' },
+  negative: { value: 'text-destructive', icon: 'bg-destructive/10 text-destructive' },
+  zero: { value: 'text-warning', icon: 'bg-warning/10 text-warning' },
+} as const;
+
+/** `positive` / `negative` / `zero` — also exposed as `data-net` for tests. */
+function netTone(cents: number): 'positive' | 'negative' | 'zero' {
+  if (cents > 0) return 'positive';
+  if (cents < 0) return 'negative';
+  return 'zero';
+}
+
+/** `Bénéfice du mois` / `Perte du mois` / `Équilibre`. */
+function netLabel(
+  translate: (key: string, options?: Record<string, unknown>) => string,
+  cents: number,
+): string {
+  const tone = netTone(cents);
+  if (tone === 'positive') return translate('dashboard.kpi.netPositive');
+  if (tone === 'negative') return translate('dashboard.kpi.netNegative');
+  return translate('dashboard.kpi.netZero');
+}
+
+/**
  * Home page (Phase 7).
  *
- * Five KPI cards for the selected month, the échéances of the week, the last
- * payments, and the teacher payroll of the month.
+ * Six KPI cards for the selected month (Phase 11 adds **Total Net** =
+ * revenue − expenses − payroll), the échéances of the week, the last payments,
+ * and the teacher payroll of the month.
  *
  * All four sources are fetched in parallel; a failing source only empties its
  * own section (one toast explains it) instead of blanking the whole page.
@@ -143,11 +175,11 @@ export function DashboardPage() {
 
       {/* ------------------------------------------------------------------ KPIs */}
       <div
-        className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
         data-testid="dashboard-kpis"
       >
         {loading && !kpis
-          ? Array.from({ length: 5 }).map((_, index) => (
+          ? Array.from({ length: 6 }).map((_, index) => (
               <Card key={index} className="p-4" data-testid="dashboard-kpi-skeleton">
                 <div className="flex items-center gap-2">
                   <div className="skeleton h-8 w-8 rounded-full" />
@@ -207,6 +239,29 @@ export function DashboardPage() {
                   value={kpis.active_teachers}
                   iconClass="bg-amber-100 text-amber-600"
                   testId="kpi-teachers"
+                />
+                {/* Phase 11 — the real profit: revenue − expenses − payroll. */}
+                <KpiCard
+                  icon={Gem}
+                  label={t('dashboard.kpi.netIncome')}
+                  value={
+                    <span dir="ltr" data-net={netTone(kpis.net_income_cents)}>
+                      {formatCurrency(kpis.net_income_cents)}
+                    </span>
+                  }
+                  iconClass={NET_TONE[kpis.net_income_cents > 0 ? 'positive' : kpis.net_income_cents < 0 ? 'negative' : 'zero'].icon}
+                  valueClass={
+                    NET_TONE[kpis.net_income_cents > 0 ? 'positive' : kpis.net_income_cents < 0 ? 'negative' : 'zero'].value
+                  }
+                  trend={computeTrend(kpis.net_income_cents, kpis.prev_month_net_income_cents)}
+                  hint={netLabel(t, kpis.net_income_cents)}
+                  showTrendHint
+                  tooltip={t('dashboard.kpi.netTooltip', {
+                    revenue: formatCurrency(kpis.monthly_revenue_cents),
+                    expenses: formatCurrency(kpis.total_expenses_cents),
+                    compensation: formatCurrency(kpis.total_compensation_cents),
+                  })}
+                  testId="kpi-net"
                 />
               </>
             )}

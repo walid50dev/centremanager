@@ -15,6 +15,7 @@
 //! - `compensation`  — monthly payroll calculation & settlements (Phase 6)
 //! - `activities`    — hours/sessions log feeding the hourly modes (Phase 6)
 //! - `dashboard`     — read-only home page aggregates (Phase 7)
+//! - `expenses`      — monthly charges, totals & editable categories (Phase 11)
 
 pub mod activities;
 pub mod auth;
@@ -25,10 +26,12 @@ pub mod demo;
 #[cfg(test)]
 mod edge_cases;
 pub mod enrollments;
+pub mod expenses;
 pub mod groups;
 pub mod invoices;
 pub mod levels;
 pub mod payments;
+pub mod schedules;
 pub mod school_years;
 pub mod settings;
 pub mod students;

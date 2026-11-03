@@ -30,6 +30,30 @@ export function stripIsolates(value: string | null | undefined): string {
 }
 
 /**
+ * Display a Moroccan mobile number as `06 07 12 34 56`.
+ *
+ * Storage keeps the ten raw digits (`0607123456`); only the UI groups them, so
+ * the same string is copy-pasteable into a phone dialer and readable in a table.
+ * Anything that is not a 10-digit number is returned untouched (legacy rows,
+ * foreign numbers), and an empty value becomes an em dash.
+ */
+export function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return '—';
+  const digits = raw.replace(/[\s-]/g, '');
+  if (digits.length !== 10) return raw;
+  return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 6)} ${digits.slice(
+    6,
+    8,
+  )} ${digits.slice(8, 10)}`;
+}
+
+/** `06 07 12 34 56` (or `06-07-12-34-56`) → `0607123456`. */
+export function stripPhone(formatted: string | null | undefined): string {
+  if (!formatted) return '';
+  return formatted.replace(/[\s-]/g, '');
+}
+
+/**
  * Format an ISO date (or datetime) as DD/MM/YYYY.
  * formatDate('2025-01-15') -> "15/01/2025"
  */

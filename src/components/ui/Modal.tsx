@@ -16,6 +16,14 @@ export interface ModalProps {
   size?: ModalSize;
   closeOnBackdrop?: boolean;
   className?: string;
+  /**
+   * Stacking level. Pages use the default 50; a quick-create modal opened on top
+   * of a form passes 60, and one opened from *that* modal passes 70. The
+   * backdrop darkens a little with each level so the depth is visible.
+   */
+  zIndex?: number;
+  /** Extra hook for tests/screenshots (`data-testid` on the panel). */
+  testId?: string;
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -35,6 +43,8 @@ export function Modal({
   size = 'md',
   closeOnBackdrop = true,
   className,
+  zIndex = 50,
+  testId,
 }: ModalProps) {
   const id = useId();
   const registerModal = useAppStore((state) => state.registerModal);
@@ -85,13 +95,19 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ zIndex }}
       role="dialog"
       aria-modal="true"
       aria-label={typeof title === 'string' ? title : undefined}
+      data-modal-z={zIndex}
     >
       <div
-        className="absolute inset-0 bg-foreground/40 backdrop-blur-[1px]"
+        className="absolute inset-0 backdrop-blur-[1px]"
+        // 40 % at z-50, +12 % per nesting level, capped at 75 %.
+        style={{
+          backgroundColor: `rgba(15, 23, 42, ${Math.min(0.75, 0.4 + Math.max(0, zIndex - 50) * 0.012)})`,
+        }}
         onClick={closeOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />
@@ -103,6 +119,7 @@ export function Modal({
           className,
         )}
         data-state={closing ? 'closing' : 'open'}
+        data-testid={testId}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="min-w-0">

@@ -1,15 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookOpen } from 'lucide-react';
 import Button from '../ui/Button';
+import CreatableSelect from '../ui/CreatableSelect';
 import Input from '../ui/Input';
+import MoneyInput from '../ui/MoneyInput';
+import NumberInput from '../ui/NumberInput';
 import Modal from '../ui/Modal';
 import Select from '../ui/Select';
 import { toast } from '../ui/Toast';
-import { DAY_NAMES, groupsApi } from '../../services/groups';
+import QuickCreateLevel from '../quick-create/QuickCreateLevel';
+import QuickCreateSubject from '../quick-create/QuickCreateSubject';
+import QuickCreateTeacher from '../quick-create/QuickCreateTeacher';
+import { groupsApi } from '../../services/groups';
+import { WEEK_DAYS, formatSchedules, scheduleSlots, shortDayLabel } from '../../utils/schedule';
+import { cn } from '../../utils/format';
 import { levelsApi, schoolYearsApi, subjectsApi } from '../../services/settings';
 import { amountToCents, centsToAmount } from '../../utils/format';
-import type { Branch, Group, GroupInput, Level, SchoolYear, Subject, TeacherOption } from '../../types';
+import type {
+  Branch,
+  Group,
+  GroupInput,
+  GroupSchedule,
+  Level,
+  SchoolYear,
+  Subject,
+  TeacherOption,
+} from '../../types';
 
 export interface GroupModalProps {
   open: boolean;
@@ -19,22 +36,35 @@ export interface GroupModalProps {
   onSaved: () => void;
 }
 
+/** One weekday of the week editor (Phase 13). */
+interface DaySlot {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+type Week = Record<string, DaySlot>;
+
 interface FormState {
   subjectId: string;
   levelId: string;
   branchId: string;
   teacherId: string;
   schoolYearId: string;
-  dayOfWeek: string;
-  startTime: string;
-  endTime: string;
+  /** The whole week, keyed by canonical weekday name. */
+  week: Week;
   room: string;
   fee: string;
   capacity: string;
 }
 
 type FieldName = keyof FormState;
-type Errors = Partial<Record<FieldName, string>>;
+/** `schedule` is the shared error line under the week editor. */
+type Errors = Partial<Record<FieldName | 'schedule', string>>;
+
+/** A week with no class on any day; Monday is ticked by default (the old default). */
+const EMPTY_WEEK: Week = Object.fromEntries(
+  WEEK_DAYS.map((day) => [day, { enabled: false, start: '16:00', end: '18:00' }]),
+);
 
 const EMPTY_FORM: FormState = {
   subjectId: '',
@@ -42,13 +72,35 @@ const EMPTY_FORM: FormState = {
   branchId: '',
   teacherId: '',
   schoolYearId: '',
-  dayOfWeek: 'Lundi',
-  startTime: '16:00',
-  endTime: '18:00',
+  week: { ...EMPTY_WEEK, Lundi: { enabled: true, start: '16:00', end: '18:00' } },
   room: '',
   fee: '',
   capacity: '10',
 };
+
+/** Prefill the week editor from a stored group (falls back to the legacy slot). */
+function weekFromGroup(group: Group): Week {
+  const week: Week = JSON.parse(JSON.stringify(EMPTY_WEEK)) as Week;
+  scheduleSlots(group).forEach((slot) => {
+    if (!week[slot.day_of_week]) return;
+    week[slot.day_of_week] = {
+      enabled: true,
+      start: slot.start_time,
+      end: slot.end_time,
+    };
+  });
+  return week;
+}
+
+/** The ticked days, Monday first, in the shape the backend expects. */
+function weekPayload(week: Week): GroupSchedule[] {
+  return WEEK_DAYS.filter((day) => week[day]?.enabled).map((day, index) => ({
+    id: index,
+    day_of_week: day,
+    start_time: week[day]?.start ?? '16:00',
+    end_time: week[day]?.end ?? '18:00',
+  }));
+}
 
 /** Create / edit a group. Levels drive the branch list, like the student form. */
 export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalProps) {
@@ -65,7 +117,24 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [schoolYears, setSchoolYears] = useState<SchoolYear[]>([]);
 
-  // Reference data is fetched once per opening.
+  // Quick-create dialogs stacked above this form (one level, `z-60`).
+  const [quickCreate, setQuickCreate] = useState<'teacher' | 'subject' | 'level' | null>(null);
+
+  // Reference data is fetched once per opening; the three loaders are reused
+  // after a quick-create so the new row appears in its dropdown.
+  const loadSubjects = useCallback(async () => {
+    const rows = await subjectsApi.list();
+    setSubjects(rows.filter((subject) => subject.is_active));
+  }, []);
+
+  const loadLevels = useCallback(async () => {
+    setLevels(await levelsApi.list());
+  }, []);
+
+  const loadTeachers = useCallback(async () => {
+    setTeachers(await groupsApi.teachers());
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -92,9 +161,27 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
     };
   }, [open]);
 
-  // Reset (or prefill) whenever the modal opens.
+  // Close the quick-create dialogs with the form.
   useEffect(() => {
-    if (!open) return;
+    if (!open) setQuickCreate(null);
+  }, [open]);
+
+  // Reset (or prefill) whenever the modal opens — once per opening.
+  //
+  // The guard matters since Phase 13: re-running this effect (the parent can
+  // hand over a fresh `group` object, or the year list can arrive late) would
+  // silently throw away the days the user just ticked.
+  const prefilled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      prefilled.current = null;
+      return;
+    }
+    const activeYear = schoolYears.find((year) => year.is_active) ?? schoolYears[0];
+    const key = group ? `group:${group.id}` : `new:${activeYear?.id ?? ''}`;
+    if (prefilled.current === key) return;
+    prefilled.current = key;
+
     setErrors({});
     if (group) {
       setForm({
@@ -103,15 +190,12 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
         branchId: group.branch_id ? String(group.branch_id) : '',
         teacherId: group.teacher_id ? String(group.teacher_id) : '',
         schoolYearId: group.school_year_id ? String(group.school_year_id) : '',
-        dayOfWeek: group.day_of_week || 'Lundi',
-        startTime: group.start_time || '16:00',
-        endTime: group.end_time || '18:00',
+        week: weekFromGroup(group),
         room: group.room ?? '',
         fee: centsToAmount(group.monthly_fee_cents),
         capacity: String(group.capacity),
       });
     } else {
-      const activeYear = schoolYears.find((year) => year.is_active) ?? schoolYears[0];
       setForm({ ...EMPTY_FORM, schoolYearId: activeYear ? String(activeYear.id) : '' });
     }
   }, [open, group, schoolYears]);
@@ -139,17 +223,44 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
     setErrors((current) => ({ ...current, [key]: undefined }));
   }, []);
 
+  /** Patch one weekday of the week editor. */
+  const setWeekDay = useCallback((day: string, patch: Partial<DaySlot>) => {
+    setForm((current) => ({
+      ...current,
+      week: {
+        ...current.week,
+        [day]: { ...(current.week[day] ?? EMPTY_WEEK[day]), ...patch },
+      },
+    }));
+    setErrors((current) => ({ ...current, schedule: undefined }));
+  }, []);
+
   const validate = useCallback((): Errors => {
     const next: Errors = {};
     if (!form.subjectId) next.subjectId = t('groups.validation.subjectRequired');
     if (!form.levelId) next.levelId = t('groups.validation.levelRequired');
     if (!form.schoolYearId) next.schoolYearId = t('groups.validation.schoolYearRequired');
-    if (!form.dayOfWeek) next.dayOfWeek = t('groups.validation.dayRequired');
-    if (!form.startTime) next.startTime = t('groups.validation.startRequired');
-    if (!form.endTime) {
-      next.endTime = t('groups.validation.endRequired');
-    } else if (form.startTime && form.endTime <= form.startTime) {
-      next.endTime = t('groups.validation.endAfterStart');
+    const activeDays = WEEK_DAYS.filter((day) => form.week[day]?.enabled);
+    if (activeDays.length === 0) {
+      next.schedule = t('groups.validation.atLeastOneDay');
+    } else {
+      const incomplete = activeDays.find((day) => {
+        const slot = form.week[day];
+        return !slot.start || !slot.end;
+      });
+      const reversed = activeDays.find((day) => {
+        const slot = form.week[day];
+        return slot.start && slot.end && slot.end <= slot.start;
+      });
+      if (incomplete) {
+        next.schedule = t('groups.validation.scheduleIncomplete', {
+          day: t(`groups.dayNames.${incomplete}`),
+        });
+      } else if (reversed) {
+        next.schedule = t('groups.validation.endAfterStartDay', {
+          day: t(`groups.dayNames.${reversed}`),
+        });
+      }
     }
     const fee = amountToCents(form.fee);
     if (!form.fee.trim() || fee <= 0) next.fee = t('groups.validation.feePositive');
@@ -169,15 +280,19 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
         return;
       }
 
+      const schedules = weekPayload(form.week);
+      const first = schedules[0];
       const payload: GroupInput = {
         subject_id: Number(form.subjectId),
         level_id: Number(form.levelId),
         branch_id: form.branchId ? Number(form.branchId) : null,
         teacher_id: form.teacherId ? Number(form.teacherId) : null,
         school_year_id: Number(form.schoolYearId),
-        day_of_week: form.dayOfWeek,
-        start_time: form.startTime,
-        end_time: form.endTime,
+        // The legacy triple mirrors the first day, like the backend does.
+        day_of_week: first?.day_of_week ?? '',
+        start_time: first?.start_time ?? '',
+        end_time: first?.end_time ?? '',
+        schedules,
         room: form.room.trim() || null,
         monthly_fee_cents: amountToCents(form.fee),
         capacity: Number.parseInt(form.capacity, 10),
@@ -203,8 +318,23 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
     [form, group, isEdit, onClose, onSaved, t, validate],
   );
 
+  // The form keeps ids; the dropdowns work with objects.
+  const selectedSubject = useMemo(
+    () => subjects.find((subject) => String(subject.id) === form.subjectId) ?? null,
+    [form.subjectId, subjects],
+  );
+  const selectedLevel = useMemo(
+    () => levels.find((level) => String(level.id) === form.levelId) ?? null,
+    [form.levelId, levels],
+  );
+  const selectedTeacher = useMemo(
+    () => teachers.find((teacher) => String(teacher.id) === form.teacherId) ?? null,
+    [form.teacherId, teachers],
+  );
+
   return (
-    <Modal
+    <>
+      <Modal
       open={open}
       onClose={onClose}
       size="lg"
@@ -232,27 +362,35 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
         noValidate
         className="grid grid-cols-1 gap-4 sm:grid-cols-2"
       >
-        <Select
+        <CreatableSelect
+          testId="group-subject"
           label={t('groups.subject')}
           required
           placeholder={t('groups.selectSubject')}
-          value={form.subjectId}
-          onChange={(event) => set('subjectId', event.target.value)}
+          options={subjects}
+          value={selectedSubject}
+          onChange={(subject) => set('subjectId', subject ? String(subject.id) : '')}
+          getOptionLabel={(subject) => subject.name}
+          getOptionValue={(subject) => subject.id}
+          onCreate={() => setQuickCreate('subject')}
           error={errors.subjectId}
-          options={subjects.map((subject) => ({ value: subject.id, label: subject.name }))}
         />
 
-        <Select
+        <CreatableSelect
+          testId="group-level"
           label={t('groups.level')}
           required
           placeholder={t('groups.selectLevel')}
-          value={form.levelId}
-          onChange={(event) => {
-            set('levelId', event.target.value);
+          options={levels}
+          value={selectedLevel}
+          onChange={(level) => {
+            set('levelId', level ? String(level.id) : '');
             set('branchId', '');
           }}
+          getOptionLabel={(level) => level.name}
+          getOptionValue={(level) => level.id}
+          onCreate={() => setQuickCreate('level')}
           error={errors.levelId}
-          options={levels.map((level) => ({ value: level.id, label: level.name }))}
         />
 
         <Select
@@ -266,13 +404,18 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           options={levelBranches.map((branch) => ({ value: branch.id, label: branch.name }))}
         />
 
-        <Select
+        <CreatableSelect
+          testId="group-teacher"
           label={t('groups.teacher')}
           placeholder={teachers.length === 0 ? t('groups.noTeacherAvailable') : t('groups.noTeacher')}
-          value={form.teacherId}
-          onChange={(event) => set('teacherId', event.target.value)}
-          disabled={teachers.length === 0}
-          options={teachers.map((teacher) => ({ value: teacher.id, label: teacher.full_name }))}
+          options={teachers}
+          value={selectedTeacher}
+          onChange={(teacher) => set('teacherId', teacher ? String(teacher.id) : '')}
+          getOptionLabel={(teacher) => teacher.full_name}
+          getOptionValue={(teacher) => teacher.id}
+          onCreate={() => setQuickCreate('teacher')}
+          searchable
+          clearable
         />
 
         <Select
@@ -285,32 +428,79 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           options={schoolYears.map((year) => ({ value: year.id, label: year.label ?? '' }))}
         />
 
-        <Select
-          label={t('groups.day')}
-          required
-          value={form.dayOfWeek}
-          onChange={(event) => set('dayOfWeek', event.target.value)}
-          error={errors.dayOfWeek}
-          options={DAY_NAMES.map((day) => ({ value: day, label: t(`groups.dayNames.${day}`) }))}
-        />
-
-        <Input
-          label={t('groups.startTime')}
-          required
-          type="time"
-          value={form.startTime}
-          onChange={(event) => set('startTime', event.target.value)}
-          error={errors.startTime}
-        />
-
-        <Input
-          label={t('groups.endTime')}
-          required
-          type="time"
-          value={form.endTime}
-          onChange={(event) => set('endTime', event.target.value)}
-          error={errors.endTime}
-        />
+        {/* ------------------------------------------- days of the week --- */}
+        <fieldset className="sm:col-span-2" data-testid="group-week">
+          <legend className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-foreground">
+            {t('groups.schedules')}
+            <span className="text-destructive" aria-hidden="true">
+              *
+            </span>
+          </legend>
+          <p className="mb-2 text-[12px] text-muted">{t('groups.schedulesHint')}</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {WEEK_DAYS.map((day) => {
+              const slot = form.week[day] ?? { enabled: false, start: '16:00', end: '18:00' };
+              const dayLabel = t(`groups.dayNames.${day}`);
+              return (
+                <div
+                  key={day}
+                  data-testid={`group-day-${day}`}
+                  data-enabled={slot.enabled ? 'true' : 'false'}
+                  className={cn(
+                    'rounded-lg border p-2 transition-colors',
+                    slot.enabled
+                      ? 'border-primary/40 bg-primary/5'
+                      : 'border-border bg-slate-50/60 opacity-60',
+                  )}
+                >
+                  <label
+                    className="flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-foreground"
+                    title={dayLabel}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-primary"
+                      checked={slot.enabled}
+                      onChange={(event) =>
+                        setWeekDay(day, { enabled: event.target.checked })
+                      }
+                      data-testid={`group-day-${day}-toggle`}
+                    />
+                    <span dir="auto">{shortDayLabel(t, day)}</span>
+                  </label>
+                  <div className="mt-1.5 space-y-1">
+                    <input
+                      type="time"
+                      aria-label={`${dayLabel} — ${t('groups.startTime')}`}
+                      value={slot.start}
+                      disabled={!slot.enabled}
+                      onChange={(event) => setWeekDay(day, { start: event.target.value })}
+                      data-testid={`group-day-${day}-start`}
+                      className="w-full rounded-md border border-border bg-white px-1 py-0.5 text-[12px] text-foreground disabled:cursor-not-allowed disabled:bg-transparent"
+                    />
+                    <input
+                      type="time"
+                      aria-label={`${dayLabel} — ${t('groups.endTime')}`}
+                      value={slot.end}
+                      disabled={!slot.enabled}
+                      onChange={(event) => setWeekDay(day, { end: event.target.value })}
+                      data-testid={`group-day-${day}-end`}
+                      className="w-full rounded-md border border-border bg-white px-1 py-0.5 text-[12px] text-foreground disabled:cursor-not-allowed disabled:bg-transparent"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[12px] text-muted" data-testid="group-week-summary">
+            {formatSchedules(t, weekPayload(form.week))}
+          </p>
+          {errors.schedule ? (
+            <p className="mt-1 text-[12px] text-destructive" role="alert" data-testid="group-week-error">
+              {errors.schedule}
+            </p>
+          ) : null}
+        </fieldset>
 
         <Input
           label={t('groups.room')}
@@ -319,32 +509,68 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           onChange={(event) => set('room', event.target.value)}
         />
 
-        <Input
+        <MoneyInput
           label={t('groups.monthlyFee')}
           required
-          type="number"
-          min="1"
-          step="0.01"
-          inputMode="decimal"
-          placeholder="300"
-          value={form.fee}
-          onChange={(event) => set('fee', event.target.value)}
+          data-testid="group-fee"
+          valueCents={amountToCents(form.fee)}
+          step={50}
+          onChange={(cents) => set('fee', cents === 0 ? '' : String(cents / 100))}
           error={errors.fee}
           hint={t('groups.feeHint')}
         />
 
-        <Input
+        <NumberInput
           label={t('groups.capacity')}
           required
-          type="number"
-          min="1"
-          step="1"
-          value={form.capacity}
-          onChange={(event) => set('capacity', event.target.value)}
+          data-testid="group-capacity"
+          decimals={0}
+          min={1}
+          max={200}
+          step={1}
+          suffix={t('common.suffix.students')}
+          value={form.capacity === '' ? Number.NaN : Number(form.capacity)}
+          onChange={(next) => set('capacity', Number.isFinite(next) && next > 0 ? String(next) : '')}
           error={errors.capacity}
         />
-      </form>
-    </Modal>
+        </form>
+      </Modal>
+
+      {/* ----------------------------------------------- quick-create dialogs */}
+      {quickCreate === 'subject' ? (
+        <QuickCreateSubject
+          onClose={() => setQuickCreate(null)}
+          onCreated={async (subject) => {
+            setQuickCreate(null);
+            await loadSubjects();
+            set('subjectId', String(subject.id));
+          }}
+        />
+      ) : null}
+
+      {quickCreate === 'level' ? (
+        <QuickCreateLevel
+          onClose={() => setQuickCreate(null)}
+          onCreated={async (level) => {
+            setQuickCreate(null);
+            await loadLevels();
+            set('levelId', String(level.id));
+            set('branchId', '');
+          }}
+        />
+      ) : null}
+
+      {quickCreate === 'teacher' ? (
+        <QuickCreateTeacher
+          onClose={() => setQuickCreate(null)}
+          onCreated={async (teacher) => {
+            setQuickCreate(null);
+            await loadTeachers();
+            set('teacherId', String(teacher.id));
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

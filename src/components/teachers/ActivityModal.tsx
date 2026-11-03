@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { CalendarPlus } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import NumberInput from '../ui/NumberInput';
 import Modal from '../ui/Modal';
 import Select from '../ui/Select';
 import Textarea from '../ui/Textarea';
@@ -125,24 +126,29 @@ export function ActivityModal({ open, teacherId, onClose, onSaved }: ActivityMod
           }))}
         />
 
-        <Input
-          type="number"
-          step="0.5"
-          min="0"
+        <NumberInput
           label={t('teachers.activity.hours')}
-          value={hours}
-          onChange={(event) => setHours(event.target.value)}
+          data-testid="activity-hours"
+          decimals={1}
+          min={0}
+          max={24}
+          step={0.5}
+          suffix={t('common.suffix.hours')}
+          value={hours.trim() === '' ? Number.NaN : Number(hours)}
+          onChange={(next) => setHours(Number.isFinite(next) && next > 0 ? String(next) : '')}
           placeholder="2"
           hint={t('teachers.activity.optional')}
         />
 
-        <Input
-          type="number"
-          step="1"
-          min="0"
+        <NumberInput
           label={t('teachers.activity.sessions')}
-          value={sessions}
-          onChange={(event) => setSessions(event.target.value)}
+          data-testid="activity-sessions"
+          decimals={0}
+          min={0}
+          max={99}
+          step={1}
+          value={sessions.trim() === '' ? Number.NaN : Number(sessions)}
+          onChange={(next) => setSessions(Number.isFinite(next) && next > 0 ? String(next) : '')}
           placeholder="1"
           hint={t('teachers.activity.optional')}
         />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import BackupSection from '../components/settings/BackupSection';
 import CenterSection from '../components/settings/CenterSection';
+import ExpenseCategoriesSection from '../components/settings/ExpenseCategoriesSection';
 import LanguageSection from '../components/settings/LanguageSection';
 import LevelsSection from '../components/settings/LevelsSection';
 import PrintingSection from '../components/settings/PrintingSection';
@@ -12,9 +13,9 @@ import { toast } from '../components/ui/Toast';
 import { settingsApi } from '../services/settings';
 
 /**
- * Settings page — eight collapsible sections:
- * centre · school year · levels · subjects · language · printing · security ·
- * backup.
+ * Settings page — nine collapsible sections:
+ * centre · school year · levels · subjects · language · printing ·
+ * expense categories (Phase 11) · security · backup.
  */
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -54,6 +55,7 @@ export function SettingsPage() {
       <SubjectsSection />
       <LanguageSection />
       <PrintingSection settings={settings} updateLocal={updateLocal} />
+      <ExpenseCategoriesSection />
       <SecuritySection />
       <BackupSection />
 

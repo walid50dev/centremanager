@@ -51,9 +51,10 @@ CREATE TABLE IF NOT EXISTS students (
     date_of_birth TEXT,
     phone         TEXT,
     parent_phone  TEXT,
+    father_name   TEXT,
     level_id      INTEGER REFERENCES levels(id) ON DELETE SET NULL,
     branch_id     INTEGER REFERENCES branches(id) ON DELETE SET NULL,
-    address       TEXT,
+    home_address  TEXT,
     notes         TEXT,
     status        TEXT DEFAULT 'actif',
     created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -201,6 +202,36 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at  TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 18. monthly_expenses — the charges the centre pays every month (Phase 11)
+-- Unlike invoices/payments these are internal bookkeeping, so they can be
+-- edited and deleted; the audit trail keeps a copy of every deleted row.
+CREATE TABLE IF NOT EXISTS monthly_expenses (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    label        TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    category     TEXT NOT NULL,
+    month        INTEGER NOT NULL,
+    year         INTEGER NOT NULL,
+    notes        TEXT,
+    created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- 19. group_schedules — the weekly slots of a group (Phase 13)
+-- A group used to carry one day (`groups.day_of_week` + start/end). It now can
+-- meet several times a week, each day with its own hours. The legacy columns on
+-- `groups` stay (V1 never drops a column) and are kept in sync with the FIRST
+-- schedule row so any old code path still reads something sensible.
+CREATE TABLE IF NOT EXISTS group_schedules (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id    INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    day_of_week TEXT NOT NULL,
+    start_time  TEXT NOT NULL,
+    end_time    TEXT NOT NULL,
+    UNIQUE (group_id, day_of_week)
+);
+
 -- ---------------------------------------------------------------------------
 -- Indexes on foreign keys / frequent lookups
 -- ---------------------------------------------------------------------------
@@ -223,3 +254,7 @@ CREATE INDEX IF NOT EXISTS idx_activities_teacher   ON teacher_activities(teache
 CREATE INDEX IF NOT EXISTS idx_compensation_teacher ON teacher_compensation(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_teacher  ON teacher_settlements(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity         ON audit_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_month_year ON monthly_expenses(month, year);
+CREATE INDEX IF NOT EXISTS idx_expenses_category   ON monthly_expenses(category);
+CREATE INDEX IF NOT EXISTS idx_schedules_group     ON group_schedules(group_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_day       ON group_schedules(day_of_week);

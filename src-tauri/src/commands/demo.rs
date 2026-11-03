@@ -4,7 +4,9 @@
 //! with four different compensation modes, 8 groups, enrollments spread over two
 //! months, invoices for the current and the previous month, payments that leave
 //! a ~60 % collection rate with a few late invoices, teacher activities and
-//! settlements — so a fresh install can be demonstrated without typing anything.
+//! settlements, and the monthly charges of both months (Phase 11) so the
+//! *Total Net* card has something to subtract — so a fresh install can be
+//! demonstrated without typing anything.
 //!
 //! The generator is deterministic: the same database always gets the same demo
 //! data, which keeps screenshots, tests and support calls reproducible. It is
@@ -18,6 +20,7 @@ use tauri::State;
 use super::activities::record_activity;
 use super::compensation::{calculate_compensation, record_settlement, set_compensation};
 use super::enrollments::enroll_student;
+use super::expenses::{create_expense, CreateExpenseInput};
 use super::groups::{create_group, CreateGroupInput};
 use super::invoices::generate_monthly_invoices;
 use super::payments::record_payment;
@@ -209,6 +212,7 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
                 room: Some(format!("Salle {}", index + 1)),
                 monthly_fee_cents: *fee,
                 capacity: *capacity,
+                schedules: None,
             },
         )?;
         group_ids.push(group_id);
@@ -231,7 +235,12 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
                 parent_phone: Some(format!("07{:08}", 10_000_000 + index * 1_111)),
                 level_id: Some(*level_id),
                 branch_id: None,
-                address: Some(format!("{}. Rue Atlas, Casablanca", 10 + index)),
+                father_name: Some(
+                    format!("Abdelkader {}", name.rsplit(' ').next().unwrap_or(""))
+                        .trim()
+                        .to_string(),
+                ),
+                home_address: Some(format!("{}. Rue Atlas, Casablanca", 10 + index)),
                 notes: None,
             },
         )?;
@@ -372,6 +381,45 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
         }
     }
 
+    // ----------------------------------------------------------- expenses ---
+    // The charges a small Casablanca centre pays every month, for the current
+    // period and the previous one so the net-income card has a trend.
+    // (label, amount in DH, category)
+    let monthly_charges: [(&str, i64, &str); 7] = [
+        ("Loyer local principal", 1_200, "Loyer"),
+        ("Abonnement fibre", 250, "WiFi"),
+        ("Facture électricité", 380, "Électricité"),
+        ("Facture eau", 150, "Eau"),
+        ("Salaire assistante", 800, "Assistance"),
+        ("Fournitures pédagogiques", 220, "Fournitures"),
+        ("Photocopies", 90, "Fournitures"),
+    ];
+    for (index, (label, dirhams, category)) in monthly_charges.iter().enumerate() {
+        for (period_month, period_year) in [(month, year), (prev_month, prev_year)] {
+            // The previous month is a little cheaper: electricity varies, and
+            // one supplies run did not happen.
+            if period_month != month && index >= 5 {
+                continue;
+            }
+            let amount = if period_month != month && *category == "Électricité" {
+                dirhams + 40
+            } else {
+                *dirhams
+            };
+            create_expense(
+                conn,
+                &CreateExpenseInput {
+                    label: (*label).to_string(),
+                    amount_cents: amount * 100,
+                    category: (*category).to_string(),
+                    month: period_month,
+                    year: period_year,
+                    notes: None,
+                },
+            )?;
+        }
+    }
+
     let invoices_total = count(conn, "invoices")?;
     // The summary is the exact template the specification asks for (English),
     // because the owner and any log line read it verbatim. The toast *prefix*
@@ -429,6 +477,29 @@ mod tests {
         assert_eq!(scalar(&conn, "SELECT COUNT(*) FROM students"), 15);
         assert_eq!(scalar(&conn, "SELECT COUNT(*) FROM teachers"), 5);
         assert_eq!(scalar(&conn, "SELECT COUNT(*) FROM groups"), 8);
+
+        // Phase 11: the charges of both months, so the net card has a trend.
+        assert_eq!(
+            scalar(&conn, "SELECT COUNT(*) FROM monthly_expenses"),
+            12,
+            "7 charges this month + 5 last month (no supplies run)"
+        );
+        assert!(
+            scalar(
+                &conn,
+                "SELECT COUNT(*) FROM monthly_expenses
+                  WHERE month = CAST(strftime('%m', 'now', 'localtime') AS INTEGER)"
+            ) == 7,
+            "the seven monthly charges belong to the current month"
+        );
+        assert_eq!(
+            scalar(
+                &conn,
+                "SELECT COUNT(DISTINCT category) FROM monthly_expenses"
+            ),
+            6,
+            "rent, WiFi, electricity, water, assistant and supplies"
+        );
         assert_eq!(
             scalar(
                 &conn,

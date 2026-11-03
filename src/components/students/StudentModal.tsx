@@ -4,11 +4,14 @@ import { UserRound } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
+import CreatableSelect from '../ui/CreatableSelect';
 import Select from '../ui/Select';
 import Textarea from '../ui/Textarea';
 import { toast } from '../ui/Toast';
 import { levelsApi } from '../../services/settings';
+import QuickCreateLevel from '../quick-create/QuickCreateLevel';
 import { isValidPhone, studentsApi } from '../../services/students';
+import { formatPhone, stripPhone } from '../../utils/format';
 import type { Branch, Level, Student, StudentInput } from '../../types';
 
 export interface StudentModalProps {
@@ -21,12 +24,14 @@ export interface StudentModalProps {
 
 interface FormState {
   fullName: string;
+  fatherName: string;
   dateOfBirth: string;
+  /** Kept as typed (spaces and dashes allowed); stripped when submitted. */
   phone: string;
   parentPhone: string;
   levelId: string;
   branchId: string;
-  address: string;
+  homeAddress: string;
   notes: string;
 }
 
@@ -35,12 +40,13 @@ type Errors = Partial<Record<FieldName, string>>;
 
 const EMPTY_FORM: FormState = {
   fullName: '',
+  fatherName: '',
   dateOfBirth: '',
   phone: '',
   parentPhone: '',
   levelId: '',
   branchId: '',
-  address: '',
+  homeAddress: '',
   notes: '',
 };
 
@@ -48,12 +54,14 @@ function toForm(student?: Student | null): FormState {
   if (!student) return EMPTY_FORM;
   return {
     fullName: student.full_name ?? '',
+    fatherName: student.father_name ?? '',
     dateOfBirth: student.date_of_birth ?? '',
-    phone: student.phone ?? '',
-    parentPhone: student.parent_phone ?? '',
+    // Stored raw (`0607123456`); shown grouped as soon as the modal opens.
+    phone: student.phone ? formatPhone(student.phone) : '',
+    parentPhone: student.parent_phone ? formatPhone(student.parent_phone) : '',
     levelId: student.level_id ? String(student.level_id) : '',
     branchId: student.branch_id ? String(student.branch_id) : '',
-    address: student.address ?? '',
+    homeAddress: student.home_address ?? '',
     notes: student.notes ?? '',
   };
 }
@@ -68,6 +76,7 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
   const [submitting, setSubmitting] = useState(false);
   const [levels, setLevels] = useState<Level[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [quickLevel, setQuickLevel] = useState(false);
 
   // Re-seed the form whenever the modal opens for a different student.
   useEffect(() => {
@@ -93,6 +102,12 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
       active = false;
     };
   }, [open]);
+
+  /** Reloaded after a quick-create so the new level is selectable. */
+  const loadLevels = useCallback(async () => {
+    const rows = await levelsApi.list();
+    setLevels(rows);
+  }, []);
 
   // Branches depend on the selected level.
   const levelId = form.levelId ? Number(form.levelId) : null;
@@ -123,11 +138,12 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
     if (!name) next.fullName = t('students.validation.nameRequired');
     else if (name.length < 2) next.fullName = t('students.validation.nameTooShort');
 
-    const phone = form.phone.trim();
+    // Validation always runs on the ten raw digits, whatever the user typed.
+    const phone = stripPhone(form.phone);
     if (!phone) next.phone = t('students.validation.phoneRequired');
     else if (!isValidPhone(phone)) next.phone = t('students.validation.phoneFormat');
 
-    const parentPhone = form.parentPhone.trim();
+    const parentPhone = stripPhone(form.parentPhone);
     if (parentPhone && !isValidPhone(parentPhone)) {
       next.parentPhone = t('students.validation.phoneFormat');
     }
@@ -156,12 +172,14 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
   const buildPayload = (): StudentInput => ({
     full_name: form.fullName.trim(),
     date_of_birth: form.dateOfBirth ? form.dateOfBirth : null,
-    phone: form.phone.trim(),
-    parent_phone: form.parentPhone.trim() ? form.parentPhone.trim() : null,
+    // The backend stores plain digits, never the display grouping.
+    phone: stripPhone(form.phone),
+    parent_phone: stripPhone(form.parentPhone) || null,
+    father_name: form.fatherName.trim() || null,
     level_id: form.levelId ? Number(form.levelId) : null,
     branch_id: form.levelId && form.branchId ? Number(form.branchId) : null,
-    address: form.address.trim() ? form.address.trim() : null,
-    notes: form.notes.trim() ? form.notes.trim() : null,
+    home_address: form.homeAddress.trim() || null,
+    notes: form.notes.trim() || null,
   });
 
   const handleSubmit = async () => {
@@ -199,13 +217,9 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
     label: branch.name,
   }));
 
-  const levelOptions = levels.map((level) => ({
-    value: level.id,
-    label: level.name,
-  }));
-
   return (
-    <Modal
+    <>
+      <Modal
       open={open}
       onClose={onClose}
       size="lg"
@@ -237,6 +251,7 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
         <Input
           containerClassName="sm:col-span-2"
           label={t('students.name')}
+          data-testid="student-full-name"
           required
           autoFocus
           value={form.fullName}
@@ -244,6 +259,15 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
           onBlur={() => markTouched('fullName')}
           error={visibleError('fullName')}
           placeholder={t('students.namePlaceholder')}
+        />
+
+        <Input
+          label={t('students.fatherName')}
+          value={form.fatherName}
+          onChange={(event) => update('fatherName', event.target.value)}
+          placeholder={t('students.fatherNamePlaceholder')}
+          hint={t('students.optional')}
+          data-testid="student-father-name"
         />
 
         <Input
@@ -256,35 +280,53 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
 
         <Input
           type="tel"
-          inputMode="numeric"
+          inputMode="tel"
+          dir="ltr"
           label={t('students.phone')}
           required
           value={form.phone}
           onChange={(event) => update('phone', event.target.value)}
-          onBlur={() => markTouched('phone')}
+          onBlur={() => {
+            // `06 07 12 34 56` the moment the field is left. An invalid number
+            // is left exactly as typed so the user can fix it.
+            const digits = stripPhone(form.phone);
+            if (isValidPhone(digits)) update('phone', formatPhone(digits));
+            markTouched('phone');
+          }}
           error={visibleError('phone')}
-          placeholder="06XXXXXXXX"
+          placeholder={t('students.phonePlaceholder')}
           hint={t('students.phoneHint')}
+          data-testid="student-phone"
         />
 
         <Input
           type="tel"
-          inputMode="numeric"
+          inputMode="tel"
+          dir="ltr"
           label={t('students.parentPhone')}
           value={form.parentPhone}
           onChange={(event) => update('parentPhone', event.target.value)}
-          onBlur={() => markTouched('parentPhone')}
+          onBlur={() => {
+            const digits = stripPhone(form.parentPhone);
+            if (isValidPhone(digits)) update('parentPhone', formatPhone(digits));
+            markTouched('parentPhone');
+          }}
           error={visibleError('parentPhone')}
-          placeholder="06XXXXXXXX"
+          placeholder={t('students.phonePlaceholder')}
           hint={t('students.optional')}
+          data-testid="student-parent-phone"
         />
 
-        <Select
+        <CreatableSelect
+          testId="student-level"
           label={t('students.level')}
           placeholder={t('students.selectLevel')}
-          options={levelOptions}
-          value={form.levelId}
-          onChange={(event) => update('levelId', event.target.value)}
+          options={levels}
+          value={levels.find((level) => String(level.id) === form.levelId) ?? null}
+          onChange={(level) => update('levelId', level ? String(level.id) : '')}
+          getOptionLabel={(level) => level.name}
+          getOptionValue={(level) => level.id}
+          onCreate={() => setQuickLevel(true)}
         />
 
         <Select
@@ -303,11 +345,12 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
 
         <Textarea
           containerClassName="sm:col-span-2"
-          label={t('students.address')}
+          label={t('students.homeAddress')}
           rows={2}
-          value={form.address}
-          onChange={(event) => update('address', event.target.value)}
-          placeholder={t('students.addressPlaceholder')}
+          value={form.homeAddress}
+          onChange={(event) => update('homeAddress', event.target.value)}
+          placeholder={t('students.homeAddressPlaceholder')}
+          data-testid="student-home-address"
         />
 
         <Textarea
@@ -321,7 +364,19 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
 
         <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
       </form>
-    </Modal>
+      </Modal>
+
+      {quickLevel ? (
+        <QuickCreateLevel
+          onClose={() => setQuickLevel(false)}
+          onCreated={async (level) => {
+            setQuickLevel(false);
+            await loadLevels();
+            update('levelId', String(level.id));
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

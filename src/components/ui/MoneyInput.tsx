@@ -1,5 +1,4 @@
-import { useId, useRef, useState } from 'react';
-import { CURRENCY_SYMBOL, cn } from '../../utils/format';
+import NumberInput from './NumberInput';
 
 export interface MoneyInputProps {
   /** Value in centimes (1 DH = 100). */
@@ -7,116 +6,65 @@ export interface MoneyInputProps {
   onChange: (cents: number) => void;
   disabled?: boolean;
   className?: string;
+  containerClassName?: string;
   id?: string;
   label?: string;
+  hint?: string;
   error?: string;
+  required?: boolean;
   autoFocus?: boolean;
+  /** Increment of the +/- buttons, in dirhams. Default `10`. */
+  step?: number;
   'aria-label'?: string;
   'data-testid'?: string;
-}
-
-/** `15000` → `"150"`, `15050` → `"150.50"` (the raw number shown while typing). */
-function rawAmount(cents: number): string {
-  const value = Number.isFinite(cents) ? cents : 0;
-  return (value / 100).toFixed(2).replace(/\.?0+$/, '') || '0';
 }
 
 /**
  * Amount field working in dirhams while the app stores centimes.
  *
- * * idle → `300.00` (two decimals),
- * * focused → the raw number (`300`), so the caret does not sit after zeros,
- * * only digits and a single decimal point, at most 2 decimals,
- * * right-aligned, with the `DH` suffix outside the input (RTL-safe).
- *
- * The displayed text is derived (`focused ? typed : formatted`), so an external
- * change of `valueCents` is reflected immediately without an effect sync.
+ * Since Phase 10 this is a thin wrapper around `NumberInput`, so it inherits the
+ * grouped display (`1 234.50`), the `DH` suffix, the +/- buttons, the wheel
+ * protection and the RTL behaviour for free. Only the conversion lives here:
+ * `valueCents / 100` going in, `Math.round(value * 100)` coming out.
  */
 export function MoneyInput({
   valueCents,
   onChange,
   disabled = false,
   className,
+  containerClassName,
   id,
   label,
+  hint,
   error,
+  required,
   autoFocus = false,
+  step = 10,
   'aria-label': ariaLabel,
   'data-testid': testId,
 }: MoneyInputProps) {
-  const generatedId = useId();
-  const inputId = id ?? generatedId;
-  // `typed` is `null` until the field is focused; the ref mirror lets the focus
-  // handler seed it exactly once, even if an input event lands first.
-  const [typed, setTypedState] = useState<string | null>(null);
-  const typedRef = useRef<string | null>(null);
-  const setTyped = (next: string | null) => {
-    typedRef.current = next;
-    setTypedState(next);
-  };
-  const [focused, setFocused] = useState(false);
-
-  const display = focused
-    ? typed ?? rawAmount(valueCents)
-    : ((Number.isFinite(valueCents) ? valueCents : 0) / 100).toFixed(2);
-
-  const handleChange = (raw: string) => {
-    const cleaned = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
-    const [whole = '', ...rest] = cleaned.split('.');
-    const decimals = rest.join('').slice(0, 2);
-    const next = rest.length > 0 ? `${whole}.${decimals}` : whole;
-    setTyped(next);
-    const parsed = Number.parseFloat(next);
-    onChange(Number.isFinite(parsed) ? Math.round(parsed * 100) : 0);
-  };
+  const cents = Number.isFinite(valueCents) ? valueCents : 0;
 
   return (
-    <div className={cn('w-full', className)}>
-      {label && (
-        <label htmlFor={inputId} className="mb-1.5 block text-label text-muted">
-          {label}
-        </label>
-      )}
-      <div
-        className={cn(
-          'flex h-9 items-center gap-2 rounded-md border bg-white px-3',
-          'focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20',
-          disabled && 'bg-background',
-          error ? 'border-destructive' : 'border-border',
-        )}
-      >
-        <input
-          id={inputId}
-          data-testid={testId}
-          type="text"
-          inputMode="decimal"
-          dir="ltr"
-          autoFocus={autoFocus}
-          disabled={disabled}
-          aria-label={ariaLabel ?? label}
-          aria-invalid={Boolean(error)}
-          value={display}
-          onFocus={() => {
-            setFocused(true);
-            // Seed the raw value once so the caret does not sit after zeros.
-            if (typedRef.current === null) setTyped(rawAmount(valueCents));
-          }}
-          onBlur={() => {
-            setFocused(false);
-            setTyped(null);
-          }}
-          onChange={(event) => handleChange(event.target.value)}
-          className={cn(
-            'h-full w-full bg-transparent text-end text-body tabular-nums text-foreground',
-            'focus:outline-none disabled:cursor-not-allowed disabled:text-muted',
-          )}
-        />
-        <span className="shrink-0 text-[13px] font-medium text-muted" aria-hidden="true">
-          {CURRENCY_SYMBOL}
-        </span>
-      </div>
-      {error && <p className="mt-1 text-[13px] text-destructive">{error}</p>}
-    </div>
+    <NumberInput
+      id={id}
+      label={label}
+      hint={hint}
+      error={error}
+      required={required}
+      autoFocus={autoFocus}
+      disabled={disabled}
+      className={className}
+      containerClassName={containerClassName}
+      aria-label={ariaLabel}
+      data-testid={testId}
+      value={cents / 100}
+      decimals={2}
+      min={0}
+      step={step}
+      suffix="DH"
+      onChange={(next) => onChange(Math.round(next * 100))}
+    />
   );
 }
 

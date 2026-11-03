@@ -23,12 +23,27 @@
 //! (`January → December of the previous year`); the payroll summary of Phase 6
 //! is deliberately **not** duplicated here, the dashboard calls the existing
 //! `cmd_get_all_teacher_compensation_summary` from the frontend.
+//!
+//! **Phase 11 — net income.** `net_income_cents` is the number the director
+//! actually cares about:
+//!
+//! ```text
+//! net = revenue (received this month) - expenses (monthly_expenses) - payroll
+//! ```
+//!
+//! The payroll figure reuses [`crate::commands::compensation::compensation_summary`],
+//! so there is still exactly one implementation of "what a teacher costs this
+//! month" — the dashboard never re-derives a mode formula. Expenses come from
+//! `monthly_expenses`, and both are also computed for the previous month so the
+//! card can show a trend.
 
 use chrono::{Duration, Local, NaiveDate};
 use rusqlite::{params, Connection};
 use tauri::State;
 
+use super::compensation::compensation_summary;
 use super::db_err;
+use super::expenses::month_total as expenses_total;
 use super::invoices::parse_iso_date;
 use crate::db::Db;
 use crate::models::{AlertItem, DashboardKPIs, RecentPayment};
@@ -65,7 +80,7 @@ pub fn previous_month(month: i32, year: i32) -> (i32, i32) {
 
 /// First day of a month — the anchor of every window computation.
 fn first_day_of(month: i32, year: i32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(year, month as u32, 1).unwrap_or_else(|| today())
+    NaiveDate::from_ymd_opt(year, month as u32, 1).unwrap_or_else(today)
 }
 
 fn last_day_of(month: i32, year: i32) -> NaiveDate {
@@ -106,6 +121,27 @@ fn theoretical_of(conn: &Connection, month: i32, year: i32) -> Result<i64, Strin
           WHERE period_month = ?1 AND period_year = ?2",
         params![month, year],
     )
+}
+
+/// Payroll of a month: the sum of every configured teacher's total.
+///
+/// Teachers without a compensation configuration cost nothing and are skipped
+/// (their `total_due_cents` is zero anyway, this just avoids the extra read).
+fn payroll_of(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
+    let summaries = compensation_summary(conn, month, year)?;
+    Ok(summaries
+        .iter()
+        .filter(|teacher| teacher.status != "not_configured")
+        .map(|teacher| teacher.total_due_cents)
+        .sum())
+}
+
+/// `revenue - expenses - payroll` for one month.
+pub fn net_income_of(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
+    let revenue = revenue_of(conn, month, year)?;
+    let expenses = expenses_total(conn, month, year)?;
+    let payroll = payroll_of(conn, month, year)?;
+    Ok(revenue - expenses - payroll)
 }
 
 /// Students holding an active enrollment at some point during the month.
@@ -156,6 +192,12 @@ pub fn dashboard_kpis(conn: &Connection, month: i32, year: i32) -> Result<Dashbo
     let prev_month_revenue_cents = revenue_of(conn, prev_month, prev_year)?;
     let prev_month_students = students_during(conn, prev_month, prev_year)?;
 
+    // Phase 11 — the real profit of the month.
+    let total_expenses_cents = expenses_total(conn, month, year)?;
+    let total_compensation_cents = payroll_of(conn, month, year)?;
+    let net_income_cents = monthly_revenue_cents - total_expenses_cents - total_compensation_cents;
+    let prev_month_net_income_cents = net_income_of(conn, prev_month, prev_year)?;
+
     Ok(DashboardKPIs {
         total_active_students: total_active_students as i32,
         monthly_revenue_cents,
@@ -165,6 +207,10 @@ pub fn dashboard_kpis(conn: &Connection, month: i32, year: i32) -> Result<Dashbo
         active_teachers: active_teachers as i32,
         prev_month_revenue_cents,
         prev_month_students,
+        total_expenses_cents,
+        total_compensation_cents,
+        net_income_cents,
+        prev_month_net_income_cents,
     })
 }
 
@@ -446,6 +492,115 @@ mod tests {
         assert_eq!(kpis.active_teachers, 0);
         assert_eq!(kpis.prev_month_revenue_cents, 0);
         assert_eq!(kpis.prev_month_students, 0);
+        // Phase 11: nothing in, nothing out — the net card is a yellow zero.
+        assert_eq!(kpis.total_expenses_cents, 0);
+        assert_eq!(kpis.total_compensation_cents, 0);
+        assert_eq!(kpis.net_income_cents, 0);
+        assert_eq!(kpis.prev_month_net_income_cents, 0);
+    }
+
+    /// Helper: one expense straight through the Phase 11 command layer.
+    fn expense(conn: &Connection, label: &str, cents: i64, category: &str, month: i32) {
+        crate::commands::expenses::create_expense(
+            conn,
+            &crate::commands::expenses::CreateExpenseInput {
+                label: label.to_string(),
+                amount_cents: cents,
+                category: category.to_string(),
+                month,
+                year: 2026,
+                notes: None,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn net_income_subtracts_expenses_and_payroll() {
+        let conn = test_conn();
+        let s = student(&conn, "Salma", "actif");
+        let g = group(&conn, 30_000, "actif");
+        let e = enrollment(&conn, s, g, "2026-01-05", None);
+        invoice(&conn, e, 3, 2026, 30_000, 20_000, "2026-03-10");
+        // 2 000 DH received in March…
+        payment(&conn, s, 200_000, "espèces", "2026-03-12 10:00:00");
+
+        // …a 500 DH rent and a 120 DH WiFi bill for March…
+        expense(&conn, "Loyer", 50_000, "Loyer", 3);
+        expense(&conn, "WiFi", 12_000, "WiFi", 3);
+        // …an April expense that must not leak into March…
+        expense(&conn, "Loyer avril", 50_000, "Loyer", 4);
+
+        // …and one teacher on a fixed 700 DH salary.
+        teacher(&conn, "Karim", "actif");
+        crate::commands::compensation::set_compensation(&conn, 1, "fixed_monthly", 70_000, None)
+            .unwrap();
+        // A second, unconfigured teacher costs nothing.
+        teacher(&conn, "Zineb", "actif");
+
+        let kpis = dashboard_kpis(&conn, 3, 2026).unwrap();
+        assert_eq!(kpis.monthly_revenue_cents, 200_000);
+        assert_eq!(kpis.total_expenses_cents, 62_000);
+        assert_eq!(kpis.total_compensation_cents, 70_000);
+        assert_eq!(kpis.net_income_cents, 200_000 - 62_000 - 70_000);
+        assert_eq!(kpis.net_income_cents, 68_000);
+    }
+
+    #[test]
+    fn net_income_can_be_negative_and_is_month_scoped() {
+        let conn = test_conn();
+        let s = student(&conn, "Omar", "actif");
+        // A quiet month: 300 DH collected, 800 DH of charges, 700 DH of salary.
+        payment(&conn, s, 30_000, "espèces", "2026-05-04 09:00:00");
+        expense(&conn, "Loyer", 80_000, "Loyer", 5);
+        teacher(&conn, "Karim", "actif");
+        crate::commands::compensation::set_compensation(&conn, 1, "fixed_monthly", 70_000, None)
+            .unwrap();
+
+        let kpis = dashboard_kpis(&conn, 5, 2026).unwrap();
+        assert_eq!(kpis.net_income_cents, 30_000 - 80_000 - 70_000);
+        assert!(kpis.net_income_cents < 0, "the card must turn red");
+        assert_eq!(
+            net_income_of(&conn, 5, 2026).unwrap(),
+            kpis.net_income_cents
+        );
+
+        // June has no expenses and no revenue: net is the payroll only.
+        let june = dashboard_kpis(&conn, 6, 2026).unwrap();
+        assert_eq!(june.total_expenses_cents, 0);
+        assert_eq!(june.net_income_cents, -70_000);
+
+        // The trend compares with the month before, which is May here.
+        assert_eq!(june.prev_month_net_income_cents, kpis.net_income_cents);
+    }
+
+    #[test]
+    fn payroll_uses_every_compensation_mode() {
+        let conn = test_conn();
+        let s1 = student(&conn, "Salma", "actif");
+        let s2 = student(&conn, "Yassine", "actif");
+        let g = group(&conn, 30_000, "actif");
+        let e1 = enrollment(&conn, s1, g, "2026-01-05", None);
+        let e2 = enrollment(&conn, s2, g, "2026-01-05", None);
+        invoice(&conn, e1, 2, 2026, 30_000, 30_000, "2026-02-10");
+        invoice(&conn, e2, 2, 2026, 30_000, 30_000, "2026-02-10");
+
+        // Karim: fixed 700 DH. Zineb: 10 % of her own group's theoretical revenue.
+        teacher(&conn, "Karim", "actif");
+        teacher(&conn, "Zineb", "actif");
+        conn.execute("UPDATE groups SET teacher_id = 2 WHERE id = ?1", params![g])
+            .unwrap();
+        crate::commands::compensation::set_compensation(&conn, 1, "fixed_monthly", 70_000, None)
+            .unwrap();
+        // 10 % is stored as 1000 hundredths (see `compensation::percentage_of`).
+        crate::commands::compensation::set_compensation(&conn, 2, "percentage", 1_000, None)
+            .unwrap();
+
+        // Zineb's group holds two students at 300 DH → 600 DH × 10 % = 60 DH.
+        let kpis = dashboard_kpis(&conn, 2, 2026).unwrap();
+        assert_eq!(kpis.total_compensation_cents, 70_000 + 6_000);
+        assert_eq!(kpis.monthly_revenue_cents, 0, "nothing collected yet");
+        assert_eq!(kpis.net_income_cents, -(70_000 + 6_000));
     }
 
     #[test]

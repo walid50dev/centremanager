@@ -36,9 +36,12 @@ pub struct CreateStudentInput {
     pub date_of_birth: Option<String>,
     pub phone: String,
     pub parent_phone: Option<String>,
+    /// Father's name — used to identify minors and printed on receipts.
+    pub father_name: Option<String>,
     pub level_id: Option<i64>,
     pub branch_id: Option<i64>,
-    pub address: Option<String>,
+    /// Home address ("adresse maison") — replaced the free-form address/email.
+    pub home_address: Option<String>,
     pub notes: Option<String>,
 }
 
@@ -52,15 +55,25 @@ struct CleanInput {
     date_of_birth: Option<String>,
     phone: String,
     parent_phone: Option<String>,
+    father_name: Option<String>,
     level_id: Option<i64>,
     branch_id: Option<i64>,
-    address: Option<String>,
+    home_address: Option<String>,
     notes: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
 // Validation helpers
 // ---------------------------------------------------------------------------
+
+/// Strip the separators a user may type (`06 07 12 34 56`, `06-07-12-34-56`)
+/// so validation and storage always work on the ten raw digits.
+pub fn normalise_phone(phone: &str) -> String {
+    phone
+        .chars()
+        .filter(|c| !matches!(c, ' ' | '-' | '\u{00A0}' | '\u{202F}' | '.' | '(' | ')'))
+        .collect()
+}
 
 /// Moroccan mobile format: exactly 10 digits starting with `06` or `07`.
 pub fn is_valid_phone(phone: &str) -> bool {
@@ -72,16 +85,18 @@ pub fn is_valid_phone(phone: &str) -> bool {
 }
 
 fn validate_phone(phone: &str, label: &str) -> Result<String, String> {
-    let trimmed = phone.trim();
-    if trimmed.is_empty() {
+    // Spaces and dashes are allowed on input, never in storage: the frontend
+    // shows `06 07 12 34 56` and the database keeps `0607123456`.
+    let normalised = normalise_phone(phone);
+    if normalised.is_empty() {
         return Err(format!("{label} est obligatoire"));
     }
-    if !is_valid_phone(trimmed) {
+    if !is_valid_phone(&normalised) {
         return Err(format!(
             "Format de {label} invalide (06XXXXXXXX ou 07XXXXXXXX)"
         ));
     }
-    Ok(trimmed.to_string())
+    Ok(normalised)
 }
 
 /// `Option<String>` field → trimmed value, empty string becomes `None`.
@@ -159,9 +174,10 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
         date_of_birth: validate_date(&data.date_of_birth)?,
         phone,
         parent_phone,
+        father_name: optional_text(&data.father_name),
         level_id: data.level_id,
         branch_id: data.branch_id,
-        address: optional_text(&data.address),
+        home_address: optional_text(&data.home_address),
         notes: optional_text(&data.notes),
         full_name,
     })
@@ -199,9 +215,21 @@ fn log_audit(
 
 /// Snapshot of the editable fields, used to build the UPDATE diff.
 fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, String> {
-    let row: Option<(String, Option<String>, Option<String>, Option<String>, Option<i64>, Option<i64>, Option<String>, Option<String>)> =
-        conn.query_row(
-            "SELECT full_name, date_of_birth, phone, parent_phone, level_id, branch_id, address, notes
+    #[allow(clippy::type_complexity)]
+    let row: Option<(
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<i64>,
+        Option<i64>,
+        Option<String>,
+        Option<String>,
+    )> = conn
+        .query_row(
+            "SELECT full_name, date_of_birth, phone, parent_phone, father_name,
+                    level_id, branch_id, home_address, notes
              FROM students WHERE id = ?1",
             params![id],
             |row| {
@@ -214,13 +242,24 @@ fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, St
                     row.get(5)?,
                     row.get(6)?,
                     row.get(7)?,
+                    row.get(8)?,
                 ))
             },
         )
         .optional()
         .map_err(|err| db_err("Lecture de l'élève", err))?;
 
-    let Some((full_name, dob, phone, parent_phone, level_id, branch_id, address, notes)) = row
+    let Some((
+        full_name,
+        dob,
+        phone,
+        parent_phone,
+        father_name,
+        level_id,
+        branch_id,
+        home_address,
+        notes,
+    )) = row
     else {
         return Ok(None);
     };
@@ -230,9 +269,10 @@ fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, St
     map.insert("date_of_birth".into(), json!(dob));
     map.insert("phone".into(), json!(phone));
     map.insert("parent_phone".into(), json!(parent_phone));
+    map.insert("father_name".into(), json!(father_name));
     map.insert("level_id".into(), json!(level_id));
     map.insert("branch_id".into(), json!(branch_id));
-    map.insert("address".into(), json!(address));
+    map.insert("home_address".into(), json!(home_address));
     map.insert("notes".into(), json!(notes));
     Ok(Some(map))
 }
@@ -258,9 +298,10 @@ fn input_json(clean: &CleanInput) -> Value {
         "date_of_birth": clean.date_of_birth,
         "phone": clean.phone,
         "parent_phone": clean.parent_phone,
+        "father_name": clean.father_name,
         "level_id": clean.level_id,
         "branch_id": clean.branch_id,
-        "address": clean.address,
+        "home_address": clean.home_address,
         "notes": clean.notes,
     })
 }
@@ -270,9 +311,9 @@ fn input_json(clean: &CleanInput) -> Value {
 // ---------------------------------------------------------------------------
 
 const SELECT_STUDENT: &str = "SELECT s.id, s.full_name, s.date_of_birth, s.phone, s.parent_phone,
-            s.level_id, l.name AS level_name,
+            s.father_name, s.level_id, l.name AS level_name,
             s.branch_id, b.name AS branch_name,
-            s.address, s.notes, s.status, s.created_at, s.updated_at
+            s.home_address, s.notes, s.status, s.created_at, s.updated_at
      FROM students s
      LEFT JOIN levels l ON l.id = s.level_id
      LEFT JOIN branches b ON b.id = s.branch_id";
@@ -286,17 +327,18 @@ fn map_student(row: &Row<'_>) -> rusqlite::Result<StudentRow> {
         // exposes a string so the UI never has to handle null.
         phone: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
         parent_phone: row.get(4)?,
-        level_id: row.get(5)?,
-        level_name: row.get(6)?,
-        branch_id: row.get(7)?,
-        branch_name: row.get(8)?,
-        address: row.get(9)?,
-        notes: row.get(10)?,
+        father_name: row.get(5)?,
+        level_id: row.get(6)?,
+        level_name: row.get(7)?,
+        branch_id: row.get(8)?,
+        branch_name: row.get(9)?,
+        home_address: row.get(10)?,
+        notes: row.get(11)?,
         status: row
-            .get::<_, Option<String>>(11)?
+            .get::<_, Option<String>>(12)?
             .unwrap_or_else(|| STATUS_ACTIVE.to_string()),
-        created_at: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
-        updated_at: row.get::<_, Option<String>>(13)?.unwrap_or_default(),
+        created_at: row.get::<_, Option<String>>(13)?.unwrap_or_default(),
+        updated_at: row.get::<_, Option<String>>(14)?.unwrap_or_default(),
     })
 }
 
@@ -446,16 +488,18 @@ pub fn create_student(conn: &Connection, data: &CreateStudentInput) -> Result<i6
 
     conn.execute(
         "INSERT INTO students
-            (full_name, date_of_birth, phone, parent_phone, level_id, branch_id, address, notes, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            (full_name, date_of_birth, phone, parent_phone, father_name,
+             level_id, branch_id, home_address, notes, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             clean.full_name,
             clean.date_of_birth,
             clean.phone,
             clean.parent_phone,
+            clean.father_name,
             clean.level_id,
             clean.branch_id,
-            clean.address,
+            clean.home_address,
             clean.notes,
             STATUS_ACTIVE,
         ],
@@ -475,17 +519,18 @@ pub fn update_student(conn: &Connection, id: i64, data: &UpdateStudentInput) -> 
     conn.execute(
         "UPDATE students SET
             full_name = ?1, date_of_birth = ?2, phone = ?3, parent_phone = ?4,
-            level_id = ?5, branch_id = ?6, address = ?7, notes = ?8,
-            updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?9",
+            father_name = ?5, level_id = ?6, branch_id = ?7, home_address = ?8,
+            notes = ?9, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?10",
         params![
             clean.full_name,
             clean.date_of_birth,
             clean.phone,
             clean.parent_phone,
+            clean.father_name,
             clean.level_id,
             clean.branch_id,
-            clean.address,
+            clean.home_address,
             clean.notes,
             id,
         ],
@@ -621,9 +666,10 @@ mod tests {
             date_of_birth: Some("2010-05-12".to_string()),
             phone: phone.to_string(),
             parent_phone: Some("0661112233".to_string()),
+            father_name: Some("Rachid El Amrani".to_string()),
             level_id: Some(10), // Tronc Commun
             branch_id: Some(1), // Sciences Maths @ Tronc Commun
-            address: Some("12 rue des Écoles".to_string()),
+            home_address: Some("12 rue des Écoles".to_string()),
             notes: Some("Payé par la mère".to_string()),
         }
     }
@@ -634,9 +680,10 @@ mod tests {
             date_of_birth: None,
             phone: phone.to_string(),
             parent_phone: None,
+            father_name: None,
             level_id: None,
             branch_id: None,
-            address: None,
+            home_address: None,
             notes: None,
         }
     }
@@ -658,6 +705,57 @@ mod tests {
         ] {
             assert!(!is_valid_phone(invalid), "{invalid} should be rejected");
         }
+    }
+
+    #[test]
+    fn phone_separators_are_stripped_before_validation_and_storage() {
+        // What the user sees: `06 07 12 34 56`; what SQLite keeps: `0607123456`.
+        for typed in ["06 07 12 34 56", "06-07-12-34-56", "06 07-12 34-56"] {
+            assert_eq!(normalise_phone(typed), "0607123456");
+        }
+
+        let conn = test_conn();
+        let mut input = minimal("Omar Tazi", "06 98 76 54 32");
+        input.parent_phone = Some("06-11-22-33-44".to_string());
+        let id = create_student(&conn, &input).unwrap();
+
+        let student = get_student(&conn, id).unwrap();
+        assert_eq!(student.phone, "0698765432", "spaces must not be stored");
+        assert_eq!(student.parent_phone.as_deref(), Some("0611223344"));
+
+        // A wrong length stays invalid once the separators are gone.
+        let mut broken = minimal("Bad Phone", "06 12 34 56 7");
+        broken.parent_phone = None;
+        assert!(create_student(&conn, &broken).is_err());
+    }
+
+    #[test]
+    fn father_name_and_home_address_round_trip() {
+        let conn = test_conn();
+        let id = create_student(&conn, &sample("Yassine El Amrani", "0612345678")).unwrap();
+
+        let student = get_student(&conn, id).unwrap();
+        assert_eq!(student.father_name.as_deref(), Some("Rachid El Amrani"));
+        assert_eq!(student.home_address.as_deref(), Some("12 rue des Écoles"));
+
+        // Partial update: clearing a field writes NULL, not an empty string.
+        let mut update = sample("Yassine El Amrani", "0612345678");
+        update.father_name = None;
+        update.home_address = Some("3 avenue Hassan II".to_string());
+        update_student(&conn, id, &update).unwrap();
+
+        let updated = get_student(&conn, id).unwrap();
+        assert_eq!(updated.father_name, None);
+        assert_eq!(updated.home_address.as_deref(), Some("3 avenue Hassan II"));
+
+        // The audit trail names the changed fields.
+        let history = student_history(&conn, id).unwrap();
+        let details = history
+            .iter()
+            .filter_map(|entry| entry.details.clone())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(details.contains("home_address"));
     }
 
     #[test]

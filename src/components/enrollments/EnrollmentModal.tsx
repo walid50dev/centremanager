@@ -6,6 +6,7 @@ import {
   Check,
   ClipboardList,
   Info,
+  Plus,
   Search,
   UserRound,
 } from 'lucide-react';
@@ -15,11 +16,13 @@ import EmptyState from '../ui/EmptyState';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import { toast } from '../ui/Toast';
+import QuickCreateGroup from '../quick-create/QuickCreateGroup';
+import QuickCreateStudent from '../quick-create/QuickCreateStudent';
 import { useDebounce } from '../../hooks/useDebounce';
 import { groupsApi, occupancyTone } from '../../services/groups';
 import { enrollmentsApi, todayIso } from '../../services/enrollments';
 import { studentsApi } from '../../services/students';
-import { cn, formatCurrency, formatDate } from '../../utils/format';
+import { cn, formatCurrency, formatDate, formatPhone } from '../../utils/format';
 import { groupSchedule } from '../../utils/schedule';
 import type { EnrollmentInput, EnrolledStudent, Group, Student } from '../../types';
 
@@ -84,6 +87,10 @@ export function EnrollmentModal({
   const [results, setResults] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
+  // quick-create (one per mode)
+  const [quickGroup, setQuickGroup] = useState(false);
+  const [quickStudent, setQuickStudent] = useState(false);
+
   // shared
   const [dates, setDates] = useState<Record<number, string>>({});
 
@@ -98,6 +105,8 @@ export function EnrollmentModal({
     setSelectedGroupIds([]);
     setAvailableGroups([]);
     setDates({});
+    setQuickGroup(false);
+    setQuickStudent(false);
   }, [open]);
 
   // Load whatever step 1 needs.
@@ -152,6 +161,20 @@ export function EnrollmentModal({
       active = false;
     };
   }, [open, mode, step, debouncedSearch, enrolledIds]);
+
+  /**
+   * The candidates of step 1 (`from_group`).
+   *
+   * A student created on the fly is selected but is not part of the current
+   * search page, so it is pinned at the top: otherwise the wizard would *look*
+   * empty while actually holding a selection.
+   */
+  const studentCandidates = useMemo(() => {
+    if (!selectedStudent) return results;
+    return results.some((row) => row.id === selectedStudent.id)
+      ? results
+      : [selectedStudent, ...results];
+  }, [results, selectedStudent]);
 
   /** The groups this enrollment will cover, in selection order. */
   const selectedGroups = useMemo(() => {
@@ -223,6 +246,7 @@ export function EnrollmentModal({
   const studentLabel = mode === 'from_student' ? (student?.full_name ?? '') : (selectedStudent?.full_name ?? '');
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -303,9 +327,24 @@ export function EnrollmentModal({
       {/* -- step 1: groups (from_student) ----------------------------- */}
       {step === 1 && mode === 'from_student' ? (
         <div className="space-y-3">
-          <p className="text-[13px] text-muted">
-            {t('enrollment.studentLabel')} <span className="font-medium text-foreground">{studentLabel}</span>
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] text-muted">
+              {t('enrollment.studentLabel')}{' '}
+              <span className="font-medium text-foreground">{studentLabel}</span>
+            </p>
+            {/* The group that does not exist yet: create it without leaving the
+                wizard, then it is ticked straight away. The list stays a list —
+                an enrollment can cover several groups — so the quick-create is a
+                button here instead of a “+ Nouveau” row in a dropdown. */}
+            <Button
+              variant="secondary"
+              leftIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={() => setQuickGroup(true)}
+              data-testid="enrollment-create-group"
+            >
+              {t('enrollment.newGroup')}
+            </Button>
+          </div>
 
           {loading ? (
             <div className="py-8 text-center text-muted">{t('common.loading')}</div>
@@ -395,17 +434,28 @@ export function EnrollmentModal({
             </p>
           ) : null}
 
-          <Input
-            label={t('enrollment.searchStudent')}
-            placeholder={t('students.search')}
-            leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          <div className="flex items-end gap-2">
+            <Input
+              label={t('enrollment.searchStudent')}
+              placeholder={t('students.search')}
+              leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Button
+              variant="secondary"
+              className="shrink-0"
+              leftIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={() => setQuickStudent(true)}
+              data-testid="enrollment-create-student"
+            >
+              {t('enrollment.newStudent')}
+            </Button>
+          </div>
 
           {loading ? (
             <div className="py-6 text-center text-muted">{t('common.loading')}</div>
-          ) : results.length === 0 ? (
+          ) : studentCandidates.length === 0 ? (
             <div className="card">
               <EmptyState
                 icon={<UserRound className="h-5 w-5" aria-hidden="true" />}
@@ -414,8 +464,8 @@ export function EnrollmentModal({
               />
             </div>
           ) : (
-            <ul className="max-h-[40vh] space-y-2 overflow-y-auto pe-1">
-              {results.map((row) => (
+            <ul className="max-h-[40vh] space-y-2 overflow-y-auto pe-1" data-testid="enrollment-students">
+              {studentCandidates.map((row) => (
                 <li key={row.id}>
                   <label
                     className={cn(
@@ -437,7 +487,7 @@ export function EnrollmentModal({
                       <span className="block font-medium text-foreground">{row.full_name}</span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12px] text-muted">
                         <span>{row.level_name ?? '—'}</span>
-                        <span dir="ltr">{row.phone}</span>
+                        <span dir="ltr">{formatPhone(row.phone)}</span>
                       </span>
                     </span>
                     <Badge variant={row.status === 'actif' ? 'success' : 'muted'}>
@@ -565,7 +615,36 @@ export function EnrollmentModal({
           <p className="text-[12px] text-muted">{t('enrollment.confirmHint')}</p>
         </div>
       ) : null}
-    </Modal>
+      </Modal>
+
+      {quickGroup ? (
+        <QuickCreateGroup
+          onClose={() => setQuickGroup(false)}
+          onCreated={(created) => {
+            setQuickGroup(false);
+            // Show it in the wizard's list and tick it: the group was created
+            // precisely because it had to be enrolled into.
+            setAvailableGroups((current) =>
+              current.some((entry) => entry.id === created.id) ? current : [created, ...current],
+            );
+            setSelectedGroupIds((current) =>
+              current.includes(created.id) ? current : [...current, created.id],
+            );
+            setDates((current) => (current[created.id] ? current : { ...current, [created.id]: todayIso() }));
+          }}
+        />
+      ) : null}
+
+      {quickStudent ? (
+        <QuickCreateStudent
+          onClose={() => setQuickStudent(false)}
+          onCreated={(created) => {
+            setQuickStudent(false);
+            setSelectedStudent(created);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 

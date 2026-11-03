@@ -234,9 +234,10 @@ try {
   const phoneText = strip(await studentLine.innerText());
   const phoneDirection = await studentLine.evaluate((node) => getComputedStyle(node).direction);
   ok('the phone is rendered as an LTR run', phoneDirection === 'ltr', phoneDirection);
+  // Phase 10: the display is grouped (`07 02 34 56 78`), storage stays raw.
   ok(
-    'the phone reads left-to-right, digits unchanged',
-    /^—?\s*0[67]\d{8}$/.test(phoneText.replace(/\s+/g, ' ').trim()),
+    'the phone reads left-to-right, grouped in pairs',
+    /^—\s*0[67] \d{2} \d{2} \d{2} \d{2}$/.test(phoneText.replace(/\s+/g, ' ').trim()),
     phoneText,
   );
   ok(

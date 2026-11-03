@@ -12,7 +12,9 @@
     "settings": "Paramètres",
     "collapse": "Réduire le menu",
     "expand": "Développer le menu",
-    "latePayments": "Factures en retard"
+    "latePayments": "Factures en retard",
+    "expenses": "Frais",
+    "timetable": "Emploi du temps"
   },
   "common": {
     "save": "Enregistrer",
@@ -49,7 +51,86 @@
       "11": "Novembre",
       "12": "Décembre"
     },
-    "refresh": "Actualiser"
+    "refresh": "Actualiser",
+    "suffix": {
+      "dh": "DH",
+      "percent": "%",
+      "hours": "h",
+      "students": "élèves"
+    },
+    "createNew": "+ Nouveau…",
+    "creating": "Création…",
+    "create": "Créer",
+    "noOptions": "Aucune option",
+    "clear": "Effacer",
+    "quickCreate": "Création rapide"
+  },
+  "quickCreate": {
+    "created": "{{entity}} créé(e) ✓",
+    "hint": "Cet enregistrement rapide ne quitte pas le formulaire en cours : les champs déjà remplis sont conservés.",
+    "teacher": {
+      "title": "Nouvel enseignant (rapide)",
+      "description": "Nom, téléphone et matières. Le reste (email, notes, rémunération) se règle sur la fiche enseignant."
+    },
+    "subject": {
+      "title": "Nouvelle matière",
+      "description": "Une matière est partagée par les groupes et les enseignants."
+    },
+    "level": {
+      "title": "Nouveau niveau",
+      "description": "Le niveau range les groupes et les élèves (Primaire, Collège, Lycée)."
+    },
+    "student": {
+      "title": "Nouvel élève (rapide)",
+      "description": "Nom, téléphone et niveau. La fiche complète reste accessible depuis la liste des élèves."
+    },
+    "group": {
+      "title": "Nouveau groupe (rapide)",
+      "description": "Matière, niveau et enseignant — puis l’horaire et le tarif.",
+      "step": "Étape {{current}} sur {{total}}",
+      "schedule": "Horaire et tarif",
+      "basics": "Matière et niveau"
+    },
+    "category": {
+      "title": "Nouvelle catégorie",
+      "description": "La catégorie est ajoutée à la liste des catégories de dépenses."
+    },
+    "fields": {
+      "name": "Nom complet",
+      "namePlaceholder": "Ex. Ahmed Benali",
+      "subjectName": "Nom de la matière",
+      "subjectPlaceholder": "Ex. Physique-Chimie",
+      "levelName": "Nom du niveau",
+      "levelPlaceholder": "Ex. Tronc Commun",
+      "category": "Catégorie",
+      "phone": "Téléphone",
+      "level": "Niveau",
+      "subjects": "Matières",
+      "subjectsHint": "Recommandé : au moins une matière, pour que le groupe s’affiche correctement.",
+      "categoryName": "Nom de la catégorie",
+      "categoryPlaceholder": "Ex. Sécurité",
+      "subject": "Matière",
+      "teacher": "Enseignant",
+      "day": "Jour",
+      "startTime": "Heure début",
+      "endTime": "Heure fin",
+      "fee": "Tarif mensuel",
+      "capacity": "Capacité"
+    },
+    "validation": {
+      "nameRequired": "Le nom est obligatoire",
+      "nameTooShort": "Au moins 2 caractères",
+      "phoneRequired": "Le téléphone est obligatoire",
+      "phoneInvalid": "Numéro marocain invalide (06/07 + 8 chiffres)",
+      "categoryRequired": "Choisissez une catégorie",
+      "subjectRequired": "Choisissez une matière",
+      "levelRequired": "Choisissez un niveau",
+      "feePositive": "Le tarif doit être supérieur à 0",
+      "capacityPositive": "La capacité doit être au moins 1",
+      "endAfterStart": "La fin doit être après le début"
+    },
+    "existing": "Cette valeur existe déjà",
+    "noSchoolYear": "Aucune année scolaire active — créez-la dans Paramètres."
   },
   "header": {
     "language": "Langue",
@@ -83,6 +164,10 @@
     },
     "login": {
       "title": "Connexion"
+    },
+    "expenses": {
+      "title": "Frais du mois",
+      "description": "Charges mensuelles du centre et résultat net"
     }
   },
   "login": {
@@ -273,7 +358,15 @@
       "confirm": "Charger",
       "success": "Données de démonstration chargées",
       "failed": "Impossible de charger les données de démonstration"
-    }
+    },
+    "expenseCategories": "Catégories de dépenses",
+    "expenseCategoriesDescription": "Les catégories proposées dans le formulaire de dépense (Loyer, WiFi, Électricité…).",
+    "addCategory": "Ajouter une catégorie",
+    "removeCategory": "Retirer {{name}}",
+    "categoryPlaceholder": "Ex. Sécurité, Taxes…",
+    "expenseCategoriesSaved": "Catégories de dépenses enregistrées ✓",
+    "expenseCategoriesHint": "Ces catégories alimentent le formulaire de dépense. Retirer une catégorie ne touche pas aux dépenses déjà enregistrées : elles gardent leur nom et leur couleur.",
+    "categoryExists": "La catégorie « {{name}} » existe déjà"
   },
   "students": {
     "new": "+ Nouvel élève",
@@ -292,9 +385,13 @@
     "status": "Statut",
     "name": "Nom complet",
     "namePlaceholder": "Prénom et nom",
+    "fatherName": "Nom du père",
+    "fatherShort": "Père : {{name}}",
+    "fatherNamePlaceholder": "Prénom et nom du père",
     "phone": "Téléphone",
     "phoneHint": "06XXXXXXXX ou 07XXXXXXXX",
     "parentPhone": "Téléphone parent",
+    "phonePlaceholder": "06 07 12 34 56",
     "birthDate": "Date de naissance",
     "level": "Niveau",
     "branch": "Branche",
@@ -302,7 +399,7 @@
     "selectBranch": "Choisir une branche",
     "selectLevelFirst": "Choisissez d'abord un niveau",
     "noBranchesForLevel": "Ce niveau n'a pas de branche",
-    "address": "Adresse",
+    "address": "Adresse maison",
     "addressPlaceholder": "Rue, ville",
     "notes": "Notes",
     "notesPlaceholder": "Remarques internes",
@@ -364,7 +461,9 @@
       "other": "Action",
       "from": "avant",
       "to": "après"
-    }
+    },
+    "homeAddress": "Adresse maison",
+    "homeAddressPlaceholder": "Rue, quartier, ville"
   },
   "groups": {
     "title": "Groupes",
@@ -418,7 +517,10 @@
       "endRequired": "L'heure de fin est obligatoire",
       "endAfterStart": "L'heure de fin doit être après l'heure de début",
       "feePositive": "Le tarif doit être supérieur à 0",
-      "capacityPositive": "La capacité doit être au moins 1"
+      "capacityPositive": "La capacité doit être au moins 1",
+      "atLeastOneDay": "Cochez au moins un jour de cours",
+      "scheduleIncomplete": "Horaires incomplets pour {{day}}",
+      "endAfterStartDay": "L'heure de fin doit être après l'heure de début ({{day}})"
     },
     "toast": {
       "created": "Groupe créé ✓",
@@ -439,7 +541,46 @@
       "breakdown_one": "{{count}} élève × {{fee}}",
       "breakdown_other": "{{count}} élèves × {{fee}}"
     },
-    "untitled": "Groupe sans intitulé"
+    "untitled": "Groupe sans intitulé",
+    "schedules": "Jours de cours",
+    "schedulesHint": "Cochez les jours où le groupe a cours, puis ajustez les horaires.",
+    "sameHours": "Horaires identiques pour tous les jours"
+  },
+  "timetable": {
+    "title": "Emploi du temps",
+    "description": "La semaine du centre, cours par cours",
+    "filters": {
+      "level": "Niveau",
+      "subject": "Matière",
+      "teacher": "Enseignant",
+      "room": "Salle",
+      "all": "Tous",
+      "reset": "Réinitialiser"
+    },
+    "days": {
+      "monday": "Lundi",
+      "tuesday": "Mardi",
+      "wednesday": "Mercredi",
+      "thursday": "Jeudi",
+      "friday": "Vendredi",
+      "saturday": "Samedi",
+      "sunday": "Dimanche",
+      "short": {
+        "monday": "Lun",
+        "tuesday": "Mar",
+        "wednesday": "Mer",
+        "thursday": "Jeu",
+        "friday": "Ven",
+        "saturday": "Sam",
+        "sunday": "Dim"
+      }
+    },
+    "summary": "{{count}} cours cette semaine",
+    "empty": "Aucun cours programmé",
+    "emptyHint": "Ajoutez des jours de cours à vos groupes, ou élargissez les filtres.",
+    "loading": "Chargement de l'emploi du temps…",
+    "showSunday": "Afficher dimanche",
+    "free": "libre"
   },
   "enrollment": {
     "title": "Inscription",
@@ -473,7 +614,9 @@
       "ended": "Inscription terminée ✓",
       "created_one": "{{count}} inscription créée ✓",
       "created_other": "{{count}} inscriptions créées ✓"
-    }
+    },
+    "newGroup": "Nouveau groupe",
+    "newStudent": "Nouvel élève"
   },
   "student": {
     "activeEnrollments": "Inscriptions actives",
@@ -576,6 +719,72 @@
       "period": "Période : {{period}}",
       "empty": "Aucun enseignant configuré",
       "emptyHint": "Configurez la compensation d'un enseignant pour le voir apparaître ici."
+    },
+    "newPayment": "Encaisser un paiement"
+  },
+  "expenses": {
+    "title": "Frais du mois",
+    "intro": "Les charges fixes du centre, mois par mois — elles se déduisent des revenus pour donner le résultat net.",
+    "new": "+ Nouvelle dépense",
+    "add": "Ajouter une dépense",
+    "editTitle": "Modifier la dépense",
+    "createTitle": "Nouvelle dépense",
+    "createDescription": "Enregistrez une charge du mois : loyer, factures, salaire de l'assistante, fournitures…",
+    "editDescription": "Modifiez la charge puis enregistrez.",
+    "empty": "Aucune dépense ce mois",
+    "emptyHint": "Ajoutez le loyer, les factures ou les fournitures de ce mois pour connaître votre résultat net.",
+    "emptyFiltered": "Aucune dépense dans cette catégorie ce mois-ci.",
+    "category": "Catégorie",
+    "categoryPlaceholder": "Choisir une catégorie",
+    "allCategories": "Toutes les catégories",
+    "label": "Libellé",
+    "labelPlaceholder": "Ex. Loyer local principal, Facture WiFi",
+    "amount": "Montant",
+    "notes": "Notes",
+    "notesPlaceholder": "Remarques internes (facultatif)",
+    "total": "Total frais",
+    "count_one": "{{count}} dépense",
+    "count_other": "{{count}} dépenses",
+    "deleteTitle": "Supprimer cette dépense ?",
+    "confirmDelete": "« {{label}} » ({{amount}}) sera définitivement supprimée. Les paiements et les factures ne sont pas concernés.",
+    "delete": "Supprimer",
+    "save": "Enregistrer",
+    "period": "Mois des frais",
+    "monthColumn": "Mois",
+    "createdAt": "Enregistrée le",
+    "columns": {
+      "category": "Catégorie",
+      "label": "Libellé",
+      "amount": "Montant",
+      "notes": "Notes",
+      "actions": "Actions"
+    },
+    "summary": {
+      "total": "Total frais",
+      "count": "Dépenses",
+      "byCategory": "Par catégorie",
+      "share": "{{pct}} des frais",
+      "noCategory": "Aucune catégorie pour ce mois"
+    },
+    "validation": {
+      "labelRequired": "Le libellé est obligatoire",
+      "categoryRequired": "Choisissez une catégorie",
+      "amountPositive": "Le montant doit être supérieur à zéro",
+      "periodRequired": "Mois et année sont obligatoires"
+    },
+    "toast": {
+      "created": "Dépense ajoutée ✓",
+      "updated": "Dépense modifiée ✓",
+      "deleted": "Dépense supprimée ✓"
+    },
+    "categories": {
+      "loyer": "Loyer",
+      "wifi": "WiFi",
+      "electricite": "Électricité",
+      "eau": "Eau",
+      "assistance": "Assistance",
+      "fournitures": "Fournitures",
+      "autre": "Autre"
     }
   },
   "payment": {
@@ -818,7 +1027,8 @@
       "reactivated": "Enseignant réactivé ✓",
       "deactivated": "Enseignant désactivé ✓",
       "error": "Enregistrement impossible :"
-    }
+    },
+    "newSubject": "Nouvelle matière"
   },
   "dashboard": {
     "greeting": "Bonjour 👋",
@@ -831,7 +1041,13 @@
       "revenue": "Revenus du mois",
       "collectionRate": "Taux de recouvrement",
       "groups": "Groupes actifs",
-      "teachers": "Enseignants"
+      "teachers": "Enseignants",
+      "netIncome": "Total Net",
+      "netTooltip": "Revenus : {{revenue}} — Frais : {{expenses}} — Salaires : {{compensation}}",
+      "netPositive": "Bénéfice du mois",
+      "netNegative": "Perte du mois",
+      "netZero": "Équilibre",
+      "netBreakdown": "Revenus : {{revenue}} — Frais : {{expenses}} — Salaires : {{compensation}}"
     },
     "trend": {
       "up": "+{{value}}%",

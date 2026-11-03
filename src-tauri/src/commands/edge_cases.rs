@@ -53,6 +53,7 @@ fn group(conn: &Connection, fee_cents: i64, capacity: i32) -> i64 {
             room: None,
             monthly_fee_cents: fee_cents,
             capacity,
+            schedules: None,
         },
     )
     .unwrap()
@@ -68,7 +69,8 @@ fn student(conn: &Connection, name: &str, phone: &str) -> i64 {
             parent_phone: None,
             level_id: Some(10),
             branch_id: None,
-            address: None,
+            father_name: None,
+            home_address: None,
             notes: None,
         },
     )
@@ -377,7 +379,7 @@ fn ending_mid_month_keeps_the_current_invoice_and_creates_no_next_one() {
     );
     assert_eq!(end_date.len(), 10, "end date must be stored: {end_date}");
     assert!(
-        end_date >= "2026-10-15".to_string(),
+        end_date.as_str() >= "2026-10-15",
         "end date cannot precede the start date: {end_date}"
     );
 
@@ -514,6 +516,7 @@ fn deactivating_a_teacher_keeps_the_groups_readable() {
             room: None,
             monthly_fee_cents: 30_000,
             capacity: 20,
+            schedules: None,
         },
     )
     .unwrap();

@@ -8,6 +8,7 @@ import type {
   Group,
   GroupDetail,
   GroupInput,
+  GroupSchedule,
   InvoiceAlert,
   Level,
   PaginatedPayments,
@@ -21,6 +22,7 @@ import type {
   StudentEnrollment,
   StudentInvoice,
   Subject,
+  TimetableEntry,
   Activity,
   CompensationDetail,
   CompensationMode,
@@ -32,6 +34,10 @@ import type {
   AlertItem,
   DashboardKPIs,
   RecentPayment,
+  CategoryTotal,
+  Expense,
+  ExpenseInput,
+  ExpensesSummary,
 } from '../types';
 
 /**
@@ -109,10 +115,13 @@ interface DevStore {
   teachers: DevTeacher[];
   teacherActivities: DevActivity[];
   teacherSettlements: DevSettlement[];
+  /** Phase 11 — monthly charges (internal bookkeeping, deletable). */
+  expenses: DevExpense[];
   /** Dev-only: keeps `entity_id` so the history tab can filter per student. */
   auditLog: Array<AuditEntry & { entity_id: number }>;
   nextStudentId: number;
   nextGroupId: number;
+  nextScheduleId: number;
   nextEnrollmentId: number;
   nextInvoiceId: number;
   nextPaymentId: number;
@@ -120,8 +129,12 @@ interface DevStore {
   nextTeacherId: number;
   nextActivityId: number;
   nextSettlementId: number;
+  nextExpenseId: number;
   nextAuditId: number;
 }
+
+/** An expense row as stored (mirrors `monthly_expenses`). */
+type DevExpense = Expense;
 
 /** Teachers are stored raw (compensation config on the row), like the SQL table. */
 interface DevTeacher {
@@ -204,6 +217,88 @@ interface DevReceipt {
   created_at: string;
 }
 
+/** Dev mirror of `expenses::CleanInput::from_input`. */
+function validateExpenseInput(raw: unknown): ExpenseInput {
+  const input = (raw ?? {}) as Record<string, unknown>;
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+  const label = text(input.label);
+  if (!label) throw new Error('Le libellé de la dépense est obligatoire');
+  if (label.length > 120) throw new Error('Le libellé ne peut pas dépasser 120 caractères');
+
+  const amount = typeof input.amount_cents === 'number' ? Math.round(input.amount_cents) : 0;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Le montant doit être supérieur à zéro');
+  }
+
+  const category = text(input.category);
+  if (!category) throw new Error('La catégorie est obligatoire');
+
+  const month = typeof input.month === 'number' ? input.month : 0;
+  const year = typeof input.year === 'number' ? input.year : 0;
+  validatePeriod(month, year);
+
+  const notes = text(input.notes);
+
+  return {
+    label,
+    amount_cents: amount,
+    category,
+    month,
+    year,
+    notes: notes ? notes : null,
+  };
+}
+
+/** Categories shipped with a new database (same list as `expenses.rs`). */
+const DEFAULT_EXPENSE_CATEGORIES = [
+  'Loyer',
+  'WiFi',
+  'Électricité',
+  'Eau',
+  'Assistance',
+  'Fournitures',
+  'Autre',
+];
+
+/** A few charges so the Frais page and the net card are not empty on day one. */
+function seedExpenses(): DevExpense[] {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const previous = month === 1 ? 12 : month - 1;
+  const previousYear = month === 1 ? year - 1 : year;
+
+  const row = (
+    id: number,
+    label: string,
+    dirhams: number,
+    category: string,
+    periodMonth: number,
+    periodYear: number,
+    notes: string | null = null,
+  ): DevExpense => ({
+    id,
+    label,
+    amount_cents: dirhams * 100,
+    category,
+    month: periodMonth,
+    year: periodYear,
+    notes,
+    created_at: now.toISOString().slice(0, 19).replace('T', ' '),
+  });
+
+  return [
+    row(1, 'Loyer local principal', 1200, 'Loyer', month, year),
+    row(2, 'Abonnement fibre', 250, 'WiFi', month, year),
+    row(3, 'Facture électricité', 380, 'Électricité', month, year),
+    row(4, 'Salaire assistante', 800, 'Assistance', month, year),
+    row(5, 'Facture eau', 150, 'Eau', month, year),
+    row(6, 'Fournitures pédagogiques', 220, 'Fournitures', month, year),
+    row(7, 'Loyer local principal', 1200, 'Loyer', previous, previousYear, 'Mois précédent'),
+  ];
+}
+
 function seed(): DevStore {
   const levels: Level[] = SEED_LEVELS.map(([name, category], index) => ({
     id: index + 1,
@@ -231,6 +326,8 @@ function seed(): DevStore {
       language: localStorage.getItem('centremanager.language') ?? 'fr',
       lock_timeout_minutes: '15',
       receipt_format: 'a4',
+      // Phase 11 — the editable category list, as JSON like the Rust side.
+      expense_categories: JSON.stringify(DEFAULT_EXPENSE_CATEGORIES),
     },
     levels,
     branches,
@@ -245,8 +342,10 @@ function seed(): DevStore {
     students: seedStudents(levels, branches),
     ...seedGroups(levels, branches),
     ...seedTeachers(),
+    expenses: seedExpenses(),
     auditLog: [],
     nextStudentId: 5,
+    nextExpenseId: 8,
     nextAuditId: 1,
   };
 }
@@ -263,6 +362,7 @@ function seedGroups(
   | 'payments'
   | 'receipts'
   | 'nextGroupId'
+  | 'nextScheduleId'
   | 'nextEnrollmentId'
   | 'nextInvoiceId'
   | 'nextPaymentId'
@@ -303,6 +403,9 @@ function seedGroups(
     capacity,
     enrolled_count: 0,
     status: 'actif',
+    // Phase 13: a seeded group meets once a week.
+    schedules: [{ id: id * 10, day_of_week, start_time, end_time }],
+    schedule_text: '',
   });
 
   const groups: Group[] = [
@@ -504,6 +607,7 @@ function seedGroups(
     payments,
     receipts: [],
     nextGroupId: groups.length + 1,
+    nextScheduleId: groups.length * 10 + 1,
     nextEnrollmentId: enrollments.length + 1,
     nextInvoiceId: invoices.length + 1,
     nextPaymentId: payments.length + 1,
@@ -616,22 +720,24 @@ function seedStudents(levels: Level[], branches: Branch[]): Student[] {
     parent_phone: string | null,
     level_id: number | null,
     branch_id: number | null,
-    address: string | null,
+    home_address: string | null,
     notes: string | null,
     status: 'actif' | 'inactif',
     created_at: string,
     date_of_birth: string | null,
+    father_name: string | null = null,
   ): Student => ({
     id,
     full_name,
     date_of_birth,
     phone,
     parent_phone,
+    father_name,
     level_id,
     level_name: levels.find((level) => level.id === level_id)?.name ?? null,
     branch_id,
     branch_name: branches.find((branch) => branch.id === branch_id)?.name ?? null,
-    address,
+    home_address,
     notes,
     status,
     created_at,
@@ -639,10 +745,10 @@ function seedStudents(levels: Level[], branches: Branch[]): Student[] {
   });
 
   return [
-    row(1, 'Yassine El Amrani', '0612345678', '0661112233', twoBac, branchSciences, '12 rue des Écoles, Casablanca', 'Inscrit en septembre', 'actif', '2025-09-12 09:15:00', '2007-04-18'),
-    row(2, 'Salma Benjelloun', '0723456789', '0611223344', sixieme, null, '45 bd Zerktouni, Casablanca', null, 'actif', '2025-09-14 11:40:00', '2013-11-02'),
-    row(3, 'Omar Tazi', '0698765432', null, sixieme, null, null, null, 'actif', '2025-09-20 16:05:00', '2013-02-25'),
-    row(4, 'Nadia Chraibi', '0655443322', '0677889900', twoBac, branchSciences, '8 rue Ibn Sina, Rabat', 'A quitté le centre', 'inactif', '2025-09-02 10:00:00', '2007-09-30'),
+    row(1, 'Yassine El Amrani', '0612345678', '0661112233', twoBac, branchSciences, '12 rue des Écoles, Casablanca', 'Inscrit en septembre', 'actif', '2025-09-12 09:15:00', '2007-04-18', 'Rachid El Amrani'),
+    row(2, 'Salma Benjelloun', '0723456789', '0611223344', sixieme, null, '45 bd Zerktouni, Casablanca', null, 'actif', '2025-09-14 11:40:00', '2013-11-02', 'Mustapha Benjelloun'),
+    row(3, 'Omar Tazi', '0698765432', null, sixieme, null, null, null, 'actif', '2025-09-20 16:05:00', '2013-02-25', null),
+    row(4, 'Nadia Chraibi', '0655443322', '0677889900', twoBac, branchSciences, '8 rue Ibn Sina, Rabat', 'A quitté le centre', 'inactif', '2025-09-02 10:00:00', '2007-09-30', 'Driss Chraibi'),
   ];
 }
 
@@ -652,7 +758,7 @@ function logAudit(
   action: string,
   entityId: number,
   details: string | null,
-  entityType: 'student' | 'group' | 'enrollment' | 'teacher' = 'student',
+  entityType: 'student' | 'group' | 'enrollment' | 'teacher' | 'expense' = 'student',
 ): void {
   store.auditLog.push({
     id: store.nextAuditId++,
@@ -667,14 +773,20 @@ function logAudit(
 
 const PHONE_PATTERN = /^0[67]\d{8}$/;
 
+/** Dev mirror of `students::normalise_phone` (spaces and dashes are cosmetic). */
+function normaliseDevPhone(value: string): string {
+  return value.replace(/[\s\u00A0\u202F.()-]/g, '');
+}
+
 function validateStudentInput(store: DevStore, input: Record<string, unknown>): {
   full_name: string;
   date_of_birth: string | null;
   phone: string;
   parent_phone: string | null;
+  father_name: string | null;
   level_id: number | null;
   branch_id: number | null;
-  address: string | null;
+  home_address: string | null;
   notes: string | null;
 } {
   const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -689,13 +801,15 @@ function validateStudentInput(store: DevStore, input: Record<string, unknown>): 
     throw new Error("Le nom de l'élève doit contenir au moins 2 caractères");
   }
 
-  const phone = text(input.phone);
+  // `06 07 12 34 56` and `06-07-12-34-56` are accepted, stored as `0607123456`.
+  const phone = normaliseDevPhone(text(input.phone));
   if (!phone) throw new Error('téléphone est obligatoire');
   if (!PHONE_PATTERN.test(phone)) {
     throw new Error('Format de téléphone invalide (06XXXXXXXX ou 07XXXXXXXX)');
   }
 
-  const parent_phone = nullable(input.parent_phone);
+  const rawParent = nullable(input.parent_phone);
+  const parent_phone = rawParent ? normaliseDevPhone(rawParent) : null;
   if (parent_phone && !PHONE_PATTERN.test(parent_phone)) {
     throw new Error('Format de téléphone du parent invalide (06XXXXXXXX ou 07XXXXXXXX)');
   }
@@ -722,9 +836,10 @@ function validateStudentInput(store: DevStore, input: Record<string, unknown>): 
     date_of_birth,
     phone,
     parent_phone,
+    father_name: nullable(input.father_name),
     level_id,
     branch_id,
-    address: nullable(input.address),
+    home_address: nullable(input.home_address ?? input.address),
     notes: nullable(input.notes),
   };
 }
@@ -746,6 +861,35 @@ function load(): DevStore {
       parsed.nextTeacherId ??= parsed.teachers.length + 1;
       parsed.nextActivityId ??= parsed.teacherActivities.length + 1;
       parsed.nextSettlementId ??= parsed.teacherSettlements.length + 1;
+      // Stores written before Phase 11 have no expenses and no category list.
+      parsed.expenses ??= [];
+      parsed.nextExpenseId ??= parsed.expenses.length + 1;
+      parsed.settings.expense_categories ??= JSON.stringify(DEFAULT_EXPENSE_CATEGORIES);
+      // Stores written before Phase 13 keep one slot in the legacy columns.
+      const maxScheduleId = parsed.groups.reduce(
+        (max, group) => Math.max(max, ...(group.schedules ?? []).map((slot) => slot.id ?? 0)),
+        0,
+      );
+      parsed.nextScheduleId ??= maxScheduleId + 1;
+      parsed.groups = parsed.groups.map((group) => {
+        const schedules = Array.isArray(group.schedules) ? group.schedules : [];
+        if (schedules.length > 0) return group;
+        if (!group.day_of_week || !group.start_time || !group.end_time) {
+          return { ...group, schedules: [], schedule_text: '' };
+        }
+        return {
+          ...group,
+          schedules: [
+            {
+              id: parsed.nextScheduleId++,
+              day_of_week: group.day_of_week,
+              start_time: group.start_time,
+              end_time: group.end_time,
+            },
+          ],
+          schedule_text: '',
+        };
+      });
       return parsed;
     }
   } catch {
@@ -817,10 +961,31 @@ function enrolledCount(store: DevStore, groupId: number): number {
   ).length;
 }
 
+/** Slots of a group, Monday first (mirrors `group_schedules` ordering). */
+function sortSchedules(schedules: GroupSchedule[] | undefined): GroupSchedule[] {
+  return [...(schedules ?? [])].sort(
+    (a, b) =>
+      DAY_NAMES.indexOf(a.day_of_week) - DAY_NAMES.indexOf(b.day_of_week) ||
+      a.start_time.localeCompare(b.start_time),
+  );
+}
+
+/** `"Lun 16-18, Mer 14-16"` — same text as the Rust `schedule_text`. */
+function scheduleText(schedules: GroupSchedule[]): string {
+  const shortDay = (day: string) => day.slice(0, 3);
+  const shortTime = (value: string) => (value.endsWith(':00') ? value.slice(0, -3) : value);
+  return schedules
+    .map((slot) => `${shortDay(slot.day_of_week)} ${shortTime(slot.start_time)}-${shortTime(slot.end_time)}`)
+    .join(', ');
+}
+
 /** Recompute the joined shape the Rust `SELECT_GROUP` returns. */
 function groupRow(store: DevStore, group: Group): Group {
+  const schedules = sortSchedules(group.schedules);
   return {
     ...group,
+    schedules,
+    schedule_text: scheduleText(schedules),
     subject_name: store.subjects.find((subject) => subject.id === group.subject_id)?.name ?? '—',
     teacher_name: store.teachers?.find((entry) => entry.id === group.teacher_id)?.full_name ?? null,
     level_name: store.levels.find((level) => level.id === group.level_id)?.name ?? '—',
@@ -835,6 +1000,48 @@ function sortGroups(groups: Group[]): Group[] {
     if (dayDiff !== 0) return dayDiff;
     return a.start_time.localeCompare(b.start_time) || a.id - b.id;
   });
+}
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * Validate a week of slots (mirror of `clean_schedules` in `schedules.rs`):
+ * at least one day, known weekday, `end > start`, no duplicate day. The result
+ * is sorted Monday-first, which is what the backend stores.
+ */
+function cleanSchedules(raw: Array<Record<string, unknown>>): GroupSchedule[] {
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+  if (raw.length === 0) throw new Error('Au moins un jour de cours est requis');
+
+  const cleaned: GroupSchedule[] = [];
+  raw.forEach((entry) => {
+    const wanted = text(entry.day_of_week).toLowerCase();
+    const day = DAY_NAMES.find((name) => name.toLowerCase() === wanted);
+    if (!day) throw new Error(`Jour de la semaine invalide : ${text(entry.day_of_week)}`);
+    const start_time = text(entry.start_time);
+    const end_time = text(entry.end_time);
+    if (!TIME_PATTERN.test(start_time)) {
+      throw new Error('Heure de début invalide (format attendu HH:MM)');
+    }
+    if (!TIME_PATTERN.test(end_time)) {
+      throw new Error('Heure de fin invalide (format attendu HH:MM)');
+    }
+    if (end_time <= start_time) {
+      throw new Error(`L'heure de fin doit être après l'heure de début (${day})`);
+    }
+    const duplicate = cleaned.find((slot) => slot.day_of_week === day);
+    if (duplicate) {
+      throw new Error(
+        `Le jour ${day} est déjà programmé (${duplicate.start_time}–${duplicate.end_time})`,
+      );
+    }
+    cleaned.push({ id: 0, day_of_week: day, start_time, end_time });
+  });
+
+  return cleaned.sort(
+    (a, b) => DAY_NAMES.indexOf(a.day_of_week) - DAY_NAMES.indexOf(b.day_of_week),
+  );
 }
 
 function validateGroupInput(store: DevStore, input: Record<string, unknown>): GroupInput {
@@ -866,23 +1073,21 @@ function validateGroupInput(store: DevStore, input: Record<string, unknown>): Gr
     throw new Error('Année scolaire introuvable');
   }
 
-  const day_of_week = DAY_NAMES.find(
-    (day) => day.toLowerCase() === text(input.day_of_week).toLowerCase(),
-  );
-  if (!day_of_week) throw new Error('Jour de la semaine invalide');
-
-  const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
-  const start_time = text(input.start_time);
-  const end_time = text(input.end_time);
-  if (!timePattern.test(start_time)) {
-    throw new Error('Heure de début invalide (format attendu HH:MM)');
-  }
-  if (!timePattern.test(end_time)) {
-    throw new Error('Heure de fin invalide (format attendu HH:MM)');
-  }
-  if (end_time <= start_time) {
-    throw new Error("L'heure de fin doit être après l'heure de début");
-  }
+  // Phase 13: the form sends the whole week, older callers send one slot.
+  const rawSchedules = Array.isArray(input.schedules) && input.schedules.length > 0
+    ? (input.schedules as Array<Record<string, unknown>>)
+    : [
+        {
+          day_of_week: input.day_of_week,
+          start_time: input.start_time,
+          end_time: input.end_time,
+        },
+      ];
+  const schedules = cleanSchedules(rawSchedules);
+  const first = schedules[0];
+  const day_of_week = first.day_of_week;
+  const start_time = first.start_time;
+  const end_time = first.end_time;
 
   const monthly_fee_cents = number(input.monthly_fee_cents);
   if (!Number.isFinite(monthly_fee_cents) || monthly_fee_cents <= 0) {
@@ -904,6 +1109,7 @@ function validateGroupInput(store: DevStore, input: Record<string, unknown>): Gr
     day_of_week,
     start_time,
     end_time,
+    schedules,
     room: text(input.room) || null,
     monthly_fee_cents,
     capacity,
@@ -1670,6 +1876,11 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
     .filter((payment) => payment.created_at.startsWith(`${prev.year}-${pad2(prev.month)}`))
     .reduce((sum, payment) => sum + payment.amount_cents, 0);
 
+  const expenses = devExpensesTotal(store, month, year);
+  const compensation = devPayrollTotal(store, month, year);
+  const prevExpenses = devExpensesTotal(store, prev.month, prev.year);
+  const prevCompensation = devPayrollTotal(store, prev.month, prev.year);
+
   return {
     total_active_students: store.students.filter(
       (student) => (student.status ?? 'actif') === 'actif',
@@ -1681,7 +1892,51 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
     active_teachers: store.teachers.filter((teacher) => teacher.status === 'actif').length,
     prev_month_revenue_cents: prevRevenue,
     prev_month_students: devStudentsDuring(store, prev.month, prev.year),
+    // Phase 11 — same arithmetic as `dashboard::net_income_of`.
+    total_expenses_cents: expenses,
+    total_compensation_cents: compensation,
+    net_income_cents: revenue - expenses - compensation,
+    prev_month_net_income_cents: prevRevenue - prevExpenses - prevCompensation,
   };
+}
+
+/** Charges of one month (dev mirror of `expenses::month_total`). */
+function devExpensesTotal(store: DevStore, month: number, year: number): number {
+  return (store.expenses ?? [])
+    .filter((row) => row.month === month && row.year === year)
+    .reduce((sum, row) => sum + row.amount_cents, 0);
+}
+
+/** Payroll of one month: every active teacher with a configuration. */
+function devPayrollTotal(store: DevStore, month: number, year: number): number {
+  return store.teachers
+    .filter((teacher) => teacher.status === 'actif' && compensationConfig(teacher))
+    .reduce((sum, teacher) => sum + calculateCompensation(store, teacher.id, month, year).total_cents, 0);
+}
+
+/** Dev mirror of `expenses::categories_from_json` (defaults when unusable). */
+function devExpenseCategories(store: DevStore): string[] {
+  const raw = store.settings.expense_categories;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed
+          .filter((entry): entry is string => typeof entry === 'string')
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+        if (cleaned.length > 0) return cleaned;
+      }
+    } catch {
+      /* corrupted value → defaults */
+    }
+  }
+  return [...DEFAULT_EXPENSE_CATEGORIES];
+}
+
+function devExpenseRow(store: DevStore, row: DevExpense): Expense {
+  void store;
+  return { ...row };
 }
 
 const ALERT_WINDOW_DAYS = 7;
@@ -1881,6 +2136,7 @@ function buildDemoStore(previous: DevStore): DevStore {
     teachers: [],
     teacherActivities: [],
     teacherSettlements: [],
+    expenses: [],
     auditLog: [],
     nextStudentId: 1,
     nextGroupId: 1,
@@ -1891,8 +2147,42 @@ function buildDemoStore(previous: DevStore): DevStore {
     nextTeacherId: 1,
     nextActivityId: 1,
     nextSettlementId: 1,
+    nextExpenseId: 1,
     nextAuditId: 1,
   };
+
+  // -- monthly charges (Phase 11) -------------------------------------------
+  // Same shape as `demo.rs`: the seven charges of the month plus the previous
+  // month's (without the supplies run) so the net card has a trend.
+  const charges: Array<[string, number, string]> = [
+    ['Loyer local principal', 1200, 'Loyer'],
+    ['Abonnement fibre', 250, 'WiFi'],
+    ['Facture électricité', 380, 'Électricité'],
+    ['Facture eau', 150, 'Eau'],
+    ['Salaire assistante', 800, 'Assistance'],
+    ['Fournitures pédagogiques', 220, 'Fournitures'],
+    ['Photocopies', 90, 'Fournitures'],
+  ];
+  charges.forEach(([label, dirhams, category], index) => {
+    const periods: Array<[number, number]> = [
+      [month, year],
+      [previousMonth, previousYear],
+    ];
+    for (const [periodMonth, periodYear] of periods) {
+      if (periodMonth !== month && index >= 5) continue;
+      const amount = periodMonth !== month && category === 'Électricité' ? dirhams + 40 : dirhams;
+      store.expenses.push({
+        id: store.nextExpenseId++,
+        label,
+        amount_cents: amount * 100,
+        category,
+        month: periodMonth,
+        year: periodYear,
+        notes: null,
+        created_at: nowTimestamp(),
+      });
+    }
+  });
 
   // -- teachers -------------------------------------------------------------
   const teacherIds = DEMO_TEACHER_ROWS.map(([name, subject, phone], index) => {
@@ -1941,6 +2231,15 @@ function buildDemoStore(previous: DevStore): DevStore {
       capacity,
       enrolled_count: 0,
       status: 'actif',
+      schedules: [
+        {
+          id: store.nextScheduleId++,
+          day_of_week: day,
+          start_time: time,
+          end_time: `${pad2(startHour)}:${time.slice(3, 5)}`,
+        },
+      ],
+      schedule_text: '',
     };
     store.groups.push(group);
     return group.id;
@@ -1959,7 +2258,8 @@ function buildDemoStore(previous: DevStore): DevStore {
       level_name: level?.name ?? null,
       branch_id: null,
       branch_name: null,
-      address: `${10 + index}. Rue Atlas, Casablanca`,
+      father_name: `Abdelkader ${name.split(' ').slice(-1)[0]}`,
+      home_address: `${12 + index} rue Atlas, Casablanca`,
       notes: null,
       status: 'actif',
       created_at: nowTimestamp(),
@@ -2440,9 +2740,15 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
     case 'cmd_create_group': {
       const clean = validateGroupInput(store, (args?.data ?? {}) as Record<string, unknown>);
+      const schedules = (clean.schedules ?? []).map((slot) => ({
+        ...slot,
+        id: store.nextScheduleId++,
+      }));
       const group: Group = {
         id: store.nextGroupId++,
         ...clean,
+        schedules,
+        schedule_text: scheduleText(schedules),
         subject_name: '',
         level_name: '',
         branch_name: null,
@@ -2475,12 +2781,106 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         if (raw[key] !== clean[key]) changes[key] = { from: raw[key], to: clean[key] };
       });
 
-      Object.assign(raw, clean);
+      const schedules = (clean.schedules ?? []).map((slot) => ({
+        ...slot,
+        id: store.nextScheduleId++,
+      }));
+      Object.assign(raw, clean, { schedules, schedule_text: scheduleText(schedules) });
       if (Object.keys(changes).length > 0) {
         logAudit(store, 'UPDATE', id, JSON.stringify(changes), 'group');
       }
       save(store);
       return undefined;
+    }
+
+    // -- Weekly timetable (Phase 13) ---------------------------------------
+    case 'cmd_get_group_schedules': {
+      const groupId = asNumber(args, 'groupId');
+      const group = store.groups.find((entry) => entry.id === groupId);
+      return clone(sortSchedules(group?.schedules));
+    }
+
+    case 'cmd_set_group_schedules': {
+      const groupId = asNumber(args, 'groupId');
+      const raw = store.groups.find((entry) => entry.id === groupId);
+      if (!raw) throw new Error('Groupe introuvable');
+
+      const payload = Array.isArray(args?.schedules)
+        ? (args?.schedules as Array<Record<string, unknown>>)
+        : [];
+      const schedules = cleanSchedules(payload).map((slot) => ({
+        ...slot,
+        id: store.nextScheduleId++,
+      }));
+
+      // The legacy columns follow the first slot, exactly like `sync_legacy_columns`.
+      raw.schedules = schedules;
+      raw.schedule_text = scheduleText(schedules);
+      raw.day_of_week = schedules[0].day_of_week;
+      raw.start_time = schedules[0].start_time;
+      raw.end_time = schedules[0].end_time;
+      save(store);
+      return clone(schedules);
+    }
+
+    case 'cmd_get_timetable': {
+      const filters = (args?.filters ?? {}) as Record<string, unknown>;
+      const optionalNumber = (key: string): number | null => {
+        const value = filters[key];
+        return value === null || value === undefined || value === '' ? null : Number(value);
+      };
+      const levelId = optionalNumber('level_id');
+      const subjectId = optionalNumber('subject_id');
+      const teacherId = optionalNumber('teacher_id');
+      const room = typeof filters.room === 'string' && filters.room.trim() ? filters.room.trim() : null;
+
+      const entries: TimetableEntry[] = [];
+      store.groups
+        .filter((group) => (group.status ?? 'actif') === 'actif')
+        .filter((group) => (levelId === null ? true : group.level_id === levelId))
+        .filter((group) => (subjectId === null ? true : group.subject_id === subjectId))
+        .filter((group) => (teacherId === null ? true : group.teacher_id === teacherId))
+        .filter((group) => (room === null ? true : group.room === room))
+        .forEach((group) => {
+          const row = groupRow(store, group);
+          row.schedules.forEach((slot) => {
+            entries.push({
+              group_id: row.id,
+              subject_name: row.subject_name,
+              level_name: row.level_name,
+              branch_name: row.branch_name,
+              teacher_name: row.teacher_name,
+              room: row.room,
+              day_of_week: slot.day_of_week,
+              start_time: slot.start_time,
+              end_time: slot.end_time,
+              enrolled_count: row.enrolled_count,
+              capacity: row.capacity,
+              monthly_fee_cents: row.monthly_fee_cents,
+            });
+          });
+        });
+
+      entries.sort(
+        (a, b) =>
+          DAY_NAMES.indexOf(a.day_of_week) - DAY_NAMES.indexOf(b.day_of_week) ||
+          a.start_time.localeCompare(b.start_time) ||
+          a.group_id - b.group_id,
+      );
+      return clone(entries);
+    }
+
+    case 'cmd_get_timetable_rooms': {
+      const rooms = Array.from(
+        new Set(
+          store.groups
+            .filter((group) => (group.status ?? 'actif') === 'actif')
+            .map((group) => (group.room ?? '').trim())
+            .filter(Boolean),
+        ),
+      );
+      rooms.sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+      return clone(rooms);
     }
 
     case 'cmd_get_teacher_options':
@@ -3033,6 +3433,147 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_get_recent_payments': {
       const limit = args?.limit === undefined ? 10 : asNumber(args, 'limit');
       return clone(devRecentPayments(store, limit));
+    }
+
+    // -- Monthly expenses (Phase 11) --------------------------------------
+    case 'cmd_get_expenses': {
+      const month = asNumber(args, 'month');
+      const year = asNumber(args, 'year');
+      validatePeriod(month, year);
+      const rawCategory = args?.category;
+      const category =
+        typeof rawCategory === 'string' && rawCategory.trim() ? rawCategory.trim() : null;
+
+      const rows = (store.expenses ?? [])
+        .filter((row) => row.month === month && row.year === year)
+        .filter((row) => (category ? row.category === category : true))
+        .sort(
+          (a, b) =>
+            a.category.localeCompare(b.category, 'fr', { sensitivity: 'base' }) ||
+            a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }) ||
+            a.id - b.id,
+        )
+        .map((row) => devExpenseRow(store, row));
+      return clone(rows);
+    }
+
+    case 'cmd_get_expenses_summary': {
+      const month = asNumber(args, 'month');
+      const year = asNumber(args, 'year');
+      validatePeriod(month, year);
+
+      const rows = (store.expenses ?? []).filter(
+        (row) => row.month === month && row.year === year,
+      );
+      const totalsByCategory = new Map<string, CategoryTotal>();
+      for (const row of rows) {
+        const line = totalsByCategory.get(row.category) ?? {
+          category: row.category,
+          total_cents: 0,
+          count: 0,
+        };
+        line.total_cents += row.amount_cents;
+        line.count += 1;
+        totalsByCategory.set(row.category, line);
+      }
+      const by_category = [...totalsByCategory.values()].sort(
+        (a, b) =>
+          b.total_cents - a.total_cents ||
+          a.category.localeCompare(b.category, 'fr', { sensitivity: 'base' }),
+      );
+      const summary: ExpensesSummary = {
+        total_cents: by_category.reduce((sum, line) => sum + line.total_cents, 0),
+        by_category,
+        count: by_category.reduce((sum, line) => sum + line.count, 0),
+      };
+      return clone(summary);
+    }
+
+    case 'cmd_create_expense': {
+      const input = validateExpenseInput(args?.data);
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const id = store.nextExpenseId++;
+      store.expenses ??= [];
+      store.expenses.push({
+        id,
+        ...input,
+        created_at: now,
+      });
+      logAudit(store, 'CREATE', id, JSON.stringify(input), 'expense');
+      save(store);
+      return id;
+    }
+
+    case 'cmd_update_expense': {
+      const id = asNumber(args, 'id');
+      const input = validateExpenseInput(args?.data);
+      const row = (store.expenses ?? []).find((entry) => entry.id === id);
+      if (!row) throw new Error('Dépense introuvable');
+
+      const before = {
+        label: row.label,
+        amount_cents: row.amount_cents,
+        category: row.category,
+        month: row.month,
+        year: row.year,
+        notes: row.notes,
+      };
+      const diff: Record<string, { from: unknown; to: unknown }> = {};
+      (Object.keys(input) as Array<keyof typeof input>).forEach((key) => {
+        if (before[key] !== input[key]) diff[key] = { from: before[key], to: input[key] };
+      });
+      Object.assign(row, input);
+      if (Object.keys(diff).length > 0) {
+        logAudit(store, 'UPDATE', id, JSON.stringify(diff), 'expense');
+      }
+      save(store);
+      return undefined;
+    }
+
+    case 'cmd_delete_expense': {
+      const id = asNumber(args, 'id');
+      const index = (store.expenses ?? []).findIndex((entry) => entry.id === id);
+      if (index < 0) throw new Error('Dépense introuvable');
+      const [removed] = store.expenses.splice(index, 1);
+      logAudit(
+        store,
+        'DELETE',
+        id,
+        JSON.stringify({
+          deleted: {
+            label: removed.label,
+            amount_cents: removed.amount_cents,
+            category: removed.category,
+            month: removed.month,
+            year: removed.year,
+            notes: removed.notes,
+          },
+        }),
+        'expense',
+      );
+      save(store);
+      return undefined;
+    }
+
+    case 'cmd_get_expense_categories':
+      return clone(devExpenseCategories(store));
+
+    case 'cmd_set_expense_categories': {
+      const raw = args?.categories;
+      if (!Array.isArray(raw)) throw new Error('Liste de catégories invalide');
+      const cleaned: string[] = [];
+      for (const entry of raw) {
+        if (typeof entry !== 'string') throw new Error('Une catégorie ne peut pas être vide');
+        const name = entry.trim();
+        if (!name) throw new Error('Une catégorie ne peut pas être vide');
+        if (!cleaned.some((existing) => existing.toLowerCase() === name.toLowerCase())) {
+          cleaned.push(name);
+        }
+      }
+      if (cleaned.length === 0) throw new Error('Au moins une catégorie est obligatoire');
+      store.settings.expense_categories = JSON.stringify(cleaned);
+      save(store);
+      return undefined;
     }
 
     // -- Backup -----------------------------------------------------------

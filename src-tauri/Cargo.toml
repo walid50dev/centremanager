@@ -1,6 +1,6 @@
 [package]
 name = "centremanager"
-version = "1.1.0"
+version = "1.6.0"
 description = "CentreManager — gestion de centres de soutien scolaire"
 authors = ["CentreManager"]
 edition = "2021"

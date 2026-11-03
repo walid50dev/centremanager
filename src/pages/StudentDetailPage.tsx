@@ -22,7 +22,7 @@ import StudentFinancesTab from '../components/students/StudentFinancesTab';
 import { toast } from '../components/ui/Toast';
 import { levelsApi } from '../services/settings';
 import { studentsApi } from '../services/students';
-import { cn, formatDate, formatDateTime } from '../utils/format';
+import { cn, formatDate, formatDateTime, formatPhone } from '../utils/format';
 import type { AuditEntry, Student, StudentDetail } from '../types';
 
 type TabKey = 'info' | 'enrollments' | 'finances' | 'history';
@@ -47,9 +47,11 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   date_of_birth: 'students.birthDate',
   phone: 'students.phone',
   parent_phone: 'students.parentPhone',
+  father_name: 'students.fatherName',
   level_id: 'students.level',
   branch_id: 'students.branch',
   address: 'students.address',
+  home_address: 'students.homeAddress',
   notes: 'students.notes',
   status: 'students.status',
   from: 'students.history.from',
@@ -118,7 +120,16 @@ function AuditDetails({ entry, lookups }: { entry: AuditEntry; lookups: NameLook
     }
 
     // CREATE -> flat snapshot (ids are already visible in the info tab)
-    const order = ['full_name', 'date_of_birth', 'phone', 'parent_phone', 'address', 'notes'];
+    const order = [
+      'full_name',
+      'father_name',
+      'date_of_birth',
+      'phone',
+      'parent_phone',
+      'home_address',
+      'address',
+      'notes',
+    ];
     return Object.entries(record)
       .filter(([key, value]) => !key.endsWith('_id') && value !== null && value !== '')
       .sort(([a], [b]) => {
@@ -332,13 +343,19 @@ export function StudentDetailPage() {
         <Card className="p-5">
           <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
             <InfoRow label={t('students.name')}>{student.full_name}</InfoRow>
+            <InfoRow label={t('students.fatherName')}>{student.father_name ?? '—'}</InfoRow>
             <InfoRow label={t('students.birthDate')}>
               {student.date_of_birth ? formatDate(student.date_of_birth) : '—'}
             </InfoRow>
             <InfoRow label={t('students.phone')}>
               {student.phone ? (
-                <a href={`tel:${student.phone}`} className="text-primary hover:underline" dir="ltr">
-                  {student.phone}
+                <a
+                  href={`tel:${student.phone}`}
+                  className="text-primary hover:underline"
+                  dir="ltr"
+                  data-testid="student-detail-phone"
+                >
+                  {formatPhone(student.phone)}
                 </a>
               ) : (
                 '—'
@@ -346,8 +363,13 @@ export function StudentDetailPage() {
             </InfoRow>
             <InfoRow label={t('students.parentPhone')}>
               {student.parent_phone ? (
-                <a href={`tel:${student.parent_phone}`} className="text-primary hover:underline" dir="ltr">
-                  {student.parent_phone}
+                <a
+                  href={`tel:${student.parent_phone}`}
+                  className="text-primary hover:underline"
+                  dir="ltr"
+                  data-testid="student-detail-parent-phone"
+                >
+                  {formatPhone(student.parent_phone)}
                 </a>
               ) : (
                 '—'
@@ -355,7 +377,9 @@ export function StudentDetailPage() {
             </InfoRow>
             <InfoRow label={t('students.level')}>{student.level_name ?? '—'}</InfoRow>
             <InfoRow label={t('students.branch')}>{student.branch_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.address')}>{student.address ?? '—'}</InfoRow>
+            <InfoRow label={t('students.homeAddress')}>
+              {student.home_address ?? '—'}
+            </InfoRow>
             <InfoRow label={t('students.notes')}>{student.notes ?? '—'}</InfoRow>
             <InfoRow label={t('students.created')}>{formatDate(student.created_at)}</InfoRow>
             <InfoRow label={t('students.updated')}>{formatDate(student.updated_at)}</InfoRow>

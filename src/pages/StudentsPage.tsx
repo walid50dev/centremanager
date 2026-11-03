@@ -13,7 +13,7 @@ import { levelsApi } from '../services/settings';
 import { studentsApi } from '../services/students';
 import { FOCUS_SEARCH_EVENT } from '../hooks/useKeyboardShortcuts';
 import { useDebounce } from '../hooks/useDebounce';
-import { cn, formatDate } from '../utils/format';
+import { cn, formatDate, formatPhone } from '../utils/format';
 import type { Level, PaginatedStudents, Student } from '../types';
 
 const PAGE_LIMIT = 20;
@@ -270,6 +270,11 @@ export function StudentsPage() {
                       <span className="font-medium text-foreground group-hover:underline">
                         {student.full_name}
                       </span>
+                      {student.father_name && (
+                        <span className="mt-0.5 block text-[12px] text-muted">
+                          {t('students.fatherShort', { name: student.father_name })}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted">
                       {student.level_name ? (
@@ -283,7 +288,9 @@ export function StudentsPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-foreground">{student.phone || '—'}</td>
+                    <td className="px-4 py-3 tabular-nums text-foreground" dir="ltr">
+                      {formatPhone(student.phone)}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={student.status === 'actif' ? 'success' : 'destructive'}>
                         {student.status === 'actif' ? t('students.active') : t('students.inactive')}

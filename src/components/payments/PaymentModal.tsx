@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Printer, Search, User } from 'lucide-react';
-import Badge from '../ui/Badge';
+import { Check, Printer } from 'lucide-react';
 import Button from '../ui/Button';
+import CreatableSelect from '../ui/CreatableSelect';
 import EmptyState from '../ui/EmptyState';
 import Modal from '../ui/Modal';
 import MoneyInput from '../ui/MoneyInput';
 import { toast } from '../ui/Toast';
 import { LATE_PAYMENTS_EVENT } from '../../stores/appStore';
 import ReceiptPreviewModal from './ReceiptPreviewModal';
+import QuickCreateStudent from '../quick-create/QuickCreateStudent';
 import { invoicesApi } from '../../services/invoices';
 import { paymentsApi } from '../../services/payments';
 import { studentsApi } from '../../services/students';
 import { useDebounce } from '../../hooks/useDebounce';
-import { cn, formatCurrency } from '../../utils/format';
+import { cn, formatCurrency, formatPhone } from '../../utils/format';
 import { methodLabel, periodLabel } from '../../utils/billing';
 import type { PaymentMethod, Student, StudentInvoice } from '../../types';
 import { PAYMENT_METHODS } from '../../types';
@@ -63,6 +64,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
   const [searching, setSearching] = useState(false);
 
   const [receiptId, setReceiptId] = useState<number | null>(null);
+  const [quickStudent, setQuickStudent] = useState(false);
 
   const unpaid = useMemo(() => invoices.filter((invoice) => invoice.remaining_cents > 0), [invoices]);
   const selectedInvoices = useMemo(
@@ -317,47 +319,27 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         {step === 1 ? (
           <div className="space-y-3">
             <p className="text-[13px] font-medium text-foreground">{t('payment.selectStudent')}</p>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-muted"
-                aria-hidden="true"
-              />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t('payment.searchPlaceholder')}
-                aria-label={t('payment.searchPlaceholder')}
-                className="h-9 w-full rounded-md border border-border bg-white ps-9 pe-3 text-body text-foreground placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
 
-            {searching ? (
-              <p className="py-4 text-center text-[13px] text-muted">…</p>
-            ) : results.length === 0 ? (
-              <EmptyState icon={<User className="h-5 w-5" aria-hidden="true" />} title={t('payment.selectStudent')} />
-            ) : (
-              <ul className="divide-y divide-border rounded-md border border-border" data-testid="payment-students">
-                {results.map((row) => (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      onClick={() => void loadStudent(row.id)}
-                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start hover:bg-background"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium text-foreground">{row.full_name}</span>
-                        <span className="mt-0.5 flex gap-3 text-[12px] text-muted">
-                          <span>{row.level_name ?? '—'}</span>
-                          <span dir="ltr">{row.phone}</span>
-                        </span>
-                      </span>
-                      <Badge variant="primary">{t('payment.selectStudent')}</Badge>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* The list is searched by the backend (debounced) and the popup
+                filters what came back — plus “+ Nouveau…” for a first payment
+                taken before the student exists in the app. */}
+            <CreatableSelect
+              testId="payment-student"
+              placeholder={t('payment.searchPlaceholder')}
+              options={results}
+              value={null}
+              onChange={(row) => {
+                if (row) void loadStudent(row.id);
+              }}
+              getOptionLabel={(row) => row.full_name}
+              getOptionValue={(row) => row.id}
+              renderOption={(row) => `${row.level_name ?? '—'} · ${formatPhone(row.phone)}`}
+              searchable
+              searchPlaceholder={t('payment.searchPlaceholder')}
+              onSearch={setSearch}
+              onCreate={() => setQuickStudent(true)}
+              emptyLabel={searching ? '…' : t('payment.selectStudent')}
+            />
           </div>
         ) : null}
 
@@ -370,7 +352,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
               {/* The separator lives *inside* the LTR run: `ms-2` on a
                   `dir="ltr"` span resolves to its own left edge, so in RTL the
                   phone ended up glued to the name. */}
-              <span className="text-muted" dir="ltr">{` — ${student.phone}`}</span>
+              <span className="text-muted" dir="ltr">{` — ${formatPhone(student.phone)}`}</span>
             </div>
 
             {loading ? (
@@ -560,6 +542,17 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
           </div>
         ) : null}
       </Modal>
+
+      {quickStudent ? (
+        <QuickCreateStudent
+          onClose={() => setQuickStudent(false)}
+          onCreated={(created) => {
+            setQuickStudent(false);
+            setSearch(created.full_name);
+            void loadStudent(created.id);
+          }}
+        />
+      ) : null}
 
       {receiptId !== null ? (
         <ReceiptPreviewModal

@@ -2,10 +2,12 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   BookOpen,
+  Calendar,
   GraduationCap,
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
+  Receipt,
   Settings,
   Users,
   Wallet,
@@ -24,8 +26,12 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'sidebar.dashboard', icon: LayoutDashboard, end: true },
   { to: '/students', labelKey: 'sidebar.students', icon: Users },
   { to: '/groups', labelKey: 'sidebar.groups', icon: BookOpen },
+  // Phase 13 — the week at a glance, next to the groups it is built from.
+  { to: '/timetable', labelKey: 'sidebar.timetable', icon: Calendar },
   { to: '/teachers', labelKey: 'sidebar.teachers', icon: GraduationCap },
   { to: '/payments', labelKey: 'sidebar.payments', icon: Wallet },
+  // Phase 11 — the monthly charges, right after the money that comes in.
+  { to: '/expenses', labelKey: 'sidebar.expenses', icon: Receipt },
   { to: '/settings', labelKey: 'sidebar.settings', icon: Settings },
 ];
 

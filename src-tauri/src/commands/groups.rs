@@ -16,8 +16,11 @@ use serde_json::{json, Map, Value};
 use tauri::State;
 
 use super::db_err;
+use super::schedules::{attach_schedules, clean_schedules, schedules_from_payload, ScheduleInput};
 use crate::db::Db;
-use crate::models::{EnrolledStudent, FinancialSummary, GroupDetail, GroupRow, TeacherOption};
+use crate::models::{
+    EnrolledStudent, FinancialSummary, GroupDetail, GroupRow, GroupSchedule, TeacherOption,
+};
 
 const ENTITY_TYPE: &str = "group";
 
@@ -34,9 +37,14 @@ pub struct CreateGroupInput {
     pub branch_id: Option<i64>,
     pub teacher_id: Option<i64>,
     pub school_year_id: i64,
+    /// Legacy single slot: still sent by older callers, and by the form as the
+    /// first schedule (kept in sync by the backend).
     pub day_of_week: String,
     pub start_time: String,
     pub end_time: String,
+    /// Phase 13 — the whole week. When present it wins over the single slot.
+    #[serde(default)]
+    pub schedules: Option<Vec<ScheduleInput>>,
     pub room: Option<String>,
     pub monthly_fee_cents: i64,
     pub capacity: i32,
@@ -53,9 +61,12 @@ struct CleanGroup {
     branch_id: Option<i64>,
     teacher_id: Option<i64>,
     school_year_id: i64,
+    /// First slot, mirrored into the legacy columns.
     day_of_week: String,
     start_time: String,
     end_time: String,
+    /// Every slot, validated and sorted, ready to insert.
+    schedules: Vec<GroupSchedule>,
     room: Option<String>,
     monthly_fee_cents: i64,
     capacity: i64,
@@ -72,17 +83,6 @@ pub fn normalise_day(day: &str) -> Option<&'static str> {
         .iter()
         .find(|name| name.to_lowercase() == wanted)
         .copied()
-}
-
-/// `HH:MM` → minutes since midnight.
-fn minutes_of_day(value: &str) -> Option<i64> {
-    let (hours, minutes) = value.trim().split_once(':')?;
-    let hours: i64 = hours.parse().ok()?;
-    let minutes: i64 = minutes.parse().ok()?;
-    if !(0..=23).contains(&hours) || !(0..=59).contains(&minutes) {
-        return None;
-    }
-    Some(hours * 60 + minutes)
 }
 
 fn optional_text(value: &Option<String>) -> Option<String> {
@@ -110,6 +110,20 @@ fn active_enrollment_count(conn: &Connection, group_id: i64) -> rusqlite::Result
         params![group_id],
         |row| row.get(0),
     )
+}
+
+/// Validate the week and return it with its first slot.
+///
+/// The first slot (school-week order) is what the legacy `groups` columns mirror.
+fn split_week(
+    payload: &[super::schedules::ScheduleInput],
+) -> Result<(Vec<GroupSchedule>, GroupSchedule), String> {
+    let schedules = clean_schedules(payload)?;
+    let first = schedules
+        .first()
+        .cloned()
+        .ok_or_else(|| "Au moins un jour de cours est requis".to_string())?;
+    Ok((schedules, first))
 }
 
 fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup, String> {
@@ -153,18 +167,18 @@ fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup,
         return Err("Année scolaire introuvable".to_string());
     }
 
-    let day_of_week = normalise_day(&data.day_of_week)
+    // Phase 13: the form sends the whole week; older callers send one slot.
+    let payload = schedules_from_payload(
+        data.schedules.as_deref(),
+        &data.day_of_week,
+        &data.start_time,
+        &data.end_time,
+    );
+    let (schedules, first) = split_week(&payload)?;
+    let day_of_week = normalise_day(&first.day_of_week)
         .ok_or_else(|| "Jour de la semaine invalide".to_string())?;
-
-    let start = data.start_time.trim();
-    let end = data.end_time.trim();
-    let start_minutes = minutes_of_day(start)
-        .ok_or_else(|| "Heure de début invalide (format attendu HH:MM)".to_string())?;
-    let end_minutes = minutes_of_day(end)
-        .ok_or_else(|| "Heure de fin invalide (format attendu HH:MM)".to_string())?;
-    if end_minutes <= start_minutes {
-        return Err("L'heure de fin doit être après l'heure de début".to_string());
-    }
+    let start = first.start_time.clone();
+    let end = first.end_time.clone();
 
     if data.monthly_fee_cents <= 0 {
         return Err("Le tarif doit être supérieur à 0".to_string());
@@ -180,8 +194,9 @@ fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup,
         teacher_id: data.teacher_id,
         school_year_id: data.school_year_id,
         day_of_week: day_of_week.to_string(),
-        start_time: start.to_string(),
-        end_time: end.to_string(),
+        start_time: start,
+        end_time: end,
+        schedules,
         room: optional_text(&data.room),
         monthly_fee_cents: data.monthly_fee_cents,
         capacity: data.capacity as i64,
@@ -207,6 +222,23 @@ fn log_audit(
     .map_err(|err| db_err("Journalisation de l'audit", err))
 }
 
+/// Write the validated week of a group.
+fn insert_schedules(
+    conn: &Connection,
+    group_id: i64,
+    schedules: &[GroupSchedule],
+) -> Result<(), String> {
+    for slot in schedules {
+        conn.execute(
+            "INSERT INTO group_schedules (group_id, day_of_week, start_time, end_time)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![group_id, slot.day_of_week, slot.start_time, slot.end_time],
+        )
+        .map_err(|err| db_err("Enregistrement d'un horaire", err))?;
+    }
+    Ok(())
+}
+
 fn input_json(clean: &CleanGroup) -> Map<String, Value> {
     let mut map = Map::new();
     map.insert("subject_id".into(), json!(clean.subject_id));
@@ -220,23 +252,43 @@ fn input_json(clean: &CleanGroup) -> Map<String, Value> {
     map.insert("room".into(), json!(clean.room));
     map.insert("monthly_fee_cents".into(), json!(clean.monthly_fee_cents));
     map.insert("capacity".into(), json!(clean.capacity));
+    map.insert(
+        "schedules".into(),
+        Value::Array(
+            clean
+                .schedules
+                .iter()
+                .map(|slot| {
+                    json!({
+                        "day_of_week": slot.day_of_week,
+                        "start_time": slot.start_time,
+                        "end_time": slot.end_time,
+                    })
+                })
+                .collect(),
+        ),
+    );
     map
 }
 
+/// Raw `groups` row read by [`snapshot`] (ids and schedule fields are all
+/// nullable in the schema, the two money/capacity columns are not).
+type GroupSnapshotRow = (
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    i64,
+    i64,
+);
+
 fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, String> {
-    let row: Option<(
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        i64,
-        i64,
-    )> = conn
+    let row: Option<GroupSnapshotRow> = conn
         .query_row(
             "SELECT subject_id, level_id, branch_id, teacher_id, school_year_id,
                     day_of_week, start_time, end_time, room, monthly_fee_cents, capacity
@@ -290,6 +342,22 @@ fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, St
     map.insert("room".into(), json!(room));
     map.insert("monthly_fee_cents".into(), json!(monthly_fee_cents));
     map.insert("capacity".into(), json!(capacity));
+    let stored = super::schedules::group_schedules(conn, id)?;
+    map.insert(
+        "schedules".into(),
+        Value::Array(
+            stored
+                .iter()
+                .map(|slot| {
+                    json!({
+                        "day_of_week": slot.day_of_week,
+                        "start_time": slot.start_time,
+                        "end_time": slot.end_time,
+                    })
+                })
+                .collect(),
+        ),
+    );
     Ok(Some(map))
 }
 
@@ -359,6 +427,9 @@ pub(crate) fn map_group(row: &Row<'_>) -> rusqlite::Result<GroupRow> {
         capacity: row.get(15)?,
         enrolled_count: row.get(16)?,
         status: row.get(17)?,
+        // Filled by `attach_schedules` in one batch query per list.
+        schedules: Vec::new(),
+        schedule_text: String::new(),
     })
 }
 
@@ -400,19 +471,23 @@ pub fn list_groups(
     for row in rows {
         groups.push(row.map_err(|err| db_err("Lecture d'un groupe", err))?);
     }
+    attach_schedules(conn, &mut groups)?;
     Ok(groups)
 }
 
 /// Read one group with every joined label.
 pub fn get_group(conn: &Connection, id: i64) -> Result<GroupRow, String> {
-    conn.query_row(
-        &format!("{SELECT_GROUP} WHERE g.id = ?1"),
-        params![id],
-        map_group,
-    )
-    .optional()
-    .map_err(|err| db_err("Lecture du groupe", err))?
-    .ok_or_else(|| "Groupe introuvable".to_string())
+    let mut group = conn
+        .query_row(
+            &format!("{SELECT_GROUP} WHERE g.id = ?1"),
+            params![id],
+            map_group,
+        )
+        .optional()
+        .map_err(|err| db_err("Lecture du groupe", err))?
+        .ok_or_else(|| "Groupe introuvable".to_string())?;
+    attach_schedules(conn, std::slice::from_mut(&mut group))?;
+    Ok(group)
 }
 
 /// Students currently enrolled in a group.
@@ -537,6 +612,7 @@ pub fn available_groups_for_student(
     for row in rows {
         groups.push(row.map_err(|err| db_err("Lecture d'un groupe", err))?);
     }
+    attach_schedules(conn, &mut groups)?;
     Ok(groups)
 }
 
@@ -599,6 +675,7 @@ pub fn create_group(conn: &Connection, data: &CreateGroupInput) -> Result<i64, S
     .map_err(|err| db_err("Création du groupe", err))?;
 
     let id = conn.last_insert_rowid();
+    insert_schedules(conn, id, &clean.schedules)?;
     log_audit(
         conn,
         "CREATE",
@@ -644,6 +721,13 @@ pub fn update_group(conn: &Connection, id: i64, data: &UpdateGroupInput) -> Resu
         ],
     )
     .map_err(|err| db_err("Mise à jour du groupe", err))?;
+
+    conn.execute(
+        "DELETE FROM group_schedules WHERE group_id = ?1",
+        params![id],
+    )
+    .map_err(|err| db_err("Suppression des anciens horaires", err))?;
+    insert_schedules(conn, id, &clean.schedules)?;
 
     let changes = diff(&before, &input_json(&clean));
     if changes.is_empty() {
@@ -723,6 +807,7 @@ mod tests {
             room: Some("Salle 3".to_string()),
             monthly_fee_cents: 30_000,
             capacity: 10,
+            schedules: None,
         }
     }
 
@@ -770,7 +855,7 @@ mod tests {
         reversed.end_time = "15:00".to_string();
         assert_eq!(
             create_group(&conn, &reversed).unwrap_err(),
-            "L'heure de fin doit être après l'heure de début"
+            "L'heure de fin doit être après l'heure de début (Lundi)"
         );
 
         let mut free = sample(1, 10);
@@ -791,7 +876,7 @@ mod tests {
         bad_day.day_of_week = "Lunedi".to_string();
         assert_eq!(
             create_group(&conn, &bad_day).unwrap_err(),
-            "Jour de la semaine invalide"
+            "Jour de la semaine invalide : Lunedi"
         );
 
         let mut bad_time = sample(1, 10);

@@ -521,6 +521,7 @@ mod tests {
                 room: None,
                 monthly_fee_cents: fee,
                 capacity: 20,
+                schedules: None,
             },
         )
         .unwrap()

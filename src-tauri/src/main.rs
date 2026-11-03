@@ -37,6 +37,11 @@ fn main() {
             // Settings (key/value)
             commands::settings::cmd_get_all_settings,
             commands::settings::cmd_get_setting,
+            // Weekly timetable (Phase 13)
+            commands::schedules::cmd_set_group_schedules,
+            commands::schedules::cmd_get_group_schedules,
+            commands::schedules::cmd_get_timetable,
+            commands::schedules::cmd_get_timetable_rooms,
             commands::settings::cmd_set_setting,
             // School years
             commands::school_years::cmd_get_school_years,
@@ -105,6 +110,14 @@ fn main() {
             commands::dashboard::cmd_get_dashboard_kpis,
             commands::dashboard::cmd_get_dashboard_alerts,
             commands::dashboard::cmd_get_recent_payments,
+            // Monthly expenses (Phase 11)
+            commands::expenses::cmd_create_expense,
+            commands::expenses::cmd_update_expense,
+            commands::expenses::cmd_delete_expense,
+            commands::expenses::cmd_get_expenses,
+            commands::expenses::cmd_get_expenses_summary,
+            commands::expenses::cmd_get_expense_categories,
+            commands::expenses::cmd_set_expense_categories,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CentreManager");

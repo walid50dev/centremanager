@@ -6,6 +6,7 @@ import AppLayout from './components/layout/AppLayout';
 import ToastViewport from './components/ui/Toast';
 import DashboardPage from './pages/DashboardPage';
 import DevCrashPage from './pages/DevCrashPage';
+import ExpensesPage from './pages/ExpensesPage';
 import GroupsPage from './pages/GroupsPage';
 import LoginPage from './pages/LoginPage';
 import PaymentsPage from './pages/PaymentsPage';
@@ -14,6 +15,7 @@ import StudentDetailPage from './pages/StudentDetailPage';
 import StudentsPage from './pages/StudentsPage';
 import TeacherDetailPage from './pages/TeacherDetailPage';
 import TeachersPage from './pages/TeachersPage';
+import TimetablePage from './pages/TimetablePage';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAuthStore } from './stores/authStore';
 
@@ -108,6 +110,15 @@ export function App() {
               </ErrorBoundary>
             }
           />
+          {/* Phase 13 — the weekly timetable, right after the groups it draws. */}
+          <Route
+            path="/timetable"
+            element={
+              <ErrorBoundary key="timetable" scope="timetable">
+                <TimetablePage />
+              </ErrorBoundary>
+            }
+          />
           <Route
             path="/teachers"
             element={
@@ -129,6 +140,14 @@ export function App() {
             element={
               <ErrorBoundary key="payments" scope="payments">
                 <PaymentsPage />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/expenses"
+            element={
+              <ErrorBoundary key="expenses" scope="expenses">
+                <ExpensesPage />
               </ErrorBoundary>
             }
           />

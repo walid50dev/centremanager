@@ -21,6 +21,8 @@ export interface KpiCardProps {
   hint?: ReactNode;
   hintClass?: string;
   showTrendHint?: boolean;
+  /** Native tooltip (`title`) — used for the net-income breakdown. */
+  tooltip?: string;
   testId?: string;
 }
 
@@ -40,6 +42,7 @@ export function KpiCard({
   hint,
   hintClass,
   showTrendHint = false,
+  tooltip,
   testId,
 }: KpiCardProps) {
   const { t } = useTranslation();
@@ -54,7 +57,7 @@ export function KpiCard({
         : 'text-muted';
 
   return (
-    <Card className="p-4" data-testid={testId}>
+    <Card className="p-4" data-testid={testId} title={tooltip} data-tooltip={tooltip}>
       {/* Below `sm` the bubble sits above the label so the words keep the full
           card width instead of breaking mid-word. */}
       <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">

@@ -137,6 +137,8 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     // `schema.sql` only runs its `CREATE TABLE IF NOT EXISTS` statements on a
     // fresh database, so columns added by a later phase are patched in here.
     upgrade_phase6_columns(conn)?;
+    upgrade_student_columns(conn)?;
+    migrate_group_schedules(conn)?;
     seed_reference_data(conn)
 }
 
@@ -160,6 +162,78 @@ fn upgrade_phase6_columns(conn: &Connection) -> rusqlite::Result<()> {
                 "ALTER TABLE {table} ADD COLUMN {column} {sql_type};"
             ))?;
         }
+    }
+    Ok(())
+}
+
+/// Phase 10 — the student sheet gained a father's name and lost its generic
+/// "address" column in favour of `home_address`.
+///
+/// Three shapes exist in the wild: a database from before Phase 3 with an
+/// `email` column, one from Phase 3–9 with `address`, and a fresh one created
+/// from `schema.sql` that already has `home_address`. All three end up
+/// identical, and an existing value is carried over instead of dropped:
+///
+/// * `email`   → renamed to `home_address` (SQLite ≥ 3.25 supports it, and the
+///   bundled rusqlite ships a much newer SQLite);
+/// * `address` → renamed to `home_address`;
+/// * neither   → column added, empty.
+fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
+    let has_home_address = column_exists(conn, "students", "home_address")?;
+
+    for legacy in ["email", "address"] {
+        if has_home_address {
+            break;
+        }
+        if column_exists(conn, "students", legacy)? {
+            // A plain rename keeps the data; if this SQLite is ever too old the
+            // batch below falls back to add + copy.
+            let renamed = conn.execute_batch(&format!(
+                "ALTER TABLE students RENAME COLUMN {legacy} TO home_address;"
+            ));
+            if renamed.is_err() {
+                conn.execute_batch(&format!(
+                    "ALTER TABLE students ADD COLUMN home_address TEXT;
+                     UPDATE students SET home_address = {legacy};"
+                ))?;
+            }
+            return upgrade_father_name(conn);
+        }
+    }
+
+    if !has_home_address {
+        conn.execute_batch("ALTER TABLE students ADD COLUMN home_address TEXT;")?;
+    }
+    upgrade_father_name(conn)
+}
+
+/// Phase 13 — a group can meet several times a week.
+///
+/// `schema.sql` creates `group_schedules`; this backfills it on an existing
+/// database: when the table is still empty and groups already carry the legacy
+/// single slot, that slot becomes the group's first (and only) row.
+///
+/// `INSERT OR IGNORE` because a half-migrated database may already hold some
+/// rows — the `UNIQUE(group_id, day_of_week)` constraint makes it a no-op.
+fn migrate_group_schedules(conn: &Connection) -> rusqlite::Result<()> {
+    let existing: i64 =
+        conn.query_row("SELECT COUNT(*) FROM group_schedules", [], |row| row.get(0))?;
+    if existing > 0 {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO group_schedules (group_id, day_of_week, start_time, end_time)
+         SELECT id, day_of_week, start_time, end_time
+         FROM groups
+         WHERE day_of_week IS NOT NULL AND TRIM(day_of_week) <> ''
+           AND start_time IS NOT NULL AND TRIM(start_time) <> ''
+           AND end_time IS NOT NULL AND TRIM(end_time) <> '';",
+    )
+}
+
+fn upgrade_father_name(conn: &Connection) -> rusqlite::Result<()> {
+    if !column_exists(conn, "students", "father_name")? {
+        conn.execute_batch("ALTER TABLE students ADD COLUMN father_name TEXT;")?;
     }
     Ok(())
 }
@@ -389,7 +463,9 @@ fn seed_defaults(conn: &Connection) -> rusqlite::Result<()> {
             ('language', 'fr'),
             ('lock_timeout_minutes', '15'),
             ('receipt_format', 'a4'),
-            ('db_version', '2');",
+            ('db_version', '2'),
+            -- Phase 11: the expense categories the director can edit in Settings.
+            ('expense_categories', '[\"Loyer\",\"WiFi\",\"Électricité\",\"Eau\",\"Assistance\",\"Fournitures\",\"Autre\"]');",
     )
 }
 
@@ -408,6 +484,57 @@ pub fn table_names(conn: &Connection) -> rusqlite::Result<Vec<String>> {
 mod tests {
     use super::*;
 
+    /// A database that predates Phase 13 has groups with a single day and no
+    /// `group_schedules` row: the backfill must turn that day into one row.
+    #[test]
+    fn legacy_single_day_groups_are_backfilled() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_pragmas(&conn).unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Written straight to SQL, bypassing the command layer, exactly like a
+        // row created by V1.2.
+        conn.execute_batch(
+            "INSERT INTO groups (subject_id, level_id, school_year_id,
+                                 day_of_week, start_time, end_time, monthly_fee_cents, capacity)
+             VALUES (1, 10, 1, 'Mercredi', '14:00', '16:00', 30000, 10);
+             INSERT INTO groups (subject_id, level_id, school_year_id,
+                                 day_of_week, start_time, end_time, monthly_fee_cents, capacity)
+             VALUES (1, 10, 1, NULL, NULL, NULL, 30000, 10);",
+        )
+        .unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM group_schedules", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+
+        migrate_group_schedules(&conn).unwrap();
+
+        let rows: Vec<(i64, String, String, String)> = conn
+            .prepare("SELECT group_id, day_of_week, start_time, end_time FROM group_schedules")
+            .unwrap()
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(rows.len(), 1, "only the dated group gets a slot");
+        assert_eq!(rows[0].1, "Mercredi");
+        assert_eq!(rows[0].2, "14:00");
+
+        // Idempotent: a second launch adds nothing.
+        migrate_group_schedules(&conn).unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM group_schedules", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+
     #[test]
     fn schema_creates_all_tables() {
         let conn = Connection::open_in_memory().unwrap();
@@ -417,7 +544,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let tables = table_names(&conn).unwrap();
-        assert_eq!(tables.len(), 17, "expected 17 tables, got {tables:?}");
+        assert_eq!(tables.len(), 19, "expected 19 tables, got {tables:?}");
         for expected in [
             "settings",
             "school_years",
@@ -436,12 +563,110 @@ mod tests {
             "teacher_compensation",
             "teacher_settlements",
             "audit_log",
+            "monthly_expenses",
+            "group_schedules",
         ] {
             assert!(
                 tables.iter().any(|name| name == expected),
                 "missing {expected}"
             );
         }
+    }
+
+    /// A database created by Phase 3–9 has a generic `address` column: the
+    /// migration must rename it (data included) and add `father_name`.
+    #[test]
+    fn student_address_column_is_renamed_to_home_address() {
+        let conn = Connection::open_in_memory().unwrap();
+
+        // Phase 9 shape: same table as today, with `address` and no
+        // `father_name`. `schema.sql` then only skips its CREATE TABLE.
+        conn.execute_batch(
+            "CREATE TABLE students (
+                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                 full_name     TEXT NOT NULL,
+                 date_of_birth TEXT,
+                 phone         TEXT,
+                 parent_phone  TEXT,
+                 level_id      INTEGER,
+                 branch_id     INTEGER,
+                 address       TEXT,
+                 notes         TEXT,
+                 status        TEXT DEFAULT 'actif',
+                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
+             );
+             INSERT INTO students (full_name, phone, address, notes)
+             VALUES ('Yassine El Amrani', '0612345678', '12 rue des Écoles', 'RAS');",
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        assert!(column_exists(&conn, "students", "home_address").unwrap());
+        assert!(column_exists(&conn, "students", "father_name").unwrap());
+        assert!(!column_exists(&conn, "students", "address").unwrap());
+
+        let (address, notes): (String, String) = conn
+            .query_row(
+                "SELECT home_address, notes FROM students WHERE full_name = 'Yassine El Amrani'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(address, "12 rue des Écoles", "existing data must survive");
+        assert_eq!(notes, "RAS");
+
+        // Idempotent: a second launch is a no-op.
+        run_migrations(&conn).unwrap();
+        assert!(column_exists(&conn, "students", "home_address").unwrap());
+    }
+
+    /// Even older databases (pre-Phase 3 sketch) had `email` instead.
+    #[test]
+    fn student_email_column_is_renamed_to_home_address() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE students (
+                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                 full_name     TEXT NOT NULL,
+                 date_of_birth TEXT,
+                 phone         TEXT,
+                 parent_phone  TEXT,
+                 level_id      INTEGER,
+                 branch_id     INTEGER,
+                 email         TEXT,
+                 notes         TEXT,
+                 status        TEXT DEFAULT 'actif',
+                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
+             );
+             INSERT INTO students (full_name, email)
+             VALUES ('Salma Benjelloun', 'Salma@example.ma');",
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        assert!(column_exists(&conn, "students", "home_address").unwrap());
+        assert!(!column_exists(&conn, "students", "email").unwrap());
+        let kept: String = conn
+            .query_row("SELECT home_address FROM students", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(kept, "Salma@example.ma");
+    }
+
+    /// A brand-new database gets both columns from `schema.sql`, and the
+    /// upgrade path must leave it untouched.
+    #[test]
+    fn fresh_student_table_already_has_the_phase10_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        assert!(column_exists(&conn, "students", "home_address").unwrap());
+        assert!(column_exists(&conn, "students", "father_name").unwrap());
+        assert!(!column_exists(&conn, "students", "address").unwrap());
+        assert!(!column_exists(&conn, "students", "email").unwrap());
     }
 
     #[test]
