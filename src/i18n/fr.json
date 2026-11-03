@@ -1143,5 +1143,17 @@
   },
   "nav": {
     "trash": "Corbeille"
+  },
+  "duplicates": {
+    "warning_name": "Un {{type}} avec le même nom existe déjà : {{name}}",
+    "warning_phone": "Un {{type}} avec le même numéro existe déjà : {{name}}",
+    "warning_both": "Doublon très probable : {{name}}",
+    "ignore": "Ignorer",
+    "view": "Voir la fiche",
+    "type_student": "élève",
+    "type_teacher": "enseignant",
+    "check_error": "La recherche de doublons est momentanément indisponible. Vous pouvez continuer.",
+    "preview_error": "Impossible de charger la fiche.",
+    "open_record": "Ouvrir la fiche complète"
   }
 }

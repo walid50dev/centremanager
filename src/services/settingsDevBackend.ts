@@ -38,7 +38,7 @@ import type {
   Expense,
   ExpenseInput,
   ExpensesSummary,
-  TrashItem, TrashEntityType,
+  TrashItem, TrashEntityType, DuplicateMatch,
 } from '../types';
 
 /**
@@ -2387,6 +2387,30 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
   const store = load();
 
   switch (cmd) {
+    case 'cmd_check_duplicates': {
+      const type = asString(args, 'entityType');
+      if (type !== 'student' && type !== 'teacher') throw new Error("Type d'entité invalide");
+      const data = (args?.data ?? {}) as Record<string, unknown>;
+      const normalizeName = (value: unknown) => typeof value === 'string' ? value.trim().split(/\s+/).join(' ').toLowerCase() : '';
+      const normalizePhone = (value: unknown) => {
+        const digits = typeof value === 'string' ? value.replace(/[^0-9]/g, '') : '';
+        return digits.length >= 10 ? digits.slice(-10) : null;
+      };
+      const first = normalizeName(data.first_name), last = normalizeName(data.last_name), phone = normalizePhone(data.phone);
+      if ((!first || !last) && !phone) return [];
+      const rows: Array<{ id: number; full_name: string; deleted_at?: string | null; phone: string | null; first_name?: string | null; last_name?: string | null; guardian_phone?: string | null }> = type === 'student' ? store.students : store.teachers;
+      const result: DuplicateMatch[] = [];
+      for (const row of rows) {
+        if (row.deleted_at || row.id === data.id) continue;
+        const [fallbackFirst = '', ...fallbackLast] = row.full_name.trim().split(/\s+/);
+        const nameMatch = Boolean(first && last && normalizeName(row.first_name?.trim() || fallbackFirst) === first && normalizeName(row.last_name?.trim() || fallbackLast.join(' ')) === last);
+        const storedPhone = type === 'student' ? row.guardian_phone || row.phone || '' : row.phone || '';
+        const phoneMatch = phone !== null && normalizePhone(storedPhone) === phone;
+        if (nameMatch || phoneMatch) result.push({ entity_id: row.id, full_name: row.full_name, phone: storedPhone, match_type: nameMatch && phoneMatch ? 'both' : nameMatch ? 'name' : 'phone' });
+      }
+      const rank = { both: 0, name: 1, phone: 2 };
+      return result.sort((a, b) => rank[a.match_type] - rank[b.match_type] || a.entity_id - b.entity_id);
+    }
     case 'cmd_delete_to_trash':
     case 'cmd_delete_expense': {
       const type = (cmd === 'cmd_delete_expense' ? 'expense' : asString(args, 'entityType')) as TrashEntityType;

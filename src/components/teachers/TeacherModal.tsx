@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GraduationCap, Plus } from 'lucide-react';
 import Button from '../ui/Button';
+import DuplicateWarnings from '../duplicates/DuplicateWarnings';
+import { splitFullName } from '../../services/duplicates';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import Textarea from '../ui/Textarea';
@@ -61,6 +63,7 @@ function toForm(teacher?: Teacher | TeacherDetail | null): FormState {
 export function TeacherModal({ open, teacher = null, onClose, onSaved }: TeacherModalProps) {
   const { t } = useTranslation();
   const isEdit = Boolean(teacher);
+  const teacherId = teacher ? ('teacher' in teacher ? teacher.teacher.id : teacher.id) : null;
 
   const [form, setForm] = useState<FormState>(() => toForm(teacher));
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
@@ -235,6 +238,7 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
           void handleSubmit();
         }}
       >
+        <DuplicateWarnings open={open} type="teacher" id={teacherId} first={splitFullName(form.fullName).first} last={splitFullName(form.fullName).last} phone={form.phone} />
         <Input
           containerClassName="sm:col-span-2"
           label={t('teachers.name')}

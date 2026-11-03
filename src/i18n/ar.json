@@ -1199,5 +1199,17 @@
   },
   "nav": {
     "trash": "سلة المحذوفات"
+  },
+  "duplicates": {
+    "warning_name": "يوجد {{type}} بنفس الاسم: {{name}}",
+    "warning_phone": "يوجد {{type}} بنفس الرقم: {{name}}",
+    "warning_both": "تكرار محتمل جدًا: {{name}}",
+    "ignore": "تجاهل",
+    "view": "عرض البطاقة",
+    "type_student": "تلميذ",
+    "type_teacher": "أستاذ",
+    "check_error": "البحث عن العناصر المتكررة غير متاح حالياً. يمكنك المتابعة.",
+    "preview_error": "تعذر تحميل البطاقة.",
+    "open_record": "فتح البطاقة الكاملة"
   }
 }

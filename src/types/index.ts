@@ -708,3 +708,16 @@ export interface TrashItem {
   permanent: boolean;
   has_financial_history: boolean;
 }
+
+export interface CheckDuplicateInput {
+  id: number | null;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+}
+export interface DuplicateMatch {
+  entity_id: number;
+  full_name: string;
+  phone: string;
+  match_type: 'name' | 'phone' | 'both';
+}
