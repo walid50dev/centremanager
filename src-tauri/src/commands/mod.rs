@@ -33,6 +33,7 @@ pub mod invoices;
 pub mod levels;
 pub mod payments;
 pub mod schedules;
+pub mod schedule_conflicts;
 pub mod school_years;
 pub mod settings;
 pub mod students;

@@ -38,7 +38,7 @@ import type {
   Expense,
   ExpenseInput,
   ExpensesSummary,
-  TrashItem, TrashEntityType, DuplicateMatch,
+  TrashItem, TrashEntityType, DuplicateMatch, ScheduleConflict,
 } from '../types';
 
 /**
@@ -2752,6 +2752,46 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     // -- Groups (Phase 4) -------------------------------------------------
+    case 'cmd_check_schedule_conflicts': {
+      const groupId = args?.groupId == null ? null : asNumber(args, 'groupId');
+      const teacherId = args?.teacherId == null ? null : asNumber(args, 'teacherId');
+      const yearId = asNumber(args, 'schoolYearId');
+      const room = asString(args, 'room').trim().toLowerCase();
+      const schedules = Array.isArray(args?.schedules) ? args.schedules as Array<Record<string, unknown>> : [];
+      const minutes = (value: unknown): number | null => {
+        if (typeof value !== 'string') return null;
+        const match = value.trim().match(/^(\d+):(\d+)$/);
+        if (!match) return null;
+        const h = Number(match[1]), m = Number(match[2]);
+        return h <= 23 && m <= 59 ? h * 60 + m : null;
+      };
+      const conflicts: ScheduleConflict[] = [];
+      for (const raw of [...store.groups].sort((a, b) => a.id - b.id)) {
+        if (raw.deleted_at || (raw.status ?? 'actif') !== 'actif' || raw.id === groupId || raw.school_year_id !== yearId) continue;
+        const group = groupRow(store, raw);
+        const slots = group.schedules.length ? group.schedules : (raw.day_of_week && raw.start_time && raw.end_time ? [raw] : []);
+        const roomMatch = Boolean(room && room === (raw.room ?? '').trim().toLowerCase());
+        const teacherMatch = teacherId !== null && teacherId === raw.teacher_id;
+        if (!roomMatch && !teacherMatch) continue;
+        const groupName = [group.subject_name, group.level_name].filter(v => v && v !== '—').join(' — ');
+        for (const slot of [...slots].sort((a, b) => a.day_of_week.localeCompare(b.day_of_week) || a.start_time.localeCompare(b.start_time))) {
+          const start = minutes(slot.start_time), end = minutes(slot.end_time);
+          if (start === null || end === null || start >= end) continue;
+          for (const input of schedules) {
+            const day = typeof input.day === 'string' ? input.day : typeof input.day_of_week === 'string' ? input.day_of_week : '';
+            const inputStart = minutes(input.start_time), inputEnd = minutes(input.end_time);
+            if (inputStart === null || inputEnd === null || inputStart >= inputEnd || day.trim().toLowerCase() !== slot.day_of_week.trim().toLowerCase() || inputStart >= end || start >= inputEnd) continue;
+            for (const type of ['room', 'teacher'] as const) {
+              if ((type === 'room' && roomMatch) || (type === 'teacher' && teacherMatch)) {
+                conflicts.push({ conflict_type: type, group_name: groupName, day: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time, teacher_name: group.teacher_name ?? '', room: raw.room ?? '' });
+              }
+            }
+          }
+        }
+      }
+      return conflicts;
+    }
+
     case 'cmd_get_groups': {
       const schoolYearId = args?.schoolYearId === null || args?.schoolYearId === undefined
         ? null

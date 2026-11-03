@@ -1,6 +1,6 @@
 import { api, isTauri } from './api';
 import { devInvoke } from './settingsDevBackend';
-import type { Group, GroupDetail, GroupInput, TeacherOption } from '../types';
+import type { Group, GroupDetail, GroupInput, ScheduleConflict, ScheduleConflictInput, TeacherOption } from '../types';
 
 /**
  * Typed wrappers for the group commands
@@ -46,6 +46,9 @@ export const groupsApi = {
   create: (data: GroupInput) => call<number>('cmd_create_group', { data }),
 
   update: (id: number, data: GroupInput) => call<void>('cmd_update_group', { id, data }),
+
+  checkScheduleConflicts: (groupId: number | null, teacherId: number | null, room: string, schoolYearId: number, schedules: ScheduleConflictInput[]) =>
+    call<ScheduleConflict[]>('cmd_check_schedule_conflicts', { groupId, teacherId, room, schoolYearId, schedules }),
 
   teachers: () => call<TeacherOption[]>('cmd_get_teacher_options'),
 };
