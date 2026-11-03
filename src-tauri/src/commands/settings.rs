@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use rusqlite::{params, Connection, OptionalExtension};
 use tauri::State;
+use serde::Serialize;
 
 use super::db_err;
 use crate::db::Db;
@@ -67,6 +68,45 @@ pub fn set_setting_value(conn: &Connection, key: &str, value: &str) -> Result<()
     .map(|_| ())
     .map_err(|err| db_err("Enregistrement du paramètre", err))
 }
+
+#[derive(Debug, Serialize)]
+pub struct CentreInfo { pub name: String, pub logo: Option<String> }
+
+pub fn get_centre_info(conn: &Connection) -> Result<CentreInfo, String> {
+    let name = get_setting_value(conn, "centre_name")?.or(get_setting_value(conn, "center_name")?)
+        .filter(|v| !v.trim().is_empty()).unwrap_or_else(|| "CentreManager".to_string());
+    let logo = get_setting_value(conn, "centre_logo")?.or(get_setting_value(conn, "center_logo")?)
+        .filter(|v| !v.is_empty());
+    Ok(CentreInfo { name, logo })
+}
+
+pub fn set_centre_info(conn: &Connection, name: &str, logo: Option<&str>) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() { return Err("Le nom du centre est requis".to_string()); }
+    if let Some(value) = logo.filter(|v| !v.is_empty()) {
+        let payload = ["data:image/png;base64,", "data:image/jpeg;base64,", "data:image/svg+xml;base64,"]
+            .iter().find_map(|prefix| value.strip_prefix(*prefix))
+            .ok_or_else(|| "Format de logo invalide".to_string())?;
+        let padding = payload.bytes().rev().take_while(|c| *c == b'=').count();
+        let body = &payload[..payload.len() - padding];
+        if payload.is_empty() || payload.len() % 4 != 0 || padding > 2
+            || !body.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'+' || c == b'/')
+            || payload.len() / 4 * 3 - padding > 500 * 1024 {
+            return Err("Logo invalide ou trop volumineux (500 Ko maximum)".to_string());
+        }
+    }
+    let tx = conn.unchecked_transaction().map_err(|e| db_err("Enregistrement du centre", e))?;
+    for (key, value) in [("centre_name", name), ("center_name", name), ("centre_logo", logo.unwrap_or("")), ("center_logo", logo.unwrap_or(""))] {
+        set_setting_value(&tx, key, value)?;
+    }
+    tx.commit().map_err(|e| db_err("Enregistrement du centre", e))
+}
+
+#[tauri::command]
+pub fn cmd_get_centre_info(db: State<'_, Db>) -> Result<CentreInfo, String> { get_centre_info(&db.conn()) }
+
+#[tauri::command]
+pub fn cmd_set_centre_info(db: State<'_, Db>, name: String, logo: Option<String>) -> Result<(), String> { set_centre_info(&db.conn(), &name, logo.as_deref()) }
 
 // ---------------------------------------------------------------------------
 // Tauri commands
@@ -142,6 +182,21 @@ mod tests {
         assert_eq!(all.get("center_name").unwrap(), "Centre");
     }
 
+    #[test]
+    fn centre_info_roundtrip_with_logo() {
+        let c = test_conn();
+        set_centre_info(&c, "Mon centre", Some("data:image/png;base64,YWJj")).unwrap();
+        let info = get_centre_info(&c).unwrap();
+        assert_eq!(info.name, "Mon centre");
+        assert_eq!(info.logo.as_deref(), Some("data:image/png;base64,YWJj"));
+    }
+    #[test]
+    fn centre_info_roundtrip_without_logo() {
+        let c = test_conn();
+        set_centre_info(&c, "Mon centre", None).unwrap();
+        assert!(get_centre_info(&c).unwrap().logo.is_none());
+        assert_eq!(get_centre_info(&c).unwrap().name, "Mon centre");
+    }
     #[test]
     fn empty_key_is_rejected() {
         let conn = test_conn();

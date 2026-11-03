@@ -439,14 +439,30 @@ export interface ReceiptPeriod {
   year: number;
 }
 
+export interface ReceiptItem {
+  subject: string;
+  group_name: string;
+  month: string;
+  amount: number;
+  kind: 'invoice' | 'advance' | 'unavailable';
+}
+
+export interface CentreInfo { name: string; logo: string | null }
+
 /** Everything printed on a receipt (frozen data + centre identity). */
 export interface ReceiptData {
   receipt_number: string;
+  centre_name: string;
+  centre_logo: string | null;
+  date: string;
+  total: number;
   center_name: string;
   center_address: string | null;
   center_phone: string | null;
   center_logo: string | null;
   student_name: string;
+  student_level: string;
+  items: ReceiptItem[];
   amount_cents: number;
   payment_date: string;
   payment_method: string;

@@ -15,7 +15,7 @@ import type {
   PaginatedStudents,
   PaymentAlerts,
   PaymentRow,
-  ReceiptData,
+  ReceiptData, ReceiptItem,
   SchoolYear,
   Student,
   StudentDetail,
@@ -198,6 +198,7 @@ interface DevInvoice {
 }
 
 interface DevPayment {
+  batch_id?: number | null;
   id: number;
   student_id: number;
   invoice_id: number | null;
@@ -208,6 +209,8 @@ interface DevPayment {
 }
 
 interface DevReceipt {
+  student_level?: string;
+  items?: ReceiptItem[];
   id: number;
   payment_id: number;
   receipt_number: string;
@@ -1432,6 +1435,9 @@ function devRecordPayment(
     advance = leftover;
   }
 
+  for (const payment of store.payments) {
+    if (payment.id >= (firstId ?? Infinity) && payment.id < store.nextPaymentId) payment.batch_id = firstId;
+  }
   logAudit(
     store,
     'PAYMENT',
@@ -1486,22 +1492,47 @@ function devPaymentsHistory(
   return { data, total: filtered.length, page: Math.max(page, 1), limit: safeLimit };
 }
 
-/** Payment rows sharing the same student + timestamp = one receipt. */
-function devReceiptSession(store: DevStore, studentId: number, createdAt: string): DevPayment[] {
-  return store.payments.filter(
-    (payment) => payment.student_id === studentId && payment.created_at === createdAt,
-  );
+/** New transactions carry a durable batch id; old ones use audit boundaries. */
+function devReceiptSession(store: DevStore, payment: DevPayment): DevPayment[] {
+  if (payment.batch_id != null) return store.payments.filter(row => row.batch_id === payment.batch_id).sort((a, b) => a.id - b.id);
+  const starts = store.auditLog.filter(row => row.action === 'PAYMENT' && row.entity_type === 'payment').map(row => row.entity_id).sort((a, b) => a - b);
+  const first = starts.filter(id => id <= payment.id).slice(-1)[0];
+  if (first !== undefined) {
+    const base = store.payments.find(row => row.id === first);
+    const next = starts.find(id => id > first) ?? Infinity;
+    if (base?.student_id === payment.student_id && base.created_at === payment.created_at) {
+      const rows = store.payments.filter(row => row.batch_id == null && row.student_id === payment.student_id && row.created_at === payment.created_at && row.id >= first && row.id < next).sort((a, b) => a.id - b.id);
+      if (rows.some(row => row.id === payment.id)) return rows;
+    }
+  }
+  return [payment];
+}
+
+function devReceiptItems(store: DevStore, session: DevPayment[]): ReceiptItem[] {
+  return session.map(payment => {
+    const invoice = store.invoices.find(row => row.id === payment.invoice_id);
+    const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
+    const group = store.groups.find(row => row.id === enrollment?.group_id);
+    const row = group ? groupRow(store, group) : null;
+    return {
+      subject: row?.subject_name && row.subject_name !== '—' ? row.subject_name : '',
+      group_name: [row?.level_name, row?.branch_name].filter(v => v && v !== '—').join(' · '),
+      month: invoice ? `${MONTH_NAMES_FR[invoice.period_month - 1] ?? ''} ${invoice.period_year}`.trim() : '',
+      amount: payment.amount_cents,
+      kind: payment.invoice_id === null ? 'advance' : 'invoice',
+    };
+  });
 }
 
 function devCreateReceipt(store: DevStore, paymentId: number): number {
   const payment = store.payments.find((entry) => entry.id === paymentId);
   if (!payment) throw new Error('Paiement introuvable');
 
-  const existing = store.receipts.find((receipt) => receipt.payment_id === paymentId);
+  const session = devReceiptSession(store, payment);
+  const existing = store.receipts.find((receipt) => session.some(row => row.id === receipt.payment_id));
   if (existing) return existing.id;
 
   const student = store.students.find((entry) => entry.id === payment.student_id);
-  const session = devReceiptSession(store, payment.student_id, payment.created_at);
   const amount = session.reduce((total, entry) => total + entry.amount_cents, 0);
   const labels: string[] = [];
   for (const entry of session) {
@@ -1518,13 +1549,15 @@ function devCreateReceipt(store: DevStore, paymentId: number): number {
 
   const receipt: DevReceipt = {
     id: store.nextReceiptId++,
-    payment_id: paymentId,
+    payment_id: session[0].id,
+    student_level: store.levels.find(level => level.id === student?.level_id)?.name ?? '',
+    items: devReceiptItems(store, session),
     receipt_number: `REC-${dayStamp}-${String(used + 1).padStart(4, '0')}`,
     student_name: student?.full_name ?? '—',
     amount_cents: amount,
     payment_date: payment.created_at,
     groups_text: labels.join(', '),
-    center_name: store.settings.center_name?.trim() || 'Centre',
+    center_name: store.settings.centre_name?.trim() || store.settings.center_name?.trim() || 'CentreManager',
     created_at: nowTimestamp(),
   };
   store.receipts.push(receipt);
@@ -1552,7 +1585,7 @@ function devReceiptData(store: DevStore, receiptId: number): ReceiptData {
 
   const periods: Array<{ month: number; year: number }> = [];
   if (payment) {
-    for (const entry of devReceiptSession(store, payment.student_id, payment.created_at)) {
+    for (const entry of devReceiptSession(store, payment)) {
       if (entry.invoice_id === null) continue;
       const invoice = store.invoices.find((row) => row.id === entry.invoice_id);
       if (!invoice) continue;
@@ -1563,13 +1596,23 @@ function devReceiptData(store: DevStore, receiptId: number): ReceiptData {
   }
   periods.sort((a, b) => a.year - b.year || a.month - b.month);
 
+  const reconstructed = payment ? devReceiptItems(store, devReceiptSession(store, payment)) : [];
+  const items: ReceiptItem[] = receipt.items ?? (reconstructed.reduce((sum, item) => sum + item.amount, 0) === receipt.amount_cents
+    ? reconstructed : [{ subject: '', group_name: '', month: '', amount: receipt.amount_cents, kind: 'unavailable' }]);
+  const student = store.students.find(row => row.id === payment?.student_id);
   return {
     receipt_number: receipt.receipt_number,
+    centre_name: receipt.center_name,
+    centre_logo: store.settings.centre_logo || store.settings.center_logo || null,
+    date: receipt.payment_date,
+    total: receipt.amount_cents,
     center_name: receipt.center_name,
     center_address: store.settings.center_address ?? null,
     center_phone: store.settings.center_phone ?? null,
-    center_logo: store.settings.center_logo ?? null,
+    center_logo: store.settings.centre_logo || store.settings.center_logo || null,
     student_name: receipt.student_name,
+    student_level: receipt.student_level ?? store.levels.find(level => level.id === student?.level_id)?.name ?? '',
+    items,
     amount_cents: receipt.amount_cents,
     payment_date: receipt.payment_date,
     payment_method: payment?.payment_method ?? '',
@@ -2437,6 +2480,22 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       save(store); return count;
     }
     // -- Settings ---------------------------------------------------------
+    case 'cmd_get_centre_info':
+      return { name: store.settings.centre_name?.trim() || store.settings.center_name?.trim() || 'CentreManager', logo: store.settings.centre_logo || store.settings.center_logo || null };
+    case 'cmd_set_centre_info': {
+      const name = asString(args, 'name').trim();
+      const logo = args?.logo == null ? '' : asString(args, 'logo');
+      if (!name) throw new Error('Le nom du centre est requis');
+      if (logo) {
+        const match = /^data:image\/(?:png|jpeg|svg\+xml);base64,([A-Za-z0-9+/]+)(={0,2})$/.exec(logo);
+        const encoded = match ? match[1] + match[2] : '';
+        if (!match || encoded.length % 4 !== 0 || encoded.length / 4 * 3 - match[2].length > 500 * 1024) throw new Error('Logo invalide ou trop volumineux (500 Ko maximum)');
+      }
+      Object.assign(store.settings, { centre_name: name, center_name: name, centre_logo: logo, center_logo: logo });
+      localStorage.setItem(AUTH_CENTER_NAME_KEY, name);
+      save(store); return undefined;
+    }
+
     case 'cmd_get_all_settings': {
       const { [PROTECTED_KEY]: _hidden, ...visible } = store.settings;
       return clone(visible);
@@ -3538,7 +3597,8 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     case 'cmd_get_receipt_data': {
-      const receiptId = asNumber(args, 'receiptId');
+      const receiptId = args?.receiptId == null ? devCreateReceipt(store, asNumber(args, 'paymentId')) : asNumber(args, 'receiptId');
+      save(store);
       return clone(devReceiptData(store, receiptId));
     }
 

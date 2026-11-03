@@ -8,6 +8,7 @@ import { paymentsApi } from '../../services/payments';
 import { settingsApi } from '../../services/settings';
 import { cn, formatCurrency, stripIsolates } from '../../utils/format';
 import { methodLabel, periodLabel } from '../../utils/billing';
+import { pdfCompatibleLogo } from '../../utils/centreLogo';
 import { buildReceiptDocument, buildReceiptLabels } from '../print/receiptLabels';
 import {
   downloadReceiptPdf,
@@ -99,9 +100,10 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
     setLoadError(null);
 
     Promise.all([paymentsApi.receipt(receiptId), settingsApi.get('receipt_format').catch(() => null)])
-      .then(([receipt, format]) => {
+      .then(async ([receipt, format]) => {
+        const logo = receipt.center_logo ? await pdfCompatibleLogo(receipt.center_logo) : null;
         if (!active) return;
-        setData(receipt);
+        setData({ ...receipt, center_logo: logo });
         // The setting wins for this preview; the toggle below only overrides it
         // until the modal is closed.
         setTemplate(normaliseTemplate(format));
@@ -121,17 +123,19 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
     };
   }, [receiptId]);
 
+  // Built-in PDF fonts lack Arabic shaping; keep document labels in French.
+  const pdfT = useMemo(() => i18n.getFixedT('fr'), [i18n]);
   const periodText = useMemo(() => {
     if (!data) return '';
     return data.periods.length > 0
-      ? data.periods.map((period) => periodLabel(t, period.month, period.year)).join(', ')
+      ? data.periods.map((period) => periodLabel(pdfT, period.month, period.year)).join(', ')
       : data.period_text;
-  }, [data, t]);
+  }, [data, pdfT]);
 
-  const labels = useMemo(() => buildReceiptLabels(t), [t]);
+  const labels = useMemo(() => buildReceiptLabels(pdfT), [pdfT]);
   const document = useMemo(
-    () => (data ? buildReceiptDocument(data, labels, periodText, methodLabel(t, data.payment_method)) : null),
-    [data, labels, periodText, t],
+    () => (data ? buildReceiptDocument(data, labels, periodText, methodLabel(pdfT, data.payment_method)) : null),
+    [data, labels, periodText, pdfT],
   );
 
   // Arabic glyphs are outside the built-in Helvetica coverage: warn the user
@@ -142,10 +146,11 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
       stripIsolates(data.center_name),
       stripIsolates(data.student_name),
       stripIsolates(data.groups_text),
+      ...data.items.flatMap(item => [item.subject, item.group_name]),
       stripIsolates(periodText),
     ].join(' ');
-    return i18n.language === 'ar' || ARABIC_CHAR.test(probe);
-  }, [data, periodText, i18n.language]);
+    return ARABIC_CHAR.test(probe);
+  }, [data, periodText]);
 
   const input: ReceiptPdfInput | null = document ? { template, data: document, labels } : null;
 

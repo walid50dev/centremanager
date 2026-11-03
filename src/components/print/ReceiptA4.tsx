@@ -1,132 +1,63 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { ReceiptDocumentData, ReceiptLabels } from './receiptLabels';
 
-/**
- * A4 receipt — the paper format, 20 mm margins.
- *
- * Colours come from the design system (`tailwind.config.ts`) so a printed
- * receipt and the screen next to it agree on what is important: the amount is
- * the only coloured element on the page.
- */
-const COLORS = {
-  primary: '#2563EB',
-  foreground: '#0F172A',
-  muted: '#64748B',
-  border: '#E2E8F0',
-  white: '#FFFFFF',
-};
-
+const colors = { ink: '#0F172A', muted: '#64748B', border: '#E2E8F0', primary: '#2563EB' };
 const styles = StyleSheet.create({
-  page: {
-    // 20 mm on every side (1 mm = 2.8346 pt).
-    padding: 57,
-    fontFamily: 'Helvetica',
-    fontSize: 10,
-    color: COLORS.foreground,
-    backgroundColor: COLORS.white,
-  },
-  header: { alignItems: 'center' },
-  logo: { maxWidth: 60, maxHeight: 60, marginBottom: 8, objectFit: 'contain' },
-  centerName: { fontSize: 18, fontFamily: 'Helvetica-Bold', textAlign: 'center' },
-  centerLine: { fontSize: 10, color: COLORS.muted, textAlign: 'center', marginTop: 2 },
-  rule: { borderBottomWidth: 1, borderBottomColor: COLORS.border, marginVertical: 14 },
-  title: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-    textAlign: 'center',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  infoText: { fontSize: 10, color: COLORS.muted },
-  infoValue: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: COLORS.foreground },
-  fields: { marginTop: 14 },
-  field: { flexDirection: 'row', marginBottom: 5 },
-  fieldLabel: { width: 70, fontSize: 11, color: COLORS.muted },
-  fieldValue: { flex: 1, fontSize: 11 },
-  amountBlock: { alignItems: 'center', paddingVertical: 8 },
-  amountLabel: { fontSize: 10, color: COLORS.muted },
-  amountValue: { fontSize: 20, fontFamily: 'Helvetica-Bold', color: COLORS.primary, marginTop: 4 },
-  method: { fontSize: 10, marginTop: 8 },
-  footer: { alignItems: 'center' },
-  footerText: { fontSize: 9, color: COLORS.muted, textAlign: 'center', marginTop: 3 },
+  page: { padding: 48, fontFamily: 'Helvetica', fontSize: 10, color: colors.ink },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  identity: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  logo: { width: 60, height: 60, objectFit: 'contain', marginRight: 12 },
+  centerName: { fontSize: 18, fontFamily: 'Helvetica-Bold' },
+  muted: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  right: { textAlign: 'right', marginLeft: 16 },
+  title: { fontSize: 13, fontFamily: 'Helvetica-Bold' },
+  rule: { borderBottomWidth: 1, borderBottomColor: colors.border, marginVertical: 14 },
+  section: { fontFamily: 'Helvetica-Bold', fontSize: 11, marginBottom: 8 },
+  field: { flexDirection: 'row', marginBottom: 4 },
+  fieldLabel: { width: 90, color: colors.muted },
+  fieldValue: { flex: 1 },
+  tableHead: { flexDirection: 'row', backgroundColor: '#F1F5F9', paddingVertical: 6, paddingHorizontal: 5, fontFamily: 'Helvetica-Bold' },
+  row: { flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 5, borderBottomWidth: 1, borderBottomColor: colors.border },
+  subject: { width: '28%', paddingRight: 5 },
+  group: { width: '28%', paddingRight: 5 },
+  month: { width: '25%', paddingRight: 5 },
+  amount: { width: '19%', textAlign: 'right' },
+  total: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10, fontFamily: 'Helvetica-Bold', fontSize: 12, color: colors.primary },
+  method: { marginTop: 16 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 38 },
+  signature: { width: 160, textAlign: 'center', color: colors.muted, fontSize: 9 },
 });
-
-export interface ReceiptA4Props {
-  data: ReceiptDocumentData;
-  labels: ReceiptLabels;
-}
-
+export interface ReceiptA4Props { data: ReceiptDocumentData; labels: ReceiptLabels }
 export function ReceiptA4Document({ data, labels }: ReceiptA4Props) {
-  return (
-    <Document
-      title={`${labels.heading} ${data.receiptNumber}`}
-      author={data.centerName}
-      subject={`${labels.student}: ${data.studentName}`}
-      creator="CentreManager"
-    >
-      {/* No `wrap={false}` here: combined with an auto height it makes
-          @react-pdf shrink the page to the content instead of keeping A4. */}
-      <Page size="A4" style={styles.page}>
-        {/* ---------------------------------------------------------- header */}
-        <View style={styles.header}>
+  return <Document title={`${labels.heading} ${data.receiptNumber}`} author={data.centerName} creator="CentreManager">
+    <Page size="A4" style={styles.page}>
+      <View style={styles.header}>
+        <View style={styles.identity}>
           {data.logo ? <Image style={styles.logo} src={data.logo} /> : null}
-          <Text style={styles.centerName}>{data.centerName}</Text>
-          {data.centerAddress ? <Text style={styles.centerLine}>{data.centerAddress}</Text> : null}
-          {data.centerPhone ? <Text style={styles.centerLine}>{data.centerPhone}</Text> : null}
-        </View>
-
-        <View style={styles.rule} />
-
-        <Text style={styles.title}>{labels.heading}</Text>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoText}>
-            {labels.number} {data.receiptNumber}
-          </Text>
-          <Text style={styles.infoText}>
-            {labels.date} {data.dateText}
-          </Text>
-        </View>
-
-        <View style={styles.fields}>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{labels.student}</Text>
-            <Text style={styles.fieldValue}>{data.studentName}</Text>
+          <View><Text style={styles.centerName}>{data.centerName}</Text>
+            {data.centerAddress ? <Text style={styles.muted}>{data.centerAddress}</Text> : null}
+            {data.centerPhone ? <Text style={styles.muted}>{data.centerPhone}</Text> : null}
           </View>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{labels.groups}</Text>
-            <Text style={styles.fieldValue}>{data.groupsText}</Text>
-          </View>
-          {data.periodText ? (
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>{labels.period}</Text>
-              <Text style={styles.fieldValue}>{data.periodText}</Text>
-            </View>
-          ) : null}
         </View>
-
-        <View style={styles.rule} />
-
-        <View style={styles.amountBlock}>
-          <Text style={styles.amountLabel}>{labels.amount}</Text>
-          <Text style={styles.amountValue}>{data.amountText}</Text>
-          {data.methodText ? (
-            // One string on purpose: two JSX expressions lose the space
-            // between them in the PDF text layout.
-            <Text style={styles.method}>{`${labels.method} ${data.methodText}`}</Text>
-          ) : null}
+        <View style={styles.right}><Text style={styles.title}>{labels.heading}</Text>
+          <Text style={styles.muted}>{`${labels.number} ${data.receiptNumber}`}</Text>
+          <Text style={styles.muted}>{`${labels.date} ${data.dateText}`}</Text>
         </View>
-
-        <View style={styles.rule} />
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>{labels.thanks}</Text>
-          <Text style={styles.footerText}>{data.centerName}</Text>
-        </View>
-      </Page>
-    </Document>
-  );
+      </View>
+      <View style={styles.rule} />
+      <Text style={styles.section}>{labels.studentInfo}</Text>
+      <View style={styles.field}><Text style={styles.fieldLabel}>{labels.student}</Text><Text style={styles.fieldValue}>{data.studentName}</Text></View>
+      <View style={styles.field}><Text style={styles.fieldLabel}>{labels.level}</Text><Text style={styles.fieldValue}>{data.studentLevel}</Text></View>
+      <View style={styles.rule} />
+      <Text style={styles.section}>{labels.paymentDetails}</Text>
+      <View style={styles.tableHead} fixed><Text style={styles.subject}>{labels.subject}</Text><Text style={styles.group}>{labels.group}</Text><Text style={styles.month}>{labels.month}</Text><Text style={styles.amount}>{labels.amount}</Text></View>
+      {data.items.map((item, index) => <View style={styles.row} key={index} wrap={false}>
+        <Text style={styles.subject}>{item.subject}</Text><Text style={styles.group}>{item.group}</Text><Text style={styles.month}>{item.month}</Text><Text style={styles.amount}>{item.amount}</Text>
+      </View>)}
+      <View style={styles.total}><Text>{`${labels.total}  ${data.amountText}`}</Text></View>
+      <Text style={styles.method}>{`${labels.method}: ${data.methodText || '—'}`}</Text>
+      <View style={styles.footer}><Text>{labels.thanks}</Text><Text style={styles.signature}>{labels.signature}</Text></View>
+    </Page>
+  </Document>;
 }
-
 export default ReceiptA4Document;

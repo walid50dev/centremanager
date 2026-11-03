@@ -230,13 +230,13 @@
       "address": "Adresse",
       "phone": "Téléphone",
       "logo": "Logo",
-      "logoHint": "PNG ou JPG, 2 Mo maximum",
+      "logoHint": "PNG, JPG ou SVG, 500 Ko maximum",
       "chooseLogo": "Choisir un logo",
       "removeLogo": "Retirer",
       "logoUpdated": "Logo mis à jour ✓",
       "logoRemoved": "Logo retiré",
-      "logoTooLarge": "L'image dépasse 2 Mo",
-      "logoInvalid": "Fichier image invalide",
+      "logoTooLarge": "L’image dépasse 500 Ko",
+      "logoInvalid": "Veuillez choisir un fichier PNG, JPG ou SVG valide",
       "nameRequired": "Le nom du centre est obligatoire",
       "success": "Informations du centre mises à jour ✓"
     },
@@ -366,7 +366,13 @@
     "categoryPlaceholder": "Ex. Sécurité, Taxes…",
     "expenseCategoriesSaved": "Catégories de dépenses enregistrées ✓",
     "expenseCategoriesHint": "Ces catégories alimentent le formulaire de dépense. Retirer une catégorie ne touche pas aux dépenses déjà enregistrées : elles gardent leur nom et leur couleur.",
-    "categoryExists": "La catégorie « {{name}} » existe déjà"
+    "categoryExists": "La catégorie « {{name}} » existe déjà",
+    "centre_identity": "Identité du centre",
+    "centre_name": "Nom du centre",
+    "centre_logo": "Logo du centre",
+    "upload_logo": "Choisir un logo",
+    "remove_logo": "Supprimer le logo",
+    "logo_preview": "Aperçu du logo"
   },
   "students": {
     "new": "+ Nouvel élève",
@@ -883,11 +889,19 @@
     "pdfError": "Impossible de générer le PDF",
     "templateA4": "A4",
     "templateThermal": "Thermique 80 mm",
-    "arabicLimitation": "L'impression PDF en arabe est limitée en V1 : les caractères arabes peuvent manquer. Utilisez l'impression thermique pour les reçus rapides, ou le format A4 en français.",
+    "arabicLimitation": "Le reçu est généré en français. Les caractères arabes des données peuvent ne pas être affichés correctement par le moteur PDF.",
     "amountPaid": "Montant payé",
     "total": "TOTAL",
     "shortHeading": "REÇU",
-    "thankYouShort": "Merci !"
+    "thankYouShort": "Merci !",
+    "level": "Niveau",
+    "subject": "Matière",
+    "group": "Groupe",
+    "month": "Mois",
+    "studentInfo": "Informations élève",
+    "paymentDetails": "Détails du paiement",
+    "signature": "Signature / cachet",
+    "unavailable": "Détails historiques indisponibles"
   },
   "teachers": {
     "title": "Enseignants",

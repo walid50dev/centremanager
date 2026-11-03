@@ -18,7 +18,7 @@ use super::db_err;
 use super::invoices::french_month_name;
 use super::settings::get_setting_value;
 use crate::db::Db;
-use crate::models::{PaginatedPayments, PaymentRow, ReceiptData, ReceiptPeriod};
+use crate::models::{PaginatedPayments, PaymentRow, ReceiptData, ReceiptItem, ReceiptPeriod};
 
 const ENTITY_TYPE: &str = "payment";
 
@@ -133,12 +133,12 @@ pub fn record_payment(
     }
     invoices.sort_by(|a, b| a.3.cmp(&b.3).then(a.0.cmp(&b.0)));
 
-    // Every row of one call shares this timestamp: it is what `create_receipt`
-    // uses to regroup the allocation lines into a single receipt.
+    // Every allocation shares the timestamp and a durable transaction batch id.
     let created_at = now_timestamp();
     let mut leftover = amount_cents;
     let mut first_payment_id: Option<i64> = None;
     let mut allocations: Vec<(i64, i64)> = Vec::new();
+    let mut payment_ids: Vec<i64> = Vec::new();
 
     for (invoice_id, amount, paid, _) in &invoices {
         if leftover <= 0 {
@@ -158,6 +158,7 @@ pub fn record_payment(
         )
         .map_err(|err| db_err("Enregistrement du paiement", err))?;
         let payment_id = tx.last_insert_rowid();
+        payment_ids.push(payment_id);
         if first_payment_id.is_none() {
             first_payment_id = Some(payment_id);
         }
@@ -183,13 +184,20 @@ pub fn record_payment(
             params![student_id, leftover, method, notes, created_at],
         )
         .map_err(|err| db_err("Enregistrement de l'avance", err))?;
+        let id = tx.last_insert_rowid();
+        payment_ids.push(id);
         if first_payment_id.is_none() {
-            first_payment_id = Some(tx.last_insert_rowid());
+            first_payment_id = Some(id);
         }
         advance_cents = leftover;
     }
 
     let first_id = first_payment_id.ok_or_else(|| "Aucun montant à affecter".to_string())?;
+
+    for id in &payment_ids {
+        tx.execute("UPDATE payments SET batch_id = ?1 WHERE id = ?2", params![first_id, id])
+            .map_err(|err| db_err("Regroupement du paiement", err))?;
+    }
 
     tx.execute(
         "INSERT INTO audit_log (action, entity_type, entity_id, details)
@@ -306,24 +314,58 @@ pub fn payments_history(
 // Receipts
 // ---------------------------------------------------------------------------
 
-/// Payment rows created by the same `cmd_record_payment` call.
-fn receipt_session(
-    conn: &Connection,
-    student_id: i64,
-    created_at: &str,
-) -> Result<Vec<i64>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id FROM payments
-             WHERE student_id = ?1 AND created_at = ?2
-             ORDER BY id",
-        )
-        .map_err(|err| db_err("Lecture des paiements", err))?;
-    let rows = stmt
-        .query_map(params![student_id, created_at], |row| row.get::<_, i64>(0))
-        .map_err(|err| db_err("Lecture des paiements", err))?;
-    rows.collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|err| db_err("Lecture des paiements", err))
+/// Payment rows in one transaction. New payments have a durable batch id.
+/// For old payments, audit transaction boundaries avoid combining payments made
+/// in the same second; without an audit record only the known row is used.
+fn receipt_session(conn: &Connection, payment_id: i64) -> Result<Vec<i64>, String> {
+    let (student, stamp, batch): (i64, String, Option<i64>) = conn.query_row(
+        "SELECT student_id, COALESCE(created_at, ''), batch_id FROM payments WHERE id=?1",
+        params![payment_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .map_err(|e| db_err("Lecture du paiement", e))?;
+    if let Some(batch_id) = batch {
+        let mut stmt = conn.prepare("SELECT id FROM payments WHERE batch_id=?1 ORDER BY id")
+            .map_err(|e| db_err("Lecture des paiements", e))?;
+        let rows = stmt.query_map(params![batch_id], |r| r.get(0)).map_err(|e| db_err("Lecture des paiements", e))?;
+        return rows.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| db_err("Lecture des paiements", e));
+    }
+    let first: Option<i64> = conn.query_row(
+        "SELECT MAX(entity_id) FROM audit_log WHERE action='PAYMENT' AND entity_type='payment' AND entity_id<=?1",
+        params![payment_id], |r| r.get(0)).map_err(|e| db_err("Lecture du journal", e))?;
+    if let Some(first) = first {
+        let mut stmt = conn.prepare("SELECT p.id FROM payments p JOIN payments base ON base.id=?1
+          WHERE base.student_id=?2 AND COALESCE(base.created_at,'')=?3 AND p.student_id=?2 AND COALESCE(p.created_at,'')=?3
+          AND p.batch_id IS NULL AND p.id>=?1 AND p.id<COALESCE((SELECT MIN(entity_id) FROM audit_log WHERE action='PAYMENT' AND entity_type='payment' AND entity_id>?1), 9223372036854775807) ORDER BY p.id")
+          .map_err(|e| db_err("Lecture des paiements", e))?;
+        let ids = stmt.query_map(params![first, student, stamp], |r| r.get(0))
+            .map_err(|e| db_err("Lecture des paiements", e))?
+            .collect::<rusqlite::Result<Vec<i64>>>().map_err(|e| db_err("Lecture des paiements", e))?;
+        if ids.contains(&payment_id) { return Ok(ids); }
+    }
+    Ok(vec![payment_id])
+}
+
+fn receipt_items(conn: &Connection, ids: &[i64]) -> Result<Vec<ReceiptItem>, String> {
+    let mut items = Vec::new();
+    for id in ids {
+        let row: (i64, Option<i64>, String, String, String, Option<i32>, Option<i32>) = conn.query_row(
+            "SELECT p.amount_cents, p.invoice_id, COALESCE(s.name,''), COALESCE(l.name,''), COALESCE(b.name,''), i.period_month, i.period_year
+             FROM payments p LEFT JOIN invoices i ON i.id=p.invoice_id
+             LEFT JOIN enrollments e ON e.id=i.enrollment_id LEFT JOIN groups g ON g.id=e.group_id
+             LEFT JOIN subjects s ON s.id=g.subject_id LEFT JOIN levels l ON l.id=g.level_id
+             LEFT JOIN branches b ON b.id=g.branch_id WHERE p.id=?1", params![id],
+            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?)))
+            .map_err(|e| db_err("Lecture des détails du reçu", e))?;
+        let (amount, invoice, subject, level, branch, month, year) = row;
+        let group_name = [level.as_str(), branch.as_str()].into_iter().filter(|v| !v.trim().is_empty()).collect::<Vec<_>>().join(" · ");
+        items.push(ReceiptItem { subject, group_name, month: match (month, year) { (Some(m), Some(y)) => format!("{} {}", french_month_name(m), y), _ => String::new() }, amount,
+            kind: if invoice.is_none() { "advance" } else { "invoice" }.to_string() });
+    }
+    Ok(items)
+}
+
+fn receipt_student_level(conn: &Connection, student_id: i64) -> Result<String, String> {
+    conn.query_row("SELECT COALESCE(l.name,'') FROM students s LEFT JOIN levels l ON l.id=s.level_id WHERE s.id=?1", params![student_id], |r| r.get(0))
+        .map_err(|e| db_err("Lecture du niveau", e))
 }
 
 /// Group labels covered by a list of payment rows (deduplicated, ordered).
@@ -406,18 +448,22 @@ pub fn create_receipt(conn: &Connection, payment_id: i64) -> Result<i64, String>
         return Err("Paiement introuvable".to_string());
     };
 
-    // Printing twice must not spawn a second receipt.
-    if let Some(existing) = conn
-        .query_row(
+    let session = receipt_session(conn, payment_id)?;
+    // Any allocation of the same transaction resolves to the same receipt.
+    for session_id in &session {
+        if let Some(existing) = conn
+            .query_row(
             "SELECT id FROM receipts WHERE payment_id = ?1 ORDER BY id LIMIT 1",
-            params![payment_id],
+            params![session_id],
             |row| row.get::<_, i64>(0),
         )
         .optional()
-        .map_err(|err| db_err("Lecture du reçu", err))?
-    {
-        return Ok(existing);
+            .map_err(|err| db_err("Lecture du reçu", err))?
+        {
+            return Ok(existing);
+        }
     }
+    let payment_id = *session.first().ok_or_else(|| "Paiement introuvable".to_string())?;
 
     let student_name: String = conn
         .query_row(
@@ -427,24 +473,17 @@ pub fn create_receipt(conn: &Connection, payment_id: i64) -> Result<i64, String>
         )
         .map_err(|err| db_err("Lecture de l'élève", err))?;
 
-    let session = receipt_session(conn, student_id, &created_at)?;
-    let amount_cents: i64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(amount_cents), 0) FROM payments
-             WHERE student_id = ?1 AND created_at = ?2",
-            params![student_id, created_at],
-            |row| row.get(0),
-        )
-        .map_err(|err| db_err("Total du paiement", err))?;
+    let items = receipt_items(conn, &session)?;
+    let amount_cents: i64 = items.iter().map(|item| item.amount).sum();
+    let items_json = serde_json::to_string(&items).map_err(|e| format!("Détails du reçu : {e}"))?;
+    let student_level = receipt_student_level(conn, student_id)?;
 
     if amount_cents <= 0 {
         return Err("Aucun montant à justifier".to_string());
     }
 
     let groups_text = groups_of_payments(conn, &session)?.join(", ");
-    let center_name = get_setting_value(conn, "center_name")?
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "Centre".to_string());
+    let center_name = super::settings::get_centre_info(conn)?.name;
 
     // REC-YYYYMMDD-XXXX, numbered per day of *payment*.
     let day_stamp: String = created_at
@@ -471,8 +510,8 @@ pub fn create_receipt(conn: &Connection, payment_id: i64) -> Result<i64, String>
 
         match conn.execute(
             "INSERT INTO receipts
-                (payment_id, receipt_number, student_name, amount_cents, payment_date, groups_text, center_name)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (payment_id, receipt_number, student_name, amount_cents, payment_date, groups_text, center_name, student_level, items_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 payment_id,
                 number,
@@ -480,7 +519,9 @@ pub fn create_receipt(conn: &Connection, payment_id: i64) -> Result<i64, String>
                 amount_cents,
                 created_at,
                 groups_text,
-                center_name
+                center_name,
+                student_level,
+                items_json
             ],
         ) {
             Ok(_) => {
@@ -516,7 +557,7 @@ pub fn create_receipt(conn: &Connection, payment_id: i64) -> Result<i64, String>
 /// Everything printed on a receipt: frozen row + centre identity.
 pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, String> {
     // (number, student, amount, date, groups, centre, payment id)
-    type ReceiptRow = (String, String, i64, String, String, String, Option<i64>);
+    type ReceiptRow = (String, String, i64, String, String, String, Option<i64>, Option<String>, Option<String>);
     let row: Option<ReceiptRow> = conn
         .query_row(
             "SELECT COALESCE(receipt_number, ''),
@@ -525,7 +566,7 @@ pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, S
                     COALESCE(payment_date, ''),
                     COALESCE(groups_text, ''),
                     COALESCE(center_name, ''),
-                    payment_id
+                    payment_id, student_level, items_json
              FROM receipts WHERE id = ?1",
             params![receipt_id],
             |row| {
@@ -536,7 +577,7 @@ pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, S
                     row.get(3)?,
                     row.get(4)?,
                     row.get(5)?,
-                    row.get(6)?,
+                    row.get(6)?, row.get(7)?, row.get(8)?,
                 ))
             },
         )
@@ -550,7 +591,7 @@ pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, S
         payment_date,
         groups_text,
         center_name,
-        payment_id,
+        payment_id, frozen_level, frozen_items,
     )) = row
     else {
         return Err("Reçu introuvable".to_string());
@@ -579,8 +620,8 @@ pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, S
                 .map_err(|err| db_err("Lecture du paiement", err))?;
 
             let periods = match session {
-                Some((student_id, created_at)) => {
-                    let ids = receipt_session(conn, student_id, &created_at)?;
+                Some((_student_id, _created_at)) => {
+                    let ids = receipt_session(conn, payment_id)?;
                     periods_of_payments(conn, &ids)?
                 }
                 None => Vec::new(),
@@ -596,19 +637,38 @@ pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, S
         .collect::<Vec<_>>()
         .join(", ");
 
+    let student_level = match (frozen_level, payment_id) {
+        (Some(level), _) => level,
+        (None, Some(id)) => conn.query_row("SELECT COALESCE(l.name, '') FROM payments p LEFT JOIN students s ON s.id=p.student_id LEFT JOIN levels l ON l.id=s.level_id WHERE p.id=?1", params![id], |r| r.get(0)).optional().map_err(|e| db_err("Lecture du niveau", e))?.unwrap_or_default(),
+        _ => String::new(),
+    };
+    let items: Vec<ReceiptItem> = if let Some(json) = frozen_items {
+        serde_json::from_str(&json).map_err(|e| format!("Détails du reçu invalides : {e}"))?
+    } else {
+        let reconstructed = match payment_id { Some(id) => receipt_items(conn, &receipt_session(conn, id)?)?, None => Vec::new() };
+        // Older totals were grouped by timestamp; do not attribute money to
+        // invoices if that grouping is ambiguous or cannot be reconstructed.
+        if reconstructed.iter().map(|item| item.amount).sum::<i64>() == amount_cents { reconstructed }
+        else { vec![ReceiptItem { subject: String::new(), group_name: String::new(), month: String::new(), amount: amount_cents, kind: "unavailable".to_string() }] }
+    };
+
+    let center_name = if center_name.trim().is_empty() {
+        super::settings::get_centre_info(conn)?.name
+    } else { center_name };
+    let center_logo = super::settings::get_centre_info(conn)?.logo;
     Ok(ReceiptData {
         receipt_number,
-        center_name: if center_name.trim().is_empty() {
-            get_setting_value(conn, "center_name")?
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| "Centre".to_string())
-        } else {
-            center_name
-        },
+        centre_name: center_name.clone(),
+        centre_logo: center_logo.clone(),
+        date: payment_date.clone(),
+        total: amount_cents,
+        center_name,
         center_address: get_setting_value(conn, "center_address")?,
         center_phone: get_setting_value(conn, "center_phone")?,
-        center_logo: get_setting_value(conn, "center_logo")?,
+        center_logo,
         student_name,
+        student_level,
+        items,
         amount_cents,
         payment_date,
         payment_method,
@@ -669,9 +729,14 @@ pub fn cmd_create_receipt(db: State<'_, Db>, payment_id: i64) -> Result<i64, Str
 }
 
 #[tauri::command]
-pub fn cmd_get_receipt_data(db: State<'_, Db>, receipt_id: i64) -> Result<ReceiptData, String> {
+pub fn cmd_get_receipt_data(db: State<'_, Db>, receipt_id: Option<i64>, payment_id: Option<i64>) -> Result<ReceiptData, String> {
     let conn = db.conn();
-    receipt_data(&conn, receipt_id)
+    let id = match (receipt_id, payment_id) {
+        (Some(id), _) => id,
+        (None, Some(id)) => create_receipt(&conn, id)?,
+        _ => return Err("Reçu introuvable".to_string()),
+    };
+    receipt_data(&conn, id)
 }
 
 // ---------------------------------------------------------------------------
@@ -995,6 +1060,34 @@ mod tests {
         let data = receipt_data(&conn, receipt_id).unwrap();
         assert_eq!(data.amount_cents, 25_000);
         assert_eq!(data.groups_text, "Mathématiques Tronc Commun");
+    }
+
+    #[test]
+    fn receipt_one_subject_uses_partial_payment_not_invoice_total() {
+        let c = test_conn();
+        let g = group(&c, 30_000); let s = student(&c, "Salma", "0612345678");
+        enroll_student(&c, s, g, "2026-03-01").unwrap();
+        let p = record_payment(&c, s, &invoice_ids(&c, s), 12_000, "espèces", None).unwrap();
+        let data = receipt_data(&c, create_receipt(&c, p).unwrap()).unwrap();
+        assert_eq!(data.items.len(), 1); assert_eq!(data.items[0].amount, 12_000);
+        assert_eq!(data.items[0].subject, "Mathématiques"); assert_eq!(data.items[0].month, "Mars 2026");
+    }
+
+    #[test]
+    fn receipt_three_subjects_is_frozen_and_batches_are_distinct() {
+        let c = test_conn(); let s = student(&c, "Salma", "0612345678");
+        for subject in [1, 2, 3] { let g = group_of(&c, subject, 10, 30_000); enroll_student(&c, s, g, "2026-03-01").unwrap(); }
+        let ids = invoice_ids(&c, s);
+        let p = record_payment(&c, s, &ids, 75_000, "chèque", None).unwrap();
+        let receipt = create_receipt(&c, p).unwrap();
+        let data = receipt_data(&c, receipt).unwrap();
+        assert_eq!(data.items.len(), 3); assert_eq!(data.items.iter().map(|i| i.amount).sum::<i64>(), 75_000);
+        assert_eq!(data.items.iter().filter(|i| i.amount == 15_000).count(), 1);
+        c.execute("UPDATE subjects SET name='Changed' WHERE id=1", []).unwrap();
+        assert_eq!(receipt_data(&c, receipt).unwrap().items[0].subject, data.items[0].subject);
+        let p2 = record_payment(&c, s, &ids, 15_000, "espèces", None).unwrap();
+        assert_ne!(create_receipt(&c, p2).unwrap(), receipt);
+        assert_eq!(receipt_data(&c, create_receipt(&c, p2).unwrap()).unwrap().amount_cents, 15_000);
     }
 
     #[test]
