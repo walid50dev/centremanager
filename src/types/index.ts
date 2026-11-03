@@ -286,17 +286,22 @@ export interface Paginated<T> {
 export interface Student {
   id: number;
   full_name: string;
-  date_of_birth: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  birth_date: string | null;
   phone: string;
-  parent_phone: string | null;
-  /** Father's name — identifies minors and is printed on receipts. */
-  father_name: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_relation: string | null;
+  secondary_contact_name: string | null;
+  secondary_contact_phone: string | null;
+  school_name: string | null;
+  enrollment_date: string;
   level_id: number | null;
   level_name: string | null;
   branch_id: number | null;
   branch_name: string | null;
-  /** Home address ("adresse maison"); replaced the old free-form address. */
-  home_address: string | null;
+  address: string | null;
   notes: string | null;
   status: 'actif' | 'inactif';
   created_at: string;
@@ -332,15 +337,22 @@ export interface StudentDetail {
 /** Payload for `cmd_create_student` / `cmd_update_student`. */
 export interface StudentInput {
   full_name: string;
-  date_of_birth: string | null;
-  /** Raw digits only — the UI strips the spaces before sending. */
+  first_name: string | null;
+  last_name: string | null;
+  birth_date: string | null;
   phone: string;
-  parent_phone: string | null;
-  father_name: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  guardian_relation: string | null;
+  secondary_contact_name: string | null;
+  secondary_contact_phone: string | null;
+  school_name: string | null;
+  enrollment_date: string;
   level_id: number | null;
   branch_id: number | null;
-  home_address: string | null;
+  address: string | null;
   notes: string | null;
+  status: 'actif' | 'inactif';
 }
 
 // ---------------------------------------------------------------------------

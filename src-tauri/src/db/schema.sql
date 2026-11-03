@@ -46,19 +46,26 @@ CREATE TABLE IF NOT EXISTS subjects (
 
 -- 6. students
 CREATE TABLE IF NOT EXISTS students (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    full_name     TEXT NOT NULL,
-    date_of_birth TEXT,
-    phone         TEXT,
-    parent_phone  TEXT,
-    father_name   TEXT,
-    level_id      INTEGER REFERENCES levels(id) ON DELETE SET NULL,
-    branch_id     INTEGER REFERENCES branches(id) ON DELETE SET NULL,
-    home_address  TEXT,
-    notes         TEXT,
-    status        TEXT DEFAULT 'actif',
-    created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    first_name TEXT,
+    last_name TEXT,
+    birth_date TEXT,
+    phone TEXT,
+    guardian_name TEXT,
+    guardian_phone TEXT,
+    guardian_relation TEXT,
+    secondary_contact_name TEXT,
+    secondary_contact_phone TEXT,
+    school_name TEXT,
+    enrollment_date TEXT NOT NULL DEFAULT (date('now')),
+    level_id INTEGER REFERENCES levels(id) ON DELETE SET NULL,
+    branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+    address TEXT,
+    notes TEXT,
+    status TEXT DEFAULT 'actif',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 7. teachers

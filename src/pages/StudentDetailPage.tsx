@@ -43,19 +43,15 @@ const ACTION_STYLES: Record<string, { dot: string; labelKey: string }> = {
 
 /** Human-readable field names for the UPDATE/STATUS details JSON. */
 const FIELD_LABEL_KEYS: Record<string, string> = {
-  full_name: 'students.name',
-  date_of_birth: 'students.birthDate',
-  phone: 'students.phone',
-  parent_phone: 'students.parentPhone',
-  father_name: 'students.fatherName',
-  level_id: 'students.level',
-  branch_id: 'students.branch',
-  address: 'students.address',
-  home_address: 'students.homeAddress',
-  notes: 'students.notes',
-  status: 'students.status',
-  from: 'students.history.from',
-  to: 'students.history.to',
+  full_name: 'students.name', first_name: 'students.first_name', last_name: 'students.last_name',
+  birth_date: 'students.birth_date', phone: 'students.guardian_phone', guardian_phone: 'students.guardian_phone',
+  guardian_name: 'students.guardian_name', guardian_relation: 'students.guardian_relation',
+  secondary_contact_name: 'students.secondary_contact', secondary_contact_phone: 'students.secondary_phone',
+  school_name: 'students.school_name', enrollment_date: 'students.enrollment_date',
+  level_id: 'students.level', branch_id: 'students.branch', address: 'students.address', notes: 'students.notes',
+  father_name: 'students.guardian_name', home_address: 'students.address', email: 'students.address',
+  date_of_birth: 'students.birth_date', parent_phone: 'students.secondary_phone',
+  status: 'students.status', from: 'students.history.from', to: 'students.history.to',
 };
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -97,7 +93,7 @@ function AuditDetails({ entry, lookups }: { entry: AuditEntry; lookups: NameLook
       if (key === 'branch_id' && typeof value === 'number') {
         return lookups.branches.get(value) ?? `#${value}`;
       }
-      if (key === 'date_of_birth') return formatDate(String(value));
+      if (key === 'birth_date' || key === 'enrollment_date') return formatDate(String(value));
       return String(value);
     };
 
@@ -120,16 +116,7 @@ function AuditDetails({ entry, lookups }: { entry: AuditEntry; lookups: NameLook
     }
 
     // CREATE -> flat snapshot (ids are already visible in the info tab)
-    const order = [
-      'full_name',
-      'father_name',
-      'date_of_birth',
-      'phone',
-      'parent_phone',
-      'home_address',
-      'address',
-      'notes',
-    ];
+    const order = ['full_name', 'guardian_name', 'birth_date', 'phone', 'address', 'notes'];
     return Object.entries(record)
       .filter(([key, value]) => !key.endsWith('_id') && value !== null && value !== '')
       .sort(([a], [b]) => {
@@ -343,43 +330,17 @@ export function StudentDetailPage() {
         <Card className="p-5">
           <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
             <InfoRow label={t('students.name')}>{student.full_name}</InfoRow>
-            <InfoRow label={t('students.fatherName')}>{student.father_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.birthDate')}>
-              {student.date_of_birth ? formatDate(student.date_of_birth) : '—'}
-            </InfoRow>
-            <InfoRow label={t('students.phone')}>
-              {student.phone ? (
-                <a
-                  href={`tel:${student.phone}`}
-                  className="text-primary hover:underline"
-                  dir="ltr"
-                  data-testid="student-detail-phone"
-                >
-                  {formatPhone(student.phone)}
-                </a>
-              ) : (
-                '—'
-              )}
-            </InfoRow>
-            <InfoRow label={t('students.parentPhone')}>
-              {student.parent_phone ? (
-                <a
-                  href={`tel:${student.parent_phone}`}
-                  className="text-primary hover:underline"
-                  dir="ltr"
-                  data-testid="student-detail-parent-phone"
-                >
-                  {formatPhone(student.parent_phone)}
-                </a>
-              ) : (
-                '—'
-              )}
-            </InfoRow>
-            <InfoRow label={t('students.level')}>{student.level_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.branch')}>{student.branch_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.homeAddress')}>
-              {student.home_address ?? '—'}
-            </InfoRow>
+            <InfoRow label={t('students.level')}>{student.level_name ?? '—'} {student.branch_name ?? ''}</InfoRow>
+            <InfoRow label={t('students.school_name')}>{student.school_name ?? '—'}</InfoRow>
+            <InfoRow label={t('students.birth_date')}>{student.birth_date ? formatDate(student.birth_date) : '—'}</InfoRow>
+            <InfoRow label={t('students.enrollment_date')}>{formatDate(student.enrollment_date)}</InfoRow>
+            <InfoRow label={t('students.guardian_name')}>{student.guardian_name ?? '—'}</InfoRow>
+            <InfoRow label={t('students.guardian_phone')}>{student.phone ? <a href={`tel:${student.phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}</InfoRow>
+            <InfoRow label={t('students.guardian_relation')}>{student.guardian_relation ? t(`students.relation_${student.guardian_relation}`) : '—'}</InfoRow>
+            <InfoRow label={t('students.secondary_contact')}>{student.secondary_contact_name ?? '—'}</InfoRow>
+            <InfoRow label={t('students.secondary_phone')}>{student.secondary_contact_phone ? <a href={`tel:${student.secondary_contact_phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-parent-phone">{formatPhone(student.secondary_contact_phone)}</a> : '—'}</InfoRow>
+            <InfoRow label={t('students.status')}>{student.status === 'actif' ? t('students.active') : t('students.inactive')}</InfoRow>
+            <InfoRow label={t('students.address')}>{student.address ?? '—'}</InfoRow>
             <InfoRow label={t('students.notes')}>{student.notes ?? '—'}</InfoRow>
             <InfoRow label={t('students.created')}>{formatDate(student.created_at)}</InfoRow>
             <InfoRow label={t('students.updated')}>{formatDate(student.updated_at)}</InfoRow>

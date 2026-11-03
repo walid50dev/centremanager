@@ -64,14 +64,15 @@ fn student(conn: &Connection, name: &str, phone: &str) -> i64 {
         conn,
         &CreateStudentInput {
             full_name: name.to_string(),
-            date_of_birth: None,
+            birth_date: None,
             phone: phone.to_string(),
-            parent_phone: None,
+            secondary_contact_phone: None,
             level_id: Some(10),
             branch_id: None,
-            father_name: None,
-            home_address: None,
+            guardian_name: None,
+            address: None,
             notes: None,
+            ..Default::default()
         },
     )
     .unwrap()

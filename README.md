@@ -2364,3 +2364,22 @@ Verified by three independent means: Rust unit tests, a scripted browser run of 
 * Later: write auth events to `audit_log`; bind the hash to the OS user (DPAPI on Windows); a native in-app restore that swaps the DB for the chosen backup; receipt printing against the saved paper format.
 * Every amount stays in centimes end-to-end; convert only at the display/input boundary (`formatCurrency` / `amountToCents`).
 * `withGlobalTauri: true` is enabled so the acceptance console snippets work; remove it for production if you want a stricter global surface.
+
+### Student identity and guardian contacts
+
+The student form separates identity, guardian contacts and administrative details. First
+and last names, level, guardian name and Moroccan mobile number are required; the centre
+registration date defaults to today. Guardian and secondary numbers are stored as digits,
+while displayed numbers are grouped. The student list searches names and contact numbers.
+
+On startup, legacy student tables are rebuilt in a transaction to support older SQLite
+versions and the registration-date default. Student IDs and foreign-key references are
+preserved: old father names become guardian names, home addresses become addresses, old
+parent numbers become secondary numbers, and old birth dates are retained. Existing
+full names are split at the first space as a best-effort migration; users can correct them
+in the form. For very old databases where `email` was used as the address field, its
+value is kept in the address. Make a backup before upgrading an existing installation.
+
+`node tests/student-dev-backend.mjs` checks the browser development backend's student
+creation, validation, search and update paths; Rust tests cover the database migration
+and phone normalization.
