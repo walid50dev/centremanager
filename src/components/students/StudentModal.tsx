@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { UserRound } from 'lucide-react';
 import Button from '../ui/Button';
+import DuplicateWarnings from '../duplicates/DuplicateWarnings';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import CreatableSelect from '../ui/CreatableSelect';
@@ -85,6 +86,7 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
     <Modal open={open} onClose={onClose} size="lg" title={<span className="flex items-center gap-2"><UserRound className="h-4 w-4 text-primary" />{t(student ? 'students.editTitle' : 'students.new')}</span>}
       footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button><Button data-testid="student-save" onClick={() => void save()} loading={submitting} disabled={!valid}>{t('students.save')}</Button></>}>
       <form className="space-y-6" onSubmit={event => { event.preventDefault(); void save(); }}>
+        <DuplicateWarnings open={open} type="student" id={student?.id} first={form.first} last={form.last} phone={form.phone} />
         <fieldset data-testid="student-section-identity" className="grid gap-4 sm:grid-cols-2"><legend className="mb-3 text-base font-semibold">{t('students.section_identity')}</legend>
           <Input label={t('students.last_name')} data-testid="student-last-name" required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
           <Input label={t('students.first_name')} data-testid="student-first-name" required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />

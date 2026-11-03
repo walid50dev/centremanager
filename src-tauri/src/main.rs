@@ -29,6 +29,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::cmd_ping,
+            commands::duplicates::cmd_check_duplicates,
             commands::trash::cmd_delete_to_trash,
             commands::trash::cmd_list_trash,
             commands::trash::cmd_restore_from_trash,

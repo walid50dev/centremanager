@@ -23,6 +23,7 @@ pub mod backup;
 pub mod compensation;
 pub mod dashboard;
 pub mod demo;
+pub mod duplicates;
 #[cfg(test)]
 mod edge_cases;
 pub mod enrollments;

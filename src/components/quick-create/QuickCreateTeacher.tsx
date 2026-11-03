@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Input from '../ui/Input';
+import DuplicateWarnings from '../duplicates/DuplicateWarnings';
+import { splitFullName } from '../../services/duplicates';
 import { toast } from '../ui/Toast';
 import { subjectsApi } from '../../services/settings';
 import { isValidTeacherPhone, teachersApi } from '../../services/teachers';
@@ -118,6 +120,7 @@ export function QuickCreateTeacher({
       onClose={onClose}
     >
       <form id="quick-teacher-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        <DuplicateWarnings open={open} type="teacher" first={splitFullName(fullName).first} last={splitFullName(fullName).last} phone={phone} />
         <Input
           label={t('quickCreate.fields.name')}
           required

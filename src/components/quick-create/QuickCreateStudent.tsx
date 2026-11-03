@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Input from '../ui/Input';
+import DuplicateWarnings from '../duplicates/DuplicateWarnings';
+import { splitFullName } from '../../services/duplicates';
 import Select from '../ui/Select';
 import { toast } from '../ui/Toast';
 import { levelsApi } from '../../services/settings';
@@ -116,6 +118,7 @@ export function QuickCreateStudent({
       onClose={onClose}
     >
       <form id="quick-student-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        <DuplicateWarnings open={open} type="student" first={splitFullName(fullName).first} last={splitFullName(fullName).last} phone={phone} />
         <Input
           label={t('quickCreate.fields.name')}
           required
