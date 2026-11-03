@@ -82,6 +82,22 @@ export interface GroupSchedule {
   end_time: string;
 }
 
+export interface ScheduleConflictInput {
+  day: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface ScheduleConflict {
+  conflict_type: 'room' | 'teacher';
+  group_name: string;
+  day: string;
+  start_time: string;
+  end_time: string;
+  teacher_name: string;
+  room: string;
+}
+
 export interface Group {
   deleted_at?: string | null;
   id: number;

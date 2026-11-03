@@ -1155,5 +1155,12 @@
     "check_error": "La recherche de doublons est momentanément indisponible. Vous pouvez continuer.",
     "preview_error": "Impossible de charger la fiche.",
     "open_record": "Ouvrir la fiche complète"
+  },
+  "conflicts": {
+    "title": "Conflits détectés",
+    "room": "La salle {{room}} est déjà occupée le {{day}} de {{start}} à {{end}} par le groupe « {{group}} ».",
+    "teacher": "L’enseignant {{teacher}} est déjà occupé le {{day}} de {{start}} à {{end}} avec le groupe « {{group}} ».",
+    "ignore": "Ignorer et continuer",
+    "check_error": "La recherche de conflits est indisponible. Vous pouvez continuer."
   }
 }

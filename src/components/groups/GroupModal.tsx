@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookOpen } from 'lucide-react';
 import Button from '../ui/Button';
+import ScheduleConflictWarnings from './ScheduleConflictWarnings';
 import CreatableSelect from '../ui/CreatableSelect';
 import Input from '../ui/Input';
 import MoneyInput from '../ui/MoneyInput';
@@ -318,6 +319,10 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
     [form, group, isEdit, onClose, onSaved, t, validate],
   );
 
+  const conflictSchedules = useMemo(() => weekPayload(form.week).map(slot => ({
+    day: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time,
+  })), [form.week]);
+
   // The form keeps ids; the dropdowns work with objects.
   const selectedSubject = useMemo(
     () => subjects.find((subject) => String(subject.id) === form.subjectId) ?? null,
@@ -362,6 +367,7 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
         noValidate
         className="grid grid-cols-1 gap-4 sm:grid-cols-2"
       >
+        <ScheduleConflictWarnings open={open} groupId={group?.id ?? null} teacherId={form.teacherId ? Number(form.teacherId) : null} room={form.room} schoolYearId={form.schoolYearId ? Number(form.schoolYearId) : null} schedules={conflictSchedules} />
         <CreatableSelect
           testId="group-subject"
           label={t('groups.subject')}

@@ -49,6 +49,7 @@ fn main() {
             commands::settings::cmd_get_all_settings,
             commands::settings::cmd_get_setting,
             // Weekly timetable (Phase 13)
+            commands::schedule_conflicts::cmd_check_schedule_conflicts,
             commands::schedules::cmd_set_group_schedules,
             commands::schedules::cmd_get_group_schedules,
             commands::schedules::cmd_get_timetable,
