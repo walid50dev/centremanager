@@ -38,6 +38,7 @@ import type {
   Expense,
   ExpenseInput,
   ExpensesSummary,
+  TrashItem, TrashEntityType,
 } from '../types';
 
 /**
@@ -138,6 +139,7 @@ type DevExpense = Expense;
 
 /** Teachers are stored raw (compensation config on the row), like the SQL table. */
 interface DevTeacher {
+  deleted_at?: string | null;
   id: number;
   full_name: string;
   phone: string | null;
@@ -945,7 +947,7 @@ export function adjustDueDate(year: number, month: number, day: number): string 
 
 function enrolledCount(store: DevStore, groupId: number): number {
   return store.enrollments.filter(
-    (enrollment) => enrollment.group_id === groupId && enrollment.status === 'actif',
+    (enrollment) => enrollment.group_id === groupId && enrollment.status === 'actif' && store.students.some(s => s.id === enrollment.student_id && !s.deleted_at),
   ).length;
 }
 
@@ -1283,7 +1285,8 @@ function devAlerts(store: DevStore, month: number, year: number): PaymentAlerts 
     if (invoice.period_month !== month || invoice.period_year !== year) continue;
     const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
     const student = store.students.find((entry) => entry.id === enrollment?.student_id);
-    if (!student) continue;
+    const group = store.groups.find(entry => entry.id === enrollment?.group_id);
+    if (!student || student.deleted_at || !group || group.deleted_at) continue;
 
     const label = devGroupLabel(store, invoice);
     const current = byStudent.get(student.id) ?? {
@@ -1871,13 +1874,13 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
 
   return {
     total_active_students: store.students.filter(
-      (student) => (student.status ?? 'actif') === 'actif',
+      (student) => !student.deleted_at && (student.status ?? 'actif') === 'actif',
     ).length,
     monthly_revenue_cents: revenue,
     theoretical_revenue_cents: theoretical,
     collection_rate: devCollectionRate(revenue, theoretical),
-    active_groups: store.groups.filter((group) => (group.status ?? 'actif') === 'actif').length,
-    active_teachers: store.teachers.filter((teacher) => teacher.status === 'actif').length,
+    active_groups: store.groups.filter((group) => !group.deleted_at && (group.status ?? 'actif') === 'actif').length,
+    active_teachers: store.teachers.filter((teacher) => !teacher.deleted_at && teacher.status === 'actif').length,
     prev_month_revenue_cents: prevRevenue,
     prev_month_students: devStudentsDuring(store, prev.month, prev.year),
     // Phase 11 — same arithmetic as `dashboard::net_income_of`.
@@ -1891,7 +1894,7 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
 /** Charges of one month (dev mirror of `expenses::month_total`). */
 function devExpensesTotal(store: DevStore, month: number, year: number): number {
   return (store.expenses ?? [])
-    .filter((row) => row.month === month && row.year === year)
+    .filter((row) => !row.deleted_at && row.month === month && row.year === year)
     .reduce((sum, row) => sum + row.amount_cents, 0);
 }
 
@@ -2343,11 +2346,72 @@ function buildDemoStore(previous: DevStore): DevStore {
   return store;
 }
 
+type DevTrashable = { id: number; deleted_at?: string | null };
+function trashRows(store: DevStore, type: TrashEntityType): DevTrashable[] {
+  switch (type) { case 'student': return store.students; case 'teacher': return store.teachers; case 'group': return store.groups; case 'expense': return store.expenses; default: throw new Error('Type de corbeille invalide'); }
+}
+function trashHasHistory(store: DevStore, type: TrashEntityType, id: number): boolean {
+  const enrolled = store.enrollments.filter(e => type === 'student' ? e.student_id === id : type === 'group' ? e.group_id === id : type === 'teacher' && store.groups.some(g => g.id === e.group_id && g.teacher_id === id));
+  if (type === 'student' && store.payments.some(p => p.student_id === id)) return true;
+  if (type === 'teacher' && store.teacherSettlements.some(s => s.teacher_id === id)) return true;
+  if ((type === 'student' || type === 'group') && store.groups.some(g =>
+      (type === 'group' ? g.id === id : enrolled.some(e => e.group_id === g.id)) &&
+      store.teacherSettlements.some(s => s.teacher_id === g.teacher_id))) return true;
+  if ((type === 'group' || type === 'teacher') && enrolled.some(e => store.payments.some(p => p.student_id === e.student_id))) return true;
+  return store.invoices.some(i => enrolled.some(e => e.id === i.enrollment_id));
+}
+function devTrashList(store: DevStore): TrashItem[] {
+  return (['student', 'teacher', 'group', 'expense'] as TrashEntityType[]).flatMap(type => trashRows(store, type).filter(row => row.deleted_at).map(row => {
+    const record = row as DevTrashable & { full_name?: string; label?: string; subject_name?: string; level_name?: string };
+    const deadline = new Date(`${row.deleted_at!.replace(' ', 'T')}${row.deleted_at!.includes('Z') ? '' : 'Z'}`).getTime() + 30 * 86400000;
+    const days = Math.max(0, Math.ceil((deadline - Date.now()) / 86400000));
+    const financial = trashHasHistory(store, type, row.id);
+    return { entity_type: type, entity_id: row.id, name: record.full_name ?? record.label ?? `${record.subject_name ?? 'Groupe'} — ${record.level_name ?? ''}`, deleted_at: row.deleted_at!, expires_at: new Date(deadline).toISOString(), days_remaining: days, permanent: days === 0 && financial, has_financial_history: financial };
+  })).sort((a,b) => b.deleted_at.localeCompare(a.deleted_at));
+}
+function devRemovePermanent(store: DevStore, type: TrashEntityType, id: number): boolean {
+  const rows = trashRows(store, type); const index = rows.findIndex(row => row.id === id && row.deleted_at);
+  if (index < 0) throw new Error('Élément introuvable dans la corbeille');
+  if (trashHasHistory(store, type, id)) return false;
+  if (type === 'student') store.enrollments = store.enrollments.filter(e => e.student_id !== id);
+  if (type === 'group') store.enrollments = store.enrollments.filter(e => e.group_id !== id);
+  if (type === 'teacher') {
+    store.teacherActivities = store.teacherActivities.filter(a => a.teacher_id !== id);
+    store.groups.forEach(group => { if (group.teacher_id === id) { group.teacher_id = null; group.teacher_name = null; } });
+  }
+  rows.splice(index, 1); logAudit(store, 'PURGE', id, null, type); return true;
+}
+
 export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
   await delay();
   const store = load();
 
   switch (cmd) {
+    case 'cmd_delete_to_trash':
+    case 'cmd_delete_expense': {
+      const type = (cmd === 'cmd_delete_expense' ? 'expense' : asString(args, 'entityType')) as TrashEntityType;
+      const id = cmd === 'cmd_delete_expense' ? asNumber(args, 'id') : asNumber(args, 'entityId');
+      const row = trashRows(store, type).find(item => item.id === id && !item.deleted_at);
+      if (!row) throw new Error('Élément introuvable ou déjà supprimé');
+      row.deleted_at = new Date().toISOString(); logAudit(store, 'TRASH', id, null, type); save(store); return undefined;
+    }
+    case 'cmd_list_trash': return clone(devTrashList(store));
+    case 'cmd_restore_from_trash': {
+      const type = asString(args, 'entityType') as TrashEntityType, id = asNumber(args, 'entityId');
+      const row = trashRows(store, type).find(item => item.id === id && item.deleted_at);
+      if (!row) throw new Error('Élément introuvable dans la corbeille');
+      row.deleted_at = null; logAudit(store, 'RESTORE', id, null, type); save(store); return undefined;
+    }
+    case 'cmd_delete_permanently': {
+      if (!devRemovePermanent(store, asString(args, 'entityType') as TrashEntityType, asNumber(args, 'entityId'))) throw new Error('Conservé pour historique financier');
+      save(store); return undefined;
+    }
+    case 'cmd_purge_trash':
+    case 'cmd_empty_trash': {
+      let count = 0;
+      for (const item of devTrashList(store)) if ((cmd === 'cmd_empty_trash' || item.days_remaining === 0) && devRemovePermanent(store, item.entity_type, item.entity_id)) count++;
+      save(store); return count;
+    }
     // -- Settings ---------------------------------------------------------
     case 'cmd_get_all_settings': {
       const { [PROTECTED_KEY]: _hidden, ...visible } = store.settings;
@@ -2547,7 +2611,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const rawLimit = typeof args?.limit === 'number' ? args.limit : 20;
       const limit = rawLimit <= 0 ? 20 : Math.min(rawLimit, 100);
 
-      let rows = [...store.students];
+      let rows = store.students.filter(student => !student.deleted_at);
       if (search) {
         rows = rows.filter(
           (student) =>
@@ -2579,7 +2643,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
     case 'cmd_get_student_detail': {
       const id = asNumber(args, 'id');
-      const student = store.students.find((entry) => entry.id === id);
+      const student = store.students.find((entry) => entry.id === id && !entry.deleted_at);
       if (!student) throw new Error('Élève introuvable');
       const history = store.auditLog
         .filter((entry) => entry.entity_id === id)
@@ -2621,7 +2685,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
     case 'cmd_update_student': {
       const id = asNumber(args, 'id');
-      const student = store.students.find((entry) => entry.id === id);
+      const student = store.students.find((entry) => entry.id === id && !entry.deleted_at);
       if (!student) throw new Error('Élève introuvable');
       const input = (args?.data ?? {}) as Record<string, unknown>;
       const clean = validateStudentInput(store, input);
@@ -2652,7 +2716,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       if (status !== 'actif' && status !== 'inactif') {
         throw new Error(`Statut invalide : ${status} (attendu : actif, inactif)`);
       }
-      const student = store.students.find((entry) => entry.id === id);
+      const student = store.students.find((entry) => entry.id === id && !entry.deleted_at);
       if (!student) throw new Error('Élève introuvable');
       if (student.status === status) return undefined;
       const from = student.status;
@@ -2673,7 +2737,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         : asString(args, 'status').trim();
 
       const groups = store.groups
-        .filter((group) => (schoolYearId === null ? true : group.school_year_id === schoolYearId))
+        .filter((group) => !group.deleted_at && (schoolYearId === null ? true : group.school_year_id === schoolYearId))
         .filter((group) => (status ? group.status === status : true))
         .map((group) => groupRow(store, group));
       return clone(sortGroups(groups));
@@ -2681,7 +2745,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
     case 'cmd_get_group_detail': {
       const id = asNumber(args, 'id');
-      const raw = store.groups.find((group) => group.id === id);
+      const raw = store.groups.find((group) => group.id === id && !group.deleted_at);
       if (!raw) throw new Error('Groupe introuvable');
 
       const now = new Date();
@@ -2759,7 +2823,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
     case 'cmd_update_group': {
       const id = asNumber(args, 'id');
-      const raw = store.groups.find((group) => group.id === id);
+      const raw = store.groups.find((group) => group.id === id && !group.deleted_at);
       if (!raw) throw new Error('Groupe introuvable');
       const clean = validateGroupInput(store, (args?.data ?? {}) as Record<string, unknown>);
 
@@ -2830,7 +2894,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
       const entries: TimetableEntry[] = [];
       store.groups
-        .filter((group) => (group.status ?? 'actif') === 'actif')
+        .filter((group) => !group.deleted_at && (group.status ?? 'actif') === 'actif')
         .filter((group) => (levelId === null ? true : group.level_id === levelId))
         .filter((group) => (subjectId === null ? true : group.subject_id === subjectId))
         .filter((group) => (teacherId === null ? true : group.teacher_id === teacherId))
@@ -2868,7 +2932,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const rooms = Array.from(
         new Set(
           store.groups
-            .filter((group) => (group.status ?? 'actif') === 'actif')
+            .filter((group) => !group.deleted_at && (group.status ?? 'actif') === 'actif')
             .map((group) => (group.room ?? '').trim())
             .filter(Boolean),
         ),
@@ -2880,7 +2944,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_get_teacher_options':
       return clone(
         [...store.teachers]
-          .filter((teacher) => teacher.status === 'actif')
+          .filter((teacher) => !teacher.deleted_at && teacher.status === 'actif')
           .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'))
           .map((teacher) => ({ id: teacher.id, full_name: teacher.full_name })),
       );
@@ -2895,7 +2959,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       }
       return clone(
         store.teachers
-          .filter((teacher) => (status ? teacher.status === status : true))
+          .filter((teacher) => !teacher.deleted_at && (status ? teacher.status === status : true))
           .map((teacher) => teacherRow(store, teacher))
           .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr')),
       );
@@ -3111,7 +3175,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       validatePeriod(month, year);
 
       const summaries: TeacherCompSummary[] = store.teachers
-        .filter((teacher) => teacher.status === 'actif')
+        .filter((teacher) => !teacher.deleted_at && teacher.status === 'actif')
         .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'))
         .map((teacher) => {
           if (!compensationConfig(teacher)) {
@@ -3300,7 +3364,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
           .map((enrollment) => enrollment.group_id),
       );
       const groups = store.groups
-        .filter((group) => group.status === 'actif' && !activeGroupIds.has(group.id))
+        .filter((group) => !group.deleted_at && group.status === 'actif' && !activeGroupIds.has(group.id))
         .filter((group) => (levelId === null ? true : group.level_id === levelId))
         .map((group) => groupRow(store, group));
       return clone(sortGroups(groups));
@@ -3314,7 +3378,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new Error('Année invalide');
 
       let created = 0;
-      for (const enrollment of store.enrollments.filter((entry) => entry.status === 'actif')) {
+      for (const enrollment of store.enrollments.filter((entry) => entry.status === 'actif' && store.students.some(s => s.id === entry.student_id && !s.deleted_at) && store.groups.some(g => g.id === entry.group_id && !g.deleted_at))) {
         const exists = store.invoices.some(
           (invoice) =>
             invoice.enrollment_id === enrollment.id &&
@@ -3359,6 +3423,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const today = new Date().toISOString().slice(0, 10);
       return store.invoices.filter(
         (invoice) =>
+          store.enrollments.some(e => e.id === invoice.enrollment_id && store.students.some(s => s.id === e.student_id && !s.deleted_at) && store.groups.some(g => g.id === e.group_id && !g.deleted_at)) &&
           invoice.status !== 'payé' &&
           invoice.paid_amount_cents < invoice.amount_cents &&
           Boolean(invoice.due_date) &&
@@ -3439,7 +3504,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         typeof rawCategory === 'string' && rawCategory.trim() ? rawCategory.trim() : null;
 
       const rows = (store.expenses ?? [])
-        .filter((row) => row.month === month && row.year === year)
+        .filter((row) => !row.deleted_at && row.month === month && row.year === year)
         .filter((row) => (category ? row.category === category : true))
         .sort(
           (a, b) =>
@@ -3457,7 +3522,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       validatePeriod(month, year);
 
       const rows = (store.expenses ?? []).filter(
-        (row) => row.month === month && row.year === year,
+        (row) => !row.deleted_at && row.month === month && row.year === year,
       );
       const totalsByCategory = new Map<string, CategoryTotal>();
       for (const row of rows) {
@@ -3520,31 +3585,6 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       if (Object.keys(diff).length > 0) {
         logAudit(store, 'UPDATE', id, JSON.stringify(diff), 'expense');
       }
-      save(store);
-      return undefined;
-    }
-
-    case 'cmd_delete_expense': {
-      const id = asNumber(args, 'id');
-      const index = (store.expenses ?? []).findIndex((entry) => entry.id === id);
-      if (index < 0) throw new Error('Dépense introuvable');
-      const [removed] = store.expenses.splice(index, 1);
-      logAudit(
-        store,
-        'DELETE',
-        id,
-        JSON.stringify({
-          deleted: {
-            label: removed.label,
-            amount_cents: removed.amount_cents,
-            category: removed.category,
-            month: removed.month,
-            year: removed.year,
-            notes: removed.notes,
-          },
-        }),
-        'expense',
-      );
       save(store);
       return undefined;
     }

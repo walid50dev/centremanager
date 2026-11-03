@@ -83,6 +83,7 @@ export interface GroupSchedule {
 }
 
 export interface Group {
+  deleted_at?: string | null;
   id: number;
   subject_id: number | null;
   subject_name: string;
@@ -284,6 +285,7 @@ export interface Paginated<T> {
 
 /** A student as returned by `cmd_get_students` / `cmd_get_student_detail`. */
 export interface Student {
+  deleted_at?: string | null;
   id: number;
   full_name: string;
   first_name: string | null;
@@ -447,6 +449,7 @@ export const PAYMENT_METHODS = ['espèces', 'virement', 'chèque', 'autre'] as c
 
 /** A teacher as returned by `cmd_get_teachers` / `cmd_get_teacher_detail`. */
 export interface Teacher {
+  deleted_at?: string | null;
   id: number;
   full_name: string;
   phone: string | null;
@@ -613,6 +616,7 @@ export interface DashboardKPIs {
 
 /** One charge of a month: rent, WiFi, electricity, supplies… */
 export interface Expense {
+  deleted_at?: string | null;
   id: number;
   label: string;
   amount_cents: number;
@@ -691,4 +695,16 @@ export interface TimetableFilters {
   subject_id: number | null;
   teacher_id: number | null;
   room: string | null;
+}
+
+export type TrashEntityType = 'student' | 'teacher' | 'group' | 'expense';
+export interface TrashItem {
+  entity_type: TrashEntityType;
+  entity_id: number;
+  name: string;
+  deleted_at: string;
+  expires_at: string;
+  days_remaining: number;
+  permanent: boolean;
+  has_financial_history: boolean;
 }

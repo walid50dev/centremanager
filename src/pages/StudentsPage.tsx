@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Search, UserPlus, Users } from 'lucide-react';
 import Badge from '../components/ui/Badge';
+import TrashButton from '../components/ui/TrashButton';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Input from '../components/ui/Input';
@@ -199,14 +200,14 @@ export function StudentsPage() {
                 </th>
                 <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
                   {t('students.enrollment_column')}
-                </th>
+                </th><th scope="col" className="border-b border-border px-4 py-2.5 text-start text-muted">{t('trash.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {loading &&
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={`skeleton-${index}`} className="border-b border-border last:border-b-0">
-                    {Array.from({ length: 6 }).map((__, cell) => (
+                    {Array.from({ length: 7 }).map((__, cell) => (
                       <td key={`skeleton-${index}-${cell}`} className="px-4 py-3">
                         <span
                           className={cn(
@@ -221,7 +222,7 @@ export function StudentsPage() {
 
               {!loading && result.data.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-0">
+                  <td colSpan={7} className="p-0">
                     <EmptyState
                       icon={<Users className="h-5 w-5" aria-hidden="true" />}
                       title={t('students.empty')}
@@ -295,6 +296,7 @@ export function StudentsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-muted">{formatDate(student.enrollment_date)}</td>
+                    <td className="px-4 py-3"><TrashButton type="student" id={student.id} onDeleted={() => void load()} /></td>
                   </tr>
                 ))}
             </tbody>

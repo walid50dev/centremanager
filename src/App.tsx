@@ -16,6 +16,7 @@ import StudentsPage from './pages/StudentsPage';
 import TeacherDetailPage from './pages/TeacherDetailPage';
 import TeachersPage from './pages/TeachersPage';
 import TimetablePage from './pages/TimetablePage';
+import TrashPage from './pages/TrashPage';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAuthStore } from './stores/authStore';
 
@@ -151,6 +152,7 @@ export function App() {
               </ErrorBoundary>
             }
           />
+          <Route path="/trash" element={<ErrorBoundary key="trash" scope="trash"><TrashPage /></ErrorBoundary>} />
           <Route
             path="/settings"
             element={

@@ -341,7 +341,7 @@ fn map_student(row: &Row<'_>) -> rusqlite::Result<StudentRow> {
 /// Read one student with its level and branch names.
 pub fn get_student(conn: &Connection, id: i64) -> Result<StudentRow, String> {
     conn.query_row(
-        &format!("{SELECT_STUDENT} WHERE s.id = ?1"),
+        &format!("{SELECT_STUDENT} WHERE s.id = ?1 AND s.deleted_at IS NULL"),
         params![id],
         map_student,
     )
@@ -356,7 +356,7 @@ fn build_filters(
     level_id: Option<i64>,
     status: Option<&str>,
 ) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
-    let mut clauses: Vec<String> = Vec::new();
+    let mut clauses: Vec<String> = vec!["s.deleted_at IS NULL".to_string()];
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(term) = search.map(str::trim).filter(|term| !term.is_empty()) {

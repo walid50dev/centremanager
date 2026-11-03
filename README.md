@@ -2383,3 +2383,20 @@ value is kept in the address. Make a backup before upgrading an existing install
 `node tests/student-dev-backend.mjs` checks the browser development backend's student
 creation, validation, search and update paths; Rust tests cover the database migration
 and phone normalization.
+
+### Corbeille et historique financier
+
+La suppression d'un élève, d'un enseignant, d'un groupe ou d'une dépense est
+logique : la ligne d'origine et ses relations restent en place, avec une date de
+suppression. Les listes ordinaires masquent ces lignes ; la corbeille permet de
+les restaurer sans recréer leurs identifiants. À partir de 30 jours, une purge au
+démarrage supprime physiquement les éléments sans historique financier lié.
+Les éléments associés à des paiements, factures ou règlements (y compris par une
+inscription ou un groupe) sont conservés indéfiniment et restent restaurables.
+La suppression définitive manuelle et « Vider la corbeille » respectent la même
+protection. Les paiements et reçus ne sont jamais supprimés par cette fonction.
+Les dépenses masquées sont exclues des totaux courants jusqu'à leur restauration.
+
+Test du backend de développement : `node tests/trash-dev-backend.mjs`. Les tests
+Rust du module `commands::trash` couvrent la restauration, la purge et la protection
+des écritures financières. Effectuez une sauvegarde avant toute mise à niveau.

@@ -1,4 +1,5 @@
 import { api, isTauri } from './api';
+import { trashApi } from './trash';
 import { devInvoke } from './settingsDevBackend';
 import type { Expense, ExpenseInput, ExpensesSummary } from '../types';
 
@@ -30,7 +31,7 @@ export const expensesApi = {
   update: (id: number, data: ExpenseInput) => call<void>('cmd_update_expense', { id, data }),
 
   /** Expenses are internal bookkeeping: unlike payments, they can be deleted. */
-  remove: (id: number) => call<void>('cmd_delete_expense', { id }),
+  remove: (id: number) => trashApi.remove('expense', id),
 
   categories: () => call<string[]>('cmd_get_expense_categories'),
 

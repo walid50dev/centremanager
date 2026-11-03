@@ -391,7 +391,7 @@ pub(crate) const SELECT_GROUP: &str = "SELECT g.id,
             COALESCE(g.end_time, '') AS end_time,
             g.room, g.monthly_fee_cents, g.capacity,
             (SELECT COUNT(*) FROM enrollments e
-              WHERE e.group_id = g.id AND COALESCE(e.status, 'actif') = 'actif') AS enrolled_count,
+              WHERE e.group_id = g.id AND COALESCE(e.status, 'actif') = 'actif' AND EXISTS (SELECT 1 FROM students st WHERE st.id=e.student_id AND st.deleted_at IS NULL)) AS enrolled_count,
             COALESCE(g.status, 'actif') AS status
      FROM groups g
      LEFT JOIN subjects s ON s.id = g.subject_id
@@ -439,7 +439,7 @@ pub fn list_groups(
     school_year_id: Option<i64>,
     status: Option<&str>,
 ) -> Result<Vec<GroupRow>, String> {
-    let mut clauses: Vec<String> = Vec::new();
+    let mut clauses: Vec<String> = vec!["g.deleted_at IS NULL".to_string()];
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(year) = school_year_id {
@@ -479,7 +479,7 @@ pub fn list_groups(
 pub fn get_group(conn: &Connection, id: i64) -> Result<GroupRow, String> {
     let mut group = conn
         .query_row(
-            &format!("{SELECT_GROUP} WHERE g.id = ?1"),
+            &format!("{SELECT_GROUP} WHERE g.id = ?1 AND g.deleted_at IS NULL"),
             params![id],
             map_group,
         )
@@ -498,7 +498,7 @@ pub fn group_students(conn: &Connection, group_id: i64) -> Result<Vec<EnrolledSt
                     COALESCE(e.start_date, ''), COALESCE(e.status, 'actif')
              FROM enrollments e
              JOIN students s ON s.id = e.student_id
-             WHERE e.group_id = ?1 AND COALESCE(e.status, 'actif') = 'actif'
+             WHERE e.group_id = ?1 AND s.deleted_at IS NULL AND COALESCE(e.status, 'actif') = 'actif'
              ORDER BY s.full_name COLLATE NOCASE",
         )
         .map_err(|err| db_err("Préparation des inscrits", err))?;
@@ -587,7 +587,7 @@ pub fn available_groups_for_student(
 ) -> Result<Vec<GroupRow>, String> {
     let mut sql = format!(
         "{SELECT_GROUP}
-         WHERE COALESCE(g.status, 'actif') = 'actif'
+         WHERE g.deleted_at IS NULL AND COALESCE(g.status, 'actif') = 'actif'
            AND g.id NOT IN (
                 SELECT group_id FROM enrollments
                 WHERE student_id = ?1 AND COALESCE(status, 'actif') = 'actif')"
@@ -624,7 +624,7 @@ pub fn list_teachers(conn: &Connection) -> Result<Vec<TeacherOption>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, full_name FROM teachers
-             WHERE COALESCE(status, 'actif') = 'actif'
+             WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'
              ORDER BY full_name COLLATE NOCASE",
         )
         .map_err(|err| db_err("Préparation de la liste des enseignants", err))?;

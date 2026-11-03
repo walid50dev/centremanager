@@ -138,6 +138,11 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     // fresh database, so columns added by a later phase are patched in here.
     upgrade_phase6_columns(conn)?;
     upgrade_student_columns(conn)?;
+    for table in ["students", "teachers", "groups", "monthly_expenses"] {
+        if !column_exists(conn, table, "deleted_at")? {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN deleted_at TEXT;"))?;
+        }
+    }
     migrate_group_schedules(conn)?;
     seed_reference_data(conn)
 }
@@ -195,6 +200,7 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
     let school = expr(&["school_name"], "NULL")?;
     let enrollment = expr(&["enrollment_date"], "COALESCE(date(created_at), date('now'))")?;
     let address = expr(&["address", "home_address", "email"], "NULL")?;
+    let deleted_at = expr(&["deleted_at"], "NULL")?;
     let fk: i64 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
     conn.execute_batch("PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE;")?;
     let result = conn.execute_batch(&format!(r#"
@@ -207,14 +213,14 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
             level_id INTEGER REFERENCES levels(id) ON DELETE SET NULL,
             branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
             address TEXT, notes TEXT, status TEXT DEFAULT 'actif',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT
         );
         INSERT INTO students_new (id, full_name, first_name, last_name, birth_date, phone,
           guardian_name, guardian_phone, guardian_relation, secondary_contact_name, secondary_contact_phone,
-          school_name, enrollment_date, level_id, branch_id, address, notes, status, created_at, updated_at)
+          school_name, enrollment_date, level_id, branch_id, address, notes, status, created_at, updated_at, deleted_at)
         SELECT id, full_name, {first}, {last}, {birth}, {guardian_phone}, {guardian}, {guardian_phone},
           {relation}, {secondary_name}, {secondary_phone}, {school}, {enrollment}, level_id, branch_id,
-          {address}, notes, status, created_at, updated_at FROM students;
+          {address}, notes, status, created_at, updated_at, {deleted_at} FROM students;
         DROP TABLE students;
         ALTER TABLE students_new RENAME TO students;
         CREATE INDEX idx_students_level ON students(level_id);

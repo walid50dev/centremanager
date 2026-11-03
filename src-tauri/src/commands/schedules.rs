@@ -271,7 +271,7 @@ pub fn timetable(
     conn: &Connection,
     filters: Option<&TimetableFilters>,
 ) -> Result<Vec<TimetableEntry>, String> {
-    let mut clauses: Vec<String> = vec!["COALESCE(g.status, 'actif') = 'actif'".to_string()];
+    let mut clauses: Vec<String> = vec!["g.deleted_at IS NULL".to_string(), "COALESCE(g.status, 'actif') = 'actif'".to_string()];
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(filters) = filters {
@@ -302,7 +302,7 @@ pub fn timetable(
         "SELECT g.id, COALESCE(s.name, '—'), COALESCE(l.name, '—'), b.name, t.full_name,
                 g.room, gs.day_of_week, gs.start_time, gs.end_time,
                 (SELECT COUNT(*) FROM enrollments e
-                  WHERE e.group_id = g.id AND COALESCE(e.status, 'actif') = 'actif'),
+                  WHERE e.group_id = g.id AND COALESCE(e.status, 'actif') = 'actif' AND EXISTS (SELECT 1 FROM students st WHERE st.id=e.student_id AND st.deleted_at IS NULL)),
                 g.capacity, g.monthly_fee_cents
          FROM group_schedules gs
          JOIN groups g ON g.id = gs.group_id
@@ -351,7 +351,7 @@ pub fn timetable_rooms(conn: &Connection) -> Result<Vec<String>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT DISTINCT room FROM groups
-             WHERE room IS NOT NULL AND TRIM(room) <> ''
+             WHERE deleted_at IS NULL AND room IS NOT NULL AND TRIM(room) <> ''
                AND COALESCE(status, 'actif') = 'actif'
              ORDER BY room COLLATE NOCASE",
         )

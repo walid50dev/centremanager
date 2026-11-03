@@ -1164,5 +1164,40 @@
   "keyboard": {
     "search": "بحث (Ctrl+K)",
     "lock": "قفل (Ctrl+L)"
+  },
+  "trash": {
+    "title": "سلة المحذوفات",
+    "empty": "سلة المحذوفات فارغة.",
+    "empty_action": "إفراغ سلة المحذوفات",
+    "restore": "استعادة",
+    "delete": "حذف",
+    "delete_permanently": "حذف نهائي",
+    "confirm_delete": "هل أنت متأكد؟ سيتم نقل العنصر إلى سلة المحذوفات وحذفه نهائياً بعد 30 يوماً ما لم يكن له سجل مالي.",
+    "confirm_empty": "هل تريد حذف العناصر دون سجل مالي نهائياً؟ ستبقى العناصر ذات السجل المالي محفوظة.",
+    "confirm_permanent": "هل تريد حذف هذا العنصر نهائياً؟ لا يمكن التراجع عن هذا الإجراء.",
+    "days_remaining": "الأيام المتبقية",
+    "days_count_one": "{{count}} يوم",
+    "days_count_other": "{{count}} أيام",
+    "type_student": "تلميذ",
+    "type_teacher": "أستاذ",
+    "type_group": "مجموعة",
+    "type_expense": "مصروف",
+    "type": "النوع",
+    "name": "الاسم",
+    "deleted_at": "تاريخ الحذف",
+    "actions": "الإجراءات",
+    "retention": "تُحفظ العناصر 30 يوماً. تظل السجلات المالية محمية وقابلة للاستعادة.",
+    "preserved": "محفوظ للسجل المالي",
+    "financial_warning": "سيُحفظ للسجل المالي",
+    "moved": "تم النقل إلى سلة المحذوفات",
+    "restored": "تمت الاستعادة",
+    "purged": "تم تحديث سلة المحذوفات",
+    "days_count_zero": "{{count}} يوم",
+    "days_count_two": "{{count}} يومان",
+    "days_count_few": "{{count}} أيام",
+    "days_count_many": "{{count}} يوماً"
+  },
+  "nav": {
+    "trash": "سلة المحذوفات"
   }
 }

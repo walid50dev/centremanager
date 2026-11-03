@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { GraduationCap, Plus, Users } from 'lucide-react';
 import Badge from '../components/ui/Badge';
+import TrashButton from '../components/ui/TrashButton';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
@@ -114,6 +115,7 @@ export function TeachersPage() {
                   <p dir="auto" className="text-body font-semibold text-foreground">
                     {teacher.full_name}
                   </p>
+                  <TrashButton type="teacher" id={teacher.id} onDeleted={() => void load()} />
                   {inactive ? <Badge variant="destructive">{t('teachers.inactive')}</Badge> : null}
                 </div>
 

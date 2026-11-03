@@ -79,7 +79,7 @@ fn today() -> String {
 fn ensure_student_active(conn: &Connection, student_id: i64) -> Result<(), String> {
     let status: Option<Option<String>> = conn
         .query_row(
-            "SELECT status FROM students WHERE id = ?1",
+            "SELECT status FROM students WHERE id = ?1 AND deleted_at IS NULL",
             params![student_id],
             |row| row.get(0),
         )
