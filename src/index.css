@@ -334,3 +334,10 @@
     box-shadow: none !important;
   }
 }
+
+/* Lane details disappear only when the actual event width is below 100px. */
+@container (width < 100px) {
+  .timetable-lane-details {
+    display: none;
+  }
+}
