@@ -166,45 +166,66 @@ fn upgrade_phase6_columns(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Phase 10 — the student sheet gained a father's name and lost its generic
-/// "address" column in favour of `home_address`.
-///
-/// Three shapes exist in the wild: a database from before Phase 3 with an
-/// `email` column, one from Phase 3–9 with `address`, and a fresh one created
-/// from `schema.sql` that already has `home_address`. All three end up
-/// identical, and an existing value is carried over instead of dropped:
-///
-/// * `email`   → renamed to `home_address` (SQLite ≥ 3.25 supports it, and the
-///   bundled rusqlite ships a much newer SQLite);
-/// * `address` → renamed to `home_address`;
-/// * neither   → column added, empty.
+/// Rebuild legacy student tables atomically, preserving identifiers and references.
+/// SQLite cannot add a column with a date expression default to a populated table.
 fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
-    let has_home_address = column_exists(conn, "students", "home_address")?;
-
-    for legacy in ["email", "address"] {
-        if has_home_address {
-            break;
-        }
-        if column_exists(conn, "students", legacy)? {
-            // A plain rename keeps the data; if this SQLite is ever too old the
-            // batch below falls back to add + copy.
-            let renamed = conn.execute_batch(&format!(
-                "ALTER TABLE students RENAME COLUMN {legacy} TO home_address;"
-            ));
-            if renamed.is_err() {
-                conn.execute_batch(&format!(
-                    "ALTER TABLE students ADD COLUMN home_address TEXT;
-                     UPDATE students SET home_address = {legacy};"
-                ))?;
-            }
-            return upgrade_father_name(conn);
-        }
+    let cols = ["first_name", "last_name", "birth_date", "guardian_name", "guardian_phone",
+        "guardian_relation", "secondary_contact_name", "secondary_contact_phone", "school_name",
+        "enrollment_date", "address"];
+    let mut needs_upgrade = false;
+    for col in cols { if !column_exists(conn, "students", col)? { needs_upgrade = true; } }
+    for col in ["father_name", "home_address", "email", "date_of_birth", "parent_phone"] {
+        if column_exists(conn, "students", col)? { needs_upgrade = true; }
     }
-
-    if !has_home_address {
-        conn.execute_batch("ALTER TABLE students ADD COLUMN home_address TEXT;")?;
-    }
-    upgrade_father_name(conn)
+    if !needs_upgrade { return Ok(()); }
+    let expr = |candidates: &[&str], fallback: &str| -> rusqlite::Result<String> {
+        let mut found = Vec::new();
+        for col in candidates { if column_exists(conn, "students", col)? { found.push(*col); } }
+        if found.is_empty() { Ok(fallback.to_string()) }
+        else { Ok(format!("COALESCE({}, {})", found.join(", "), fallback)) }
+    };
+    let first = expr(&["first_name"], "CASE WHEN instr(trim(full_name), ' ') > 0 THEN substr(trim(full_name), 1, instr(trim(full_name), ' ') - 1) ELSE trim(full_name) END")?;
+    let last = expr(&["last_name"], "CASE WHEN instr(trim(full_name), ' ') > 0 THEN trim(substr(trim(full_name), instr(trim(full_name), ' ') + 1)) ELSE '' END")?;
+    let birth = expr(&["birth_date", "date_of_birth"], "NULL")?;
+    let guardian = expr(&["guardian_name", "father_name"], "NULL")?;
+    let guardian_phone = expr(&["guardian_phone", "phone"], "NULL")?;
+    let relation = expr(&["guardian_relation"], "NULL")?;
+    let secondary_name = expr(&["secondary_contact_name"], "NULL")?;
+    let secondary_phone = expr(&["secondary_contact_phone", "parent_phone"], "NULL")?;
+    let school = expr(&["school_name"], "NULL")?;
+    let enrollment = expr(&["enrollment_date"], "COALESCE(date(created_at), date('now'))")?;
+    let address = expr(&["address", "home_address", "email"], "NULL")?;
+    let fk: i64 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
+    conn.execute_batch("PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE;")?;
+    let result = conn.execute_batch(&format!(r#"
+        CREATE TABLE students_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL,
+            first_name TEXT, last_name TEXT, birth_date TEXT, phone TEXT,
+            guardian_name TEXT, guardian_phone TEXT, guardian_relation TEXT,
+            secondary_contact_name TEXT, secondary_contact_phone TEXT, school_name TEXT,
+            enrollment_date TEXT NOT NULL DEFAULT (date('now')),
+            level_id INTEGER REFERENCES levels(id) ON DELETE SET NULL,
+            branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+            address TEXT, notes TEXT, status TEXT DEFAULT 'actif',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO students_new (id, full_name, first_name, last_name, birth_date, phone,
+          guardian_name, guardian_phone, guardian_relation, secondary_contact_name, secondary_contact_phone,
+          school_name, enrollment_date, level_id, branch_id, address, notes, status, created_at, updated_at)
+        SELECT id, full_name, {first}, {last}, {birth}, {guardian_phone}, {guardian}, {guardian_phone},
+          {relation}, {secondary_name}, {secondary_phone}, {school}, {enrollment}, level_id, branch_id,
+          {address}, notes, status, created_at, updated_at FROM students;
+        DROP TABLE students;
+        ALTER TABLE students_new RENAME TO students;
+        CREATE INDEX idx_students_level ON students(level_id);
+        CREATE INDEX idx_students_branch ON students(branch_id);
+        CREATE INDEX idx_students_name ON students(full_name);
+        CREATE INDEX idx_students_status ON students(status);
+        COMMIT;
+    "#));
+    if result.is_err() { let _ = conn.execute_batch("ROLLBACK;"); }
+    if fk != 0 { conn.execute_batch("PRAGMA foreign_keys = ON;")?; }
+    result
 }
 
 /// Phase 13 — a group can meet several times a week.
@@ -229,13 +250,6 @@ fn migrate_group_schedules(conn: &Connection) -> rusqlite::Result<()> {
            AND start_time IS NOT NULL AND TRIM(start_time) <> ''
            AND end_time IS NOT NULL AND TRIM(end_time) <> '';",
     )
-}
-
-fn upgrade_father_name(conn: &Connection) -> rusqlite::Result<()> {
-    if !column_exists(conn, "students", "father_name")? {
-        conn.execute_batch("ALTER TABLE students ADD COLUMN father_name TEXT;")?;
-    }
-    Ok(())
 }
 
 fn column_exists(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
@@ -573,100 +587,27 @@ mod tests {
         }
     }
 
-    /// A database created by Phase 3–9 has a generic `address` column: the
-    /// migration must rename it (data included) and add `father_name`.
     #[test]
-    fn student_address_column_is_renamed_to_home_address() {
+    fn legacy_students_are_migrated_without_losing_references() {
         let conn = Connection::open_in_memory().unwrap();
-
-        // Phase 9 shape: same table as today, with `address` and no
-        // `father_name`. `schema.sql` then only skips its CREATE TABLE.
-        conn.execute_batch(
-            "CREATE TABLE students (
-                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                 full_name     TEXT NOT NULL,
-                 date_of_birth TEXT,
-                 phone         TEXT,
-                 parent_phone  TEXT,
-                 level_id      INTEGER,
-                 branch_id     INTEGER,
-                 address       TEXT,
-                 notes         TEXT,
-                 status        TEXT DEFAULT 'actif',
-                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
-             );
-             INSERT INTO students (full_name, phone, address, notes)
-             VALUES ('Yassine El Amrani', '0612345678', '12 rue des Écoles', 'RAS');",
-        )
-        .unwrap();
-
+        conn.execute_batch("PRAGMA foreign_keys=ON;
+            CREATE TABLE students (id INTEGER PRIMARY KEY, full_name TEXT NOT NULL, date_of_birth TEXT,
+                phone TEXT, parent_phone TEXT, father_name TEXT, home_address TEXT, level_id INTEGER,
+                branch_id INTEGER, notes TEXT, status TEXT, created_at TEXT, updated_at TEXT);
+            INSERT INTO students VALUES (1, 'Salma Mansouri', '2010-01-01', '0612345678', '0712345678',
+                'Rachid', 'Rabat', NULL, NULL, 'test', 'actif', '2025-01-01', '2025-01-01');
+            CREATE TABLE linked_student (student_id INTEGER REFERENCES students(id) ON DELETE CASCADE);
+            INSERT INTO linked_student VALUES (1);").unwrap();
         run_migrations(&conn).unwrap();
-
-        assert!(column_exists(&conn, "students", "home_address").unwrap());
-        assert!(column_exists(&conn, "students", "father_name").unwrap());
-        assert!(!column_exists(&conn, "students", "address").unwrap());
-
-        let (address, notes): (String, String) = conn
-            .query_row(
-                "SELECT home_address, notes FROM students WHERE full_name = 'Yassine El Amrani'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        assert_eq!(address, "12 rue des Écoles", "existing data must survive");
-        assert_eq!(notes, "RAS");
-
-        // Idempotent: a second launch is a no-op.
+        let data: (String, String, String, String) = conn.query_row(
+            "SELECT guardian_name, address, birth_date, secondary_contact_phone FROM students WHERE id=1", [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+        assert_eq!(data, ("Rachid".to_string(), "Rabat".to_string(), "2010-01-01".to_string(), "0712345678".to_string()));
+        for col in ["father_name", "home_address", "email"] { assert!(!column_exists(&conn, "students", col).unwrap()); }
         run_migrations(&conn).unwrap();
-        assert!(column_exists(&conn, "students", "home_address").unwrap());
-    }
-
-    /// Even older databases (pre-Phase 3 sketch) had `email` instead.
-    #[test]
-    fn student_email_column_is_renamed_to_home_address() {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "CREATE TABLE students (
-                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                 full_name     TEXT NOT NULL,
-                 date_of_birth TEXT,
-                 phone         TEXT,
-                 parent_phone  TEXT,
-                 level_id      INTEGER,
-                 branch_id     INTEGER,
-                 email         TEXT,
-                 notes         TEXT,
-                 status        TEXT DEFAULT 'actif',
-                 created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-                 updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
-             );
-             INSERT INTO students (full_name, email)
-             VALUES ('Salma Benjelloun', 'Salma@example.ma');",
-        )
-        .unwrap();
-
-        run_migrations(&conn).unwrap();
-
-        assert!(column_exists(&conn, "students", "home_address").unwrap());
-        assert!(!column_exists(&conn, "students", "email").unwrap());
-        let kept: String = conn
-            .query_row("SELECT home_address FROM students", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(kept, "Salma@example.ma");
-    }
-
-    /// A brand-new database gets both columns from `schema.sql`, and the
-    /// upgrade path must leave it untouched.
-    #[test]
-    fn fresh_student_table_already_has_the_phase10_columns() {
-        let conn = Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
-
-        assert!(column_exists(&conn, "students", "home_address").unwrap());
-        assert!(column_exists(&conn, "students", "father_name").unwrap());
-        assert!(!column_exists(&conn, "students", "address").unwrap());
-        assert!(!column_exists(&conn, "students", "email").unwrap());
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM linked_student WHERE student_id=1", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+        assert_eq!(conn.query_row("PRAGMA foreign_keys", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
     }
 
     #[test]

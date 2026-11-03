@@ -225,23 +225,26 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
             conn,
             &CreateStudentInput {
                 full_name: (*name).to_string(),
-                date_of_birth: Some(format!(
+                first_name: Some(name.split_whitespace().next().unwrap_or("").to_string()),
+                last_name: Some(name.split_whitespace().skip(1).collect::<Vec<_>>().join(" ")),
+                birth_date: Some(format!(
                     "20{:02}-{:02}-{:02}",
                     5 + index % 12,
                     1 + index % 12,
                     1 + index % 27
                 )),
                 phone: (*phone).to_string(),
-                parent_phone: Some(format!("07{:08}", 10_000_000 + index * 1_111)),
+                secondary_contact_phone: Some(format!("07{:08}", 10_000_000 + index * 1_111)),
                 level_id: Some(*level_id),
                 branch_id: None,
-                father_name: Some(
+                guardian_name: Some(
                     format!("Abdelkader {}", name.rsplit(' ').next().unwrap_or(""))
                         .trim()
                         .to_string(),
                 ),
-                home_address: Some(format!("{}. Rue Atlas, Casablanca", 10 + index)),
+                address: Some(format!("{}. Rue Atlas, Casablanca", 10 + index)),
                 notes: None,
+                ..Default::default()
             },
         )?;
         student_ids.push(student_id);

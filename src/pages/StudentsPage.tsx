@@ -189,13 +189,16 @@ export function StudentsPage() {
                   {t('students.columns.level')}
                 </th>
                 <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.columns.phone')}
+                  {t('students.guardian_column')}
+                </th>
+                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
+                  {t('students.school_name')}
                 </th>
                 <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
                   {t('students.columns.status')}
                 </th>
                 <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.columns.createdAt')}
+                  {t('students.enrollment_column')}
                 </th>
               </tr>
             </thead>
@@ -203,7 +206,7 @@ export function StudentsPage() {
               {loading &&
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={`skeleton-${index}`} className="border-b border-border last:border-b-0">
-                    {Array.from({ length: 5 }).map((__, cell) => (
+                    {Array.from({ length: 6 }).map((__, cell) => (
                       <td key={`skeleton-${index}-${cell}`} className="px-4 py-3">
                         <span
                           className={cn(
@@ -218,7 +221,7 @@ export function StudentsPage() {
 
               {!loading && result.data.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-0">
+                  <td colSpan={6} className="p-0">
                     <EmptyState
                       icon={<Users className="h-5 w-5" aria-hidden="true" />}
                       title={t('students.empty')}
@@ -270,11 +273,7 @@ export function StudentsPage() {
                       <span className="font-medium text-foreground group-hover:underline">
                         {student.full_name}
                       </span>
-                      {student.father_name && (
-                        <span className="mt-0.5 block text-[12px] text-muted">
-                          {t('students.fatherShort', { name: student.father_name })}
-                        </span>
-                      )}
+
                     </td>
                     <td className="px-4 py-3 text-muted">
                       {student.level_name ? (
@@ -288,15 +287,14 @@ export function StudentsPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-foreground" dir="ltr">
-                      {formatPhone(student.phone)}
-                    </td>
+                    <td className="px-4 py-3 text-muted">{student.guardian_name ?? '—'}<span className="block tabular-nums" dir="ltr">{formatPhone(student.phone)}</span></td>
+                    <td className="px-4 py-3 text-muted">{student.school_name ?? '—'}</td>
                     <td className="px-4 py-3">
                       <Badge variant={student.status === 'actif' ? 'success' : 'destructive'}>
                         {student.status === 'actif' ? t('students.active') : t('students.inactive')}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-muted">{formatDate(student.created_at)}</td>
+                    <td className="px-4 py-3 text-muted">{formatDate(student.enrollment_date)}</td>
                   </tr>
                 ))}
             </tbody>

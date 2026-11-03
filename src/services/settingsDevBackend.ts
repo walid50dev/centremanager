@@ -717,27 +717,34 @@ function seedStudents(levels: Level[], branches: Branch[]): Student[] {
     id: number,
     full_name: string,
     phone: string,
-    parent_phone: string | null,
+    secondary_contact_phone: string | null,
     level_id: number | null,
     branch_id: number | null,
-    home_address: string | null,
+    address: string | null,
     notes: string | null,
     status: 'actif' | 'inactif',
     created_at: string,
-    date_of_birth: string | null,
-    father_name: string | null = null,
+    birth_date: string | null,
+    guardian_name: string | null = null,
   ): Student => ({
     id,
     full_name,
-    date_of_birth,
+    first_name: full_name.split(' ')[0],
+    last_name: full_name.split(' ').slice(1).join(' '),
+    birth_date,
     phone,
-    parent_phone,
-    father_name,
+    guardian_phone: phone,
+    guardian_relation: null,
+    secondary_contact_name: null,
+    school_name: null,
+    enrollment_date: created_at.slice(0, 10),
+    secondary_contact_phone,
+    guardian_name,
     level_id,
     level_name: levels.find((level) => level.id === level_id)?.name ?? null,
     branch_id,
     branch_name: branches.find((branch) => branch.id === branch_id)?.name ?? null,
-    home_address,
+    address,
     notes,
     status,
     created_at,
@@ -778,70 +785,33 @@ function normaliseDevPhone(value: string): string {
   return value.replace(/[\s\u00A0\u202F.()-]/g, '');
 }
 
-function validateStudentInput(store: DevStore, input: Record<string, unknown>): {
-  full_name: string;
-  date_of_birth: string | null;
-  phone: string;
-  parent_phone: string | null;
-  father_name: string | null;
-  level_id: number | null;
-  branch_id: number | null;
-  home_address: string | null;
-  notes: string | null;
-} {
-  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-  const nullable = (value: unknown): string | null => {
-    const trimmed = text(value);
-    return trimmed ? trimmed : null;
-  };
-
-  const full_name = text(input.full_name);
-  if (!full_name) throw new Error("Le nom de l'élève est obligatoire");
-  if (full_name.length < 2) {
-    throw new Error("Le nom de l'élève doit contenir au moins 2 caractères");
+function validateStudentInput(store: DevStore, input: Record<string, unknown>): import('../types').StudentInput {
+  const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
+  const nullable = (value: unknown): string | null => text(value) || null;
+  const full_name = `${text(input.first_name)} ${text(input.last_name)}`.trim();
+  if (full_name.length < 2) throw new Error("Le nom de l'élève doit contenir au moins 2 caractères");
+  if (!text(input.first_name) || !text(input.last_name)) throw new Error('Prénom et nom obligatoires');
+  if (!text(input.guardian_name)) throw new Error('Nom du tuteur obligatoire');
+  if (typeof input.level_id !== 'number') throw new Error('Niveau obligatoire');
+  for (const value of [input.birth_date, input.enrollment_date]) {
+    if (text(value)) { const d = text(value); const parsed = new Date(`${d}T00:00:00Z`); if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== d) throw new Error('Date invalide'); }
   }
-
-  // `06 07 12 34 56` and `06-07-12-34-56` are accepted, stored as `0607123456`.
-  const phone = normaliseDevPhone(text(input.phone));
-  if (!phone) throw new Error('téléphone est obligatoire');
-  if (!PHONE_PATTERN.test(phone)) {
-    throw new Error('Format de téléphone invalide (06XXXXXXXX ou 07XXXXXXXX)');
-  }
-
-  const rawParent = nullable(input.parent_phone);
-  const parent_phone = rawParent ? normaliseDevPhone(rawParent) : null;
-  if (parent_phone && !PHONE_PATTERN.test(parent_phone)) {
-    throw new Error('Format de téléphone du parent invalide (06XXXXXXXX ou 07XXXXXXXX)');
-  }
-
-  const date_of_birth = nullable(input.date_of_birth);
-  if (date_of_birth && !/^\d{4}-\d{2}-\d{2}$/.test(date_of_birth)) {
-    throw new Error('Date de naissance invalide (format attendu AAAA-MM-JJ)');
-  }
-
-  const level_id =
-    typeof input.level_id === 'number' && Number.isFinite(input.level_id) ? input.level_id : null;
-  const branch_id =
-    typeof input.branch_id === 'number' && Number.isFinite(input.branch_id) ? input.branch_id : null;
-
-  if (level_id !== null && !store.levels.some((level) => level.id === level_id)) {
-    throw new Error('Niveau introuvable');
-  }
-  if (branch_id !== null && !store.branches.some((branch) => branch.id === branch_id)) {
-    throw new Error('Branche introuvable');
-  }
-
-  return {
-    full_name,
-    date_of_birth,
-    phone,
-    parent_phone,
-    father_name: nullable(input.father_name),
-    level_id,
-    branch_id,
-    home_address: nullable(input.home_address ?? input.address),
-    notes: nullable(input.notes),
-  };
+  const phone = normaliseDevPhone(text(input.guardian_phone ?? input.phone));
+  if (!PHONE_PATTERN.test(phone)) throw new Error('Format de téléphone du tuteur invalide (06XXXXXXXX ou 07XXXXXXXX)');
+  const secondary_contact_phone = normaliseDevPhone(text(input.secondary_contact_phone)) || null;
+  if (secondary_contact_phone && !PHONE_PATTERN.test(secondary_contact_phone)) throw new Error('Format de téléphone invalide');
+  const level_id = typeof input.level_id === 'number' ? input.level_id : null;
+  const branch_id = typeof input.branch_id === 'number' ? input.branch_id : null;
+  if (level_id !== null && !store.levels.some((level) => level.id === level_id)) throw new Error('Niveau introuvable');
+  if (branch_id !== null && !store.branches.some((branch) => branch.id === branch_id)) throw new Error('Branche introuvable');
+  const status = text(input.status) || 'actif';
+  if (status !== 'actif' && status !== 'inactif') throw new Error('Statut invalide');
+  return { full_name, first_name: nullable(input.first_name), last_name: nullable(input.last_name),
+    birth_date: nullable(input.birth_date), phone, guardian_phone: phone,
+    guardian_name: nullable(input.guardian_name), guardian_relation: nullable(input.guardian_relation),
+    secondary_contact_name: nullable(input.secondary_contact_name), secondary_contact_phone,
+    school_name: nullable(input.school_name), enrollment_date: text(input.enrollment_date) || new Date().toISOString().slice(0, 10),
+    level_id, branch_id, address: nullable(input.address), notes: nullable(input.notes), status };
 }
 
 function load(): DevStore {
@@ -849,6 +819,24 @@ function load(): DevStore {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DevStore;
+      parsed.students = (parsed.students ?? []).map((student) => {
+        const old = student as unknown as Record<string, unknown>;
+        const names = student.full_name.trim().split(/\s+/);
+        const migrated = { ...student, first_name: student.first_name ?? names[0] ?? '',
+          last_name: student.last_name ?? names.slice(1).join(' '),
+          birth_date: student.birth_date ?? (old['date_of_birth'] as string | null) ?? null,
+          guardian_name: student.guardian_name ?? (old['father_name'] as string | null) ?? null,
+          guardian_phone: student.guardian_phone ?? student.phone,
+          guardian_relation: student.guardian_relation ?? null,
+          secondary_contact_name: student.secondary_contact_name ?? null,
+          secondary_contact_phone: student.secondary_contact_phone ?? (old['parent_phone'] as string | null) ?? null,
+          school_name: student.school_name ?? null,
+          enrollment_date: student.enrollment_date ?? student.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+          address: student.address ?? (old['home_address'] as string | null) ?? (old['email'] as string | null) ?? null };
+        const cleaned = migrated as unknown as Record<string, unknown>;
+        for (const key of ['father_name', 'home_address', 'email', 'date_of_birth', 'parent_phone']) delete cleaned[key];
+        return migrated;
+      });
       // Stores written before Phase 5 have no payments/receipts.
       parsed.payments ??= [];
       parsed.receipts ??= [];
@@ -2251,15 +2239,18 @@ function buildDemoStore(previous: DevStore): DevStore {
     const student: Student = {
       id: store.nextStudentId++,
       full_name: name,
-      date_of_birth: `20${pad2(5 + (index % 12))}-${pad2(1 + (index % 12))}-${pad2(1 + (index % 27))}`,
+      first_name: name.split(' ')[0], last_name: name.split(' ').slice(1).join(' '),
+      guardian_phone: phone, guardian_relation: null, secondary_contact_name: null,
+      school_name: null, enrollment_date: new Date().toISOString().slice(0, 10),
+      birth_date: `20${pad2(5 + (index % 12))}-${pad2(1 + (index % 12))}-${pad2(1 + (index % 27))}`,
       phone,
-      parent_phone: `071${String(10000000 + index * 1111).slice(1)}`,
+      secondary_contact_phone: `071${String(10000000 + index * 1111).slice(1)}`,
       level_id: levelId,
       level_name: level?.name ?? null,
       branch_id: null,
       branch_name: null,
-      father_name: `Abdelkader ${name.split(' ').slice(-1)[0]}`,
-      home_address: `${12 + index} rue Atlas, Casablanca`,
+      guardian_name: `Abdelkader ${name.split(' ').slice(-1)[0]}`,
+      address: `${12 + index} rue Atlas, Casablanca`,
       notes: null,
       status: 'actif',
       created_at: nowTimestamp(),
@@ -2561,7 +2552,11 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         rows = rows.filter(
           (student) =>
             student.full_name.toLowerCase().includes(search) ||
-            (student.phone ?? '').toLowerCase().includes(search),
+            (student.first_name ?? '').toLowerCase().includes(search) ||
+            (student.last_name ?? '').toLowerCase().includes(search) ||
+            (student.guardian_name ?? '').toLowerCase().includes(search) ||
+            (student.guardian_phone ?? student.phone ?? '').includes(normaliseDevPhone(search)) ||
+            (student.secondary_contact_phone ?? '').includes(normaliseDevPhone(search)),
         );
       }
       if (levelId !== null) rows = rows.filter((student) => student.level_id === levelId);
@@ -2616,7 +2611,6 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         ...clean,
         level_name: store.levels.find((level) => level.id === clean.level_id)?.name ?? null,
         branch_name: store.branches.find((branch) => branch.id === clean.branch_id)?.name ?? null,
-        status: 'actif',
         created_at: now,
         updated_at: now,
       });

@@ -30,18 +30,25 @@ const HISTORY_LIMIT: i64 = 50;
 // ---------------------------------------------------------------------------
 
 /// Payload for `cmd_create_student`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct CreateStudentInput {
     pub full_name: String,
-    pub date_of_birth: Option<String>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub guardian_phone: Option<String>,
+    pub guardian_relation: Option<String>,
+    pub secondary_contact_name: Option<String>,
+    pub school_name: Option<String>,
+    pub enrollment_date: Option<String>,
+    pub status: Option<String>,
+    pub birth_date: Option<String>,
     pub phone: String,
-    pub parent_phone: Option<String>,
-    /// Father's name — used to identify minors and printed on receipts.
-    pub father_name: Option<String>,
+    pub secondary_contact_phone: Option<String>,
+    pub guardian_name: Option<String>,
     pub level_id: Option<i64>,
     pub branch_id: Option<i64>,
-    /// Home address ("adresse maison") — replaced the free-form address/email.
-    pub home_address: Option<String>,
+    pub address: Option<String>,
     pub notes: Option<String>,
 }
 
@@ -52,13 +59,21 @@ pub type UpdateStudentInput = CreateStudentInput;
 #[derive(Debug, Clone)]
 struct CleanInput {
     full_name: String,
-    date_of_birth: Option<String>,
+    first_name: Option<String>,
+    last_name: Option<String>,
+    guardian_phone: Option<String>,
+    guardian_relation: Option<String>,
+    secondary_contact_name: Option<String>,
+    school_name: Option<String>,
+    enrollment_date: String,
+    status: String,
+    birth_date: Option<String>,
     phone: String,
-    parent_phone: Option<String>,
-    father_name: Option<String>,
+    secondary_contact_phone: Option<String>,
+    guardian_name: Option<String>,
     level_id: Option<i64>,
     branch_id: Option<i64>,
-    home_address: Option<String>,
+    address: Option<String>,
     notes: Option<String>,
 }
 
@@ -142,7 +157,10 @@ fn branch_exists(conn: &Connection, id: i64) -> rusqlite::Result<bool> {
 }
 
 fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInput, String> {
-    let full_name = data.full_name.trim().to_string();
+    let full_name = match (optional_text(&data.first_name), optional_text(&data.last_name)) {
+        (Some(first), Some(last)) => format!("{first} {last}"),
+        _ => data.full_name.trim().to_string(),
+    };
     if full_name.is_empty() {
         return Err("Le nom de l'élève est obligatoire".to_string());
     }
@@ -150,9 +168,9 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
         return Err("Le nom de l'élève doit contenir au moins 2 caractères".to_string());
     }
 
-    let phone = validate_phone(&data.phone, "téléphone")?;
+    let phone = validate_phone(data.guardian_phone.as_deref().unwrap_or(&data.phone), "téléphone du tuteur")?;
 
-    let parent_phone = match optional_text(&data.parent_phone) {
+    let secondary_contact_phone = match optional_text(&data.secondary_contact_phone) {
         None => None,
         Some(value) => Some(validate_phone(&value, "téléphone du parent")?),
     };
@@ -170,14 +188,27 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
         }
     }
 
+    let enrollment_date = match optional_text(&data.enrollment_date) {
+        Some(date) => { chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|_| "Date d'inscription invalide".to_string())?; date },
+        None => chrono::Utc::now().date_naive().to_string(),
+    };
+    let status = validate_status(data.status.as_deref().unwrap_or(STATUS_ACTIVE))?;
     Ok(CleanInput {
-        date_of_birth: validate_date(&data.date_of_birth)?,
+        first_name: optional_text(&data.first_name),
+        last_name: optional_text(&data.last_name),
+        guardian_phone: Some(phone.clone()),
+        guardian_relation: optional_text(&data.guardian_relation),
+        secondary_contact_name: optional_text(&data.secondary_contact_name),
+        school_name: optional_text(&data.school_name),
+        enrollment_date,
+        status,
+        birth_date: validate_date(&data.birth_date)?,
         phone,
-        parent_phone,
-        father_name: optional_text(&data.father_name),
+        secondary_contact_phone,
+        guardian_name: optional_text(&data.guardian_name),
         level_id: data.level_id,
         branch_id: data.branch_id,
-        home_address: optional_text(&data.home_address),
+        address: optional_text(&data.address),
         notes: optional_text(&data.notes),
         full_name,
     })
@@ -215,65 +246,13 @@ fn log_audit(
 
 /// Snapshot of the editable fields, used to build the UPDATE diff.
 fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, String> {
-    #[allow(clippy::type_complexity)]
-    let row: Option<(
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<i64>,
-        Option<i64>,
-        Option<String>,
-        Option<String>,
-    )> = conn
-        .query_row(
-            "SELECT full_name, date_of_birth, phone, parent_phone, father_name,
-                    level_id, branch_id, home_address, notes
-             FROM students WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                    row.get(5)?,
-                    row.get(6)?,
-                    row.get(7)?,
-                    row.get(8)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(|err| db_err("Lecture de l'élève", err))?;
-
-    let Some((
-        full_name,
-        dob,
-        phone,
-        parent_phone,
-        father_name,
-        level_id,
-        branch_id,
-        home_address,
-        notes,
-    )) = row
-    else {
-        return Ok(None);
+    let student = match get_student(conn, id) {
+        Ok(student) => student,
+        Err(error) if error == "Élève introuvable" => return Ok(None),
+        Err(error) => return Err(error),
     };
-
-    let mut map = Map::new();
-    map.insert("full_name".into(), json!(full_name));
-    map.insert("date_of_birth".into(), json!(dob));
-    map.insert("phone".into(), json!(phone));
-    map.insert("parent_phone".into(), json!(parent_phone));
-    map.insert("father_name".into(), json!(father_name));
-    map.insert("level_id".into(), json!(level_id));
-    map.insert("branch_id".into(), json!(branch_id));
-    map.insert("home_address".into(), json!(home_address));
-    map.insert("notes".into(), json!(notes));
+    let mut map = serde_json::to_value(student).unwrap().as_object().unwrap().clone();
+    for key in ["id", "level_name", "branch_name", "created_at", "updated_at"] { map.remove(key); }
     Ok(Some(map))
 }
 
@@ -295,13 +274,21 @@ fn diff(before: &Map<String, Value>, after: &Map<String, Value>) -> Map<String, 
 fn input_json(clean: &CleanInput) -> Value {
     json!({
         "full_name": clean.full_name,
-        "date_of_birth": clean.date_of_birth,
+        "first_name": clean.first_name,
+        "last_name": clean.last_name,
+        "guardian_phone": clean.guardian_phone,
+        "guardian_relation": clean.guardian_relation,
+        "secondary_contact_name": clean.secondary_contact_name,
+        "school_name": clean.school_name,
+        "enrollment_date": clean.enrollment_date,
+        "status": clean.status,
+        "birth_date": clean.birth_date,
         "phone": clean.phone,
-        "parent_phone": clean.parent_phone,
-        "father_name": clean.father_name,
+        "secondary_contact_phone": clean.secondary_contact_phone,
+        "guardian_name": clean.guardian_name,
         "level_id": clean.level_id,
         "branch_id": clean.branch_id,
-        "home_address": clean.home_address,
+        "address": clean.address,
         "notes": clean.notes,
     })
 }
@@ -310,10 +297,12 @@ fn input_json(clean: &CleanInput) -> Value {
 // Read helpers
 // ---------------------------------------------------------------------------
 
-const SELECT_STUDENT: &str = "SELECT s.id, s.full_name, s.date_of_birth, s.phone, s.parent_phone,
-            s.father_name, s.level_id, l.name AS level_name,
+const SELECT_STUDENT: &str = "SELECT s.id, s.full_name, s.birth_date, s.phone, s.secondary_contact_phone,
+            s.guardian_name, s.level_id, l.name AS level_name,
             s.branch_id, b.name AS branch_name,
-            s.home_address, s.notes, s.status, s.created_at, s.updated_at
+            s.address, s.notes, s.status, s.created_at, s.updated_at,
+            s.first_name, s.last_name, s.guardian_phone, s.guardian_relation,
+            s.secondary_contact_name, s.school_name, s.enrollment_date
      FROM students s
      LEFT JOIN levels l ON l.id = s.level_id
      LEFT JOIN branches b ON b.id = s.branch_id";
@@ -322,17 +311,24 @@ fn map_student(row: &Row<'_>) -> rusqlite::Result<StudentRow> {
     Ok(StudentRow {
         id: row.get(0)?,
         full_name: row.get(1)?,
-        date_of_birth: row.get(2)?,
+        first_name: row.get(15)?,
+        last_name: row.get(16)?,
+        guardian_phone: row.get(17)?,
+        guardian_relation: row.get(18)?,
+        secondary_contact_name: row.get(19)?,
+        school_name: row.get(20)?,
+        enrollment_date: row.get(21)?,
+        birth_date: row.get(2)?,
         // `phone` is nullable at the SQL level (legacy rows); the API always
         // exposes a string so the UI never has to handle null.
         phone: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-        parent_phone: row.get(4)?,
-        father_name: row.get(5)?,
+        secondary_contact_phone: row.get(4)?,
+        guardian_name: row.get(5)?,
         level_id: row.get(6)?,
         level_name: row.get(7)?,
         branch_id: row.get(8)?,
         branch_name: row.get(9)?,
-        home_address: row.get(10)?,
+        address: row.get(10)?,
         notes: row.get(11)?,
         status: row
             .get::<_, Option<String>>(12)?
@@ -366,10 +362,16 @@ fn build_filters(
     if let Some(term) = search.map(str::trim).filter(|term| !term.is_empty()) {
         // SQLite's LIKE is already ASCII case-insensitive; accents are matched
         // case-sensitively (a documented SQLite limitation).
-        clauses.push("(s.full_name LIKE ? OR COALESCE(s.phone, '') LIKE ?)".to_string());
+        clauses.push("(s.full_name LIKE ? OR COALESCE(s.first_name, '') LIKE ? OR COALESCE(s.last_name, '') LIKE ? OR COALESCE(s.phone, '') LIKE ? OR COALESCE(s.guardian_name, '') LIKE ? OR COALESCE(s.guardian_phone, '') LIKE ? OR COALESCE(s.secondary_contact_phone, '') LIKE ?)".to_string());
         let pattern = format!("%{term}%");
+        let phone_pattern = format!("%{}%", normalise_phone(term));
         values.push(Box::new(pattern.clone()));
+        values.push(Box::new(pattern.clone()));
+        values.push(Box::new(pattern.clone()));
+        values.push(Box::new(phone_pattern.clone()));
         values.push(Box::new(pattern));
+        values.push(Box::new(phone_pattern.clone()));
+        values.push(Box::new(phone_pattern));
     }
     if let Some(level) = level_id {
         clauses.push("s.level_id = ?".to_string());
@@ -487,22 +489,14 @@ pub fn create_student(conn: &Connection, data: &CreateStudentInput) -> Result<i6
     let clean = clean_input(conn, data)?;
 
     conn.execute(
-        "INSERT INTO students
-            (full_name, date_of_birth, phone, parent_phone, father_name,
-             level_id, branch_id, home_address, notes, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![
-            clean.full_name,
-            clean.date_of_birth,
-            clean.phone,
-            clean.parent_phone,
-            clean.father_name,
-            clean.level_id,
-            clean.branch_id,
-            clean.home_address,
-            clean.notes,
-            STATUS_ACTIVE,
-        ],
+        "INSERT INTO students (full_name, birth_date, phone, secondary_contact_phone, guardian_name,
+         level_id, branch_id, address, notes, status, first_name, last_name, guardian_phone,
+         guardian_relation, secondary_contact_name, school_name, enrollment_date)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+        params![clean.full_name, clean.birth_date, clean.phone, clean.secondary_contact_phone,
+            clean.guardian_name, clean.level_id, clean.branch_id, clean.address, clean.notes,
+            clean.status, clean.first_name, clean.last_name, clean.guardian_phone, clean.guardian_relation,
+            clean.secondary_contact_name, clean.school_name, clean.enrollment_date],
     )
     .map_err(|err| db_err("Création de l'élève", err))?;
 
@@ -517,23 +511,15 @@ pub fn update_student(conn: &Connection, id: i64, data: &UpdateStudentInput) -> 
     let clean = clean_input(conn, data)?;
 
     conn.execute(
-        "UPDATE students SET
-            full_name = ?1, date_of_birth = ?2, phone = ?3, parent_phone = ?4,
-            father_name = ?5, level_id = ?6, branch_id = ?7, home_address = ?8,
-            notes = ?9, updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?10",
-        params![
-            clean.full_name,
-            clean.date_of_birth,
-            clean.phone,
-            clean.parent_phone,
-            clean.father_name,
-            clean.level_id,
-            clean.branch_id,
-            clean.home_address,
-            clean.notes,
-            id,
-        ],
+        "UPDATE students SET full_name=?1, birth_date=?2, phone=?3, secondary_contact_phone=?4,
+         guardian_name=?5, level_id=?6, branch_id=?7, address=?8, notes=?9, status=?10,
+         first_name=?11, last_name=?12, guardian_phone=?13, guardian_relation=?14,
+         secondary_contact_name=?15, school_name=?16, enrollment_date=?17, updated_at=CURRENT_TIMESTAMP
+         WHERE id=?18",
+        params![clean.full_name, clean.birth_date, clean.phone, clean.secondary_contact_phone,
+            clean.guardian_name, clean.level_id, clean.branch_id, clean.address, clean.notes,
+            clean.status, clean.first_name, clean.last_name, clean.guardian_phone, clean.guardian_relation,
+            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, id],
     )
     .map_err(|err| db_err("Mise à jour de l'élève", err))?;
 
@@ -587,9 +573,19 @@ pub fn set_student_status(conn: &Connection, id: i64, status: &str) -> Result<()
 // Tauri commands
 // ---------------------------------------------------------------------------
 
+fn validate_required_form_fields(data: &CreateStudentInput) -> Result<(), String> {
+    if optional_text(&data.first_name).is_none() || optional_text(&data.last_name).is_none() {
+        return Err("Prénom et nom obligatoires".into());
+    }
+    if optional_text(&data.guardian_name).is_none() { return Err("Nom du tuteur obligatoire".into()); }
+    if data.level_id.is_none() { return Err("Niveau obligatoire".into()); }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn cmd_create_student(db: State<'_, Db>, data: CreateStudentInput) -> Result<i64, String> {
     let conn = db.conn();
+    validate_required_form_fields(&data)?;
     create_student(&conn, &data)
 }
 
@@ -600,6 +596,7 @@ pub fn cmd_update_student(
     data: UpdateStudentInput,
 ) -> Result<(), String> {
     let conn = db.conn();
+    validate_required_form_fields(&data)?;
     update_student(&conn, id, &data)
 }
 
@@ -663,29 +660,46 @@ mod tests {
     fn sample(name: &str, phone: &str) -> CreateStudentInput {
         CreateStudentInput {
             full_name: name.to_string(),
-            date_of_birth: Some("2010-05-12".to_string()),
+            birth_date: Some("2010-05-12".to_string()),
             phone: phone.to_string(),
-            parent_phone: Some("0661112233".to_string()),
-            father_name: Some("Rachid El Amrani".to_string()),
+            secondary_contact_phone: Some("0661112233".to_string()),
+            guardian_name: Some("Rachid El Amrani".to_string()),
             level_id: Some(10), // Tronc Commun
             branch_id: Some(1), // Sciences Maths @ Tronc Commun
-            home_address: Some("12 rue des Écoles".to_string()),
+            address: Some("12 rue des Écoles".to_string()),
             notes: Some("Payé par la mère".to_string()),
+            ..Default::default()
         }
     }
 
     fn minimal(name: &str, phone: &str) -> CreateStudentInput {
         CreateStudentInput {
             full_name: name.to_string(),
-            date_of_birth: None,
+            birth_date: None,
             phone: phone.to_string(),
-            parent_phone: None,
-            father_name: None,
+            secondary_contact_phone: None,
+            guardian_name: None,
             level_id: None,
             branch_id: None,
-            home_address: None,
+            address: None,
             notes: None,
+            ..Default::default()
         }
+    }
+
+    #[test]
+    fn guardian_phone_is_normalised_validated_and_searchable() {
+        let conn = test_conn();
+        let mut data = sample("Salma Mansouri", "0612345678");
+        data.guardian_phone = Some("06 61-23 45 67".into());
+        let id = create_student(&conn, &data).unwrap();
+        let student = get_student(&conn, id).unwrap();
+        assert_eq!(student.phone, "0661234567");
+        assert_eq!(student.guardian_phone.as_deref(), Some("0661234567"));
+        assert_eq!(list_students(&conn, Some("Rachid"), None, None, 1, 20).unwrap().total, 1);
+        assert_eq!(list_students(&conn, Some("06 61 23 45 67"), None, None, 1, 20).unwrap().total, 1);
+        data.guardian_phone = Some("0512345678".into());
+        assert!(create_student(&conn, &data).is_err());
     }
 
     #[test]
@@ -716,37 +730,37 @@ mod tests {
 
         let conn = test_conn();
         let mut input = minimal("Omar Tazi", "06 98 76 54 32");
-        input.parent_phone = Some("06-11-22-33-44".to_string());
+        input.secondary_contact_phone = Some("06-11-22-33-44".to_string());
         let id = create_student(&conn, &input).unwrap();
 
         let student = get_student(&conn, id).unwrap();
         assert_eq!(student.phone, "0698765432", "spaces must not be stored");
-        assert_eq!(student.parent_phone.as_deref(), Some("0611223344"));
+        assert_eq!(student.secondary_contact_phone.as_deref(), Some("0611223344"));
 
         // A wrong length stays invalid once the separators are gone.
         let mut broken = minimal("Bad Phone", "06 12 34 56 7");
-        broken.parent_phone = None;
+        broken.secondary_contact_phone = None;
         assert!(create_student(&conn, &broken).is_err());
     }
 
     #[test]
-    fn father_name_and_home_address_round_trip() {
+    fn guardian_name_and_address_round_trip() {
         let conn = test_conn();
         let id = create_student(&conn, &sample("Yassine El Amrani", "0612345678")).unwrap();
 
         let student = get_student(&conn, id).unwrap();
-        assert_eq!(student.father_name.as_deref(), Some("Rachid El Amrani"));
-        assert_eq!(student.home_address.as_deref(), Some("12 rue des Écoles"));
+        assert_eq!(student.guardian_name.as_deref(), Some("Rachid El Amrani"));
+        assert_eq!(student.address.as_deref(), Some("12 rue des Écoles"));
 
         // Partial update: clearing a field writes NULL, not an empty string.
         let mut update = sample("Yassine El Amrani", "0612345678");
-        update.father_name = None;
-        update.home_address = Some("3 avenue Hassan II".to_string());
+        update.guardian_name = None;
+        update.address = Some("3 avenue Hassan II".to_string());
         update_student(&conn, id, &update).unwrap();
 
         let updated = get_student(&conn, id).unwrap();
-        assert_eq!(updated.father_name, None);
-        assert_eq!(updated.home_address.as_deref(), Some("3 avenue Hassan II"));
+        assert_eq!(updated.guardian_name, None);
+        assert_eq!(updated.address.as_deref(), Some("3 avenue Hassan II"));
 
         // The audit trail names the changed fields.
         let history = student_history(&conn, id).unwrap();
@@ -755,7 +769,7 @@ mod tests {
             .filter_map(|entry| entry.details.clone())
             .collect::<Vec<_>>()
             .join(" ");
-        assert!(details.contains("home_address"));
+        assert!(details.contains("address"));
     }
 
     #[test]
@@ -769,7 +783,7 @@ mod tests {
         assert_eq!(student.status, STATUS_ACTIVE);
         assert_eq!(student.level_name.as_deref(), Some("Tronc Commun"));
         assert_eq!(student.branch_name.as_deref(), Some("Sciences Maths"));
-        assert_eq!(student.date_of_birth.as_deref(), Some("2010-05-12"));
+        assert_eq!(student.birth_date.as_deref(), Some("2010-05-12"));
 
         let history = student_history(&conn, id).unwrap();
         assert_eq!(history.len(), 1);
@@ -787,7 +801,7 @@ mod tests {
         assert_eq!(student.full_name, "Salma");
         assert!(student.level_id.is_none());
         assert!(student.branch_id.is_none());
-        assert!(student.parent_phone.is_none());
+        assert!(student.secondary_contact_phone.is_none());
         assert_eq!(student.status, STATUS_ACTIVE);
     }
 
@@ -807,7 +821,7 @@ mod tests {
         }
 
         let mut data = minimal("Nom Valide", "0612345678");
-        data.parent_phone = Some("0123456789".to_string());
+        data.secondary_contact_phone = Some("0123456789".to_string());
         assert!(create_student(&conn, &data).unwrap_err().contains("Format"));
 
         let mut data = minimal("Nom Valide", "0612345678");
@@ -825,7 +839,7 @@ mod tests {
         );
 
         let mut data = minimal("Nom Valide", "0612345678");
-        data.date_of_birth = Some("12/05/2010".to_string());
+        data.birth_date = Some("12/05/2010".to_string());
         assert!(create_student(&conn, &data)
             .unwrap_err()
             .contains("Date de naissance invalide"));

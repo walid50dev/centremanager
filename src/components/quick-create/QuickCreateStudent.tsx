@@ -32,6 +32,7 @@ export function QuickCreateStudent({
   const { t } = useTranslation();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [guardian, setGuardian] = useState('');
   const [levelId, setLevelId] = useState('');
   const [levels, setLevels] = useState<Level[]>([]);
   const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
@@ -41,6 +42,7 @@ export function QuickCreateStudent({
     if (!open) return;
     setFullName('');
     setPhone('');
+    setGuardian('');
     setLevelId('');
     setErrors({});
     setSaving(false);
@@ -71,21 +73,19 @@ export function QuickCreateStudent({
       else if (trimmedName.length < 2) nextErrors.name = t('quickCreate.validation.nameTooShort');
       if (!phone.trim()) nextErrors.phone = t('quickCreate.validation.phoneRequired');
       else if (!isValidPhone(phone)) nextErrors.phone = t('quickCreate.validation.phoneInvalid');
+      if (!guardian.trim() || !levelId || trimmedName.split(/\s+/).length < 2) { toast.error(t('students.quick_required')); return; }
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors);
         return;
       }
 
+      const parts = trimmedName.split(/\s+/);
       const payload: StudentInput = {
-        full_name: trimmedName,
-        date_of_birth: null,
-        phone: stripPhone(phone),
-        parent_phone: null,
-        father_name: null,
-        level_id: levelId ? Number(levelId) : null,
-        branch_id: null,
-        home_address: null,
-        notes: null,
+        full_name: trimmedName, first_name: parts[0], last_name: parts.slice(1).join(' '),
+        birth_date: null, phone: stripPhone(phone), guardian_phone: stripPhone(phone),
+        guardian_name: guardian.trim(), guardian_relation: null, secondary_contact_name: null,
+        secondary_contact_phone: null, school_name: null, enrollment_date: new Date().toISOString().split('T')[0],
+        level_id: Number(levelId), branch_id: null, address: null, notes: null, status: 'actif',
       };
 
       setSaving(true);
@@ -101,7 +101,7 @@ export function QuickCreateStudent({
         setSaving(false);
       }
     },
-    [fullName, levelId, onCreated, phone, t],
+    [fullName, guardian, levelId, onCreated, phone, t],
   );
 
   return (
@@ -130,9 +130,11 @@ export function QuickCreateStudent({
           data-testid="quick-student-name"
         />
 
+        <Input label={t('students.guardian_name')} required value={guardian} onChange={event => setGuardian(event.target.value)} />
+
         <Input
           type="tel"
-          label={t('quickCreate.fields.phone')}
+          label={t('students.guardian_phone')}
           required
           value={phone}
           onChange={(event) => {
@@ -154,7 +156,7 @@ export function QuickCreateStudent({
           value={levelId}
           onChange={(event) => setLevelId(event.target.value)}
           options={levels.map((level) => ({ value: level.id, label: level.name }))}
-          hint={t('teachers.optional')}
+          required
           data-testid="quick-student-level"
         />
       </form>
