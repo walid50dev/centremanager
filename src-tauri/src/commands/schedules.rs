@@ -271,7 +271,7 @@ pub fn timetable(
     conn: &Connection,
     filters: Option<&TimetableFilters>,
 ) -> Result<Vec<TimetableEntry>, String> {
-    let mut clauses: Vec<String> = vec!["g.deleted_at IS NULL".to_string(), "COALESCE(g.status, 'actif') = 'actif'".to_string()];
+    let mut clauses: Vec<String> = vec!["g.deleted_at IS NULL".to_string(), "g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)".to_string(), "COALESCE(g.status, 'actif') = 'actif'".to_string()];
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(filters) = filters {
@@ -351,7 +351,7 @@ pub fn timetable_rooms(conn: &Connection) -> Result<Vec<String>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT DISTINCT room FROM groups
-             WHERE deleted_at IS NULL AND room IS NOT NULL AND TRIM(room) <> ''
+             WHERE deleted_at IS NULL AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND room IS NOT NULL AND TRIM(room) <> ''
                AND COALESCE(status, 'actif') = 'actif'
              ORDER BY room COLLATE NOCASE",
         )

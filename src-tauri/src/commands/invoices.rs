@@ -84,7 +84,7 @@ pub fn generate_monthly_invoices(conn: &Connection, month: i32, year: i32) -> Re
                  FROM enrollments e
                  JOIN groups g ON g.id = e.group_id
                  JOIN students st ON st.id = e.student_id
-                 WHERE g.deleted_at IS NULL AND st.deleted_at IS NULL AND COALESCE(e.status, 'actif') = 'actif'
+                 WHERE g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND st.deleted_at IS NULL AND COALESCE(e.status, 'actif') = 'actif'
                  ORDER BY e.id",
             )
             .map_err(|err| db_err("Lecture des inscriptions", err))?;
@@ -176,7 +176,7 @@ pub fn student_invoices(conn: &Connection, student_id: i64) -> Result<Vec<Studen
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
              LEFT JOIN branches b  ON b.id = g.branch_id
-             WHERE e.student_id = ?1
+             WHERE e.student_id = ?1 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
              ORDER BY i.period_year DESC, i.period_month DESC, i.id DESC",
         )
         .map_err(|err| db_err("Lecture des factures", err))?;
@@ -252,7 +252,7 @@ pub fn payment_alerts_on(
              JOIN groups g      ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
-             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND i.period_month = ?1 AND i.period_year = ?2
+             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND i.period_month = ?1 AND i.period_year = ?2
              ORDER BY s.id, i.due_date, i.id",
         )
         .map_err(|err| db_err("Lecture des factures", err))?;
@@ -405,7 +405,8 @@ fn last_payment_of_month(
         "SELECT p.created_at, COALESCE(p.payment_method, '')
          FROM payments p
          JOIN invoices i ON i.id = p.invoice_id
-         WHERE p.student_id = ?1 AND i.period_month = ?2 AND i.period_year = ?3
+         JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id
+         WHERE g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND p.student_id = ?1 AND i.period_month = ?2 AND i.period_year = ?3
          ORDER BY p.created_at DESC, p.id DESC
          LIMIT 1",
         params![student_id, month, year],
@@ -435,7 +436,7 @@ pub fn late_payment_count_on(conn: &Connection, reference_day: NaiveDate) -> Res
          JOIN enrollments e ON e.id = i.enrollment_id
          JOIN students s ON s.id = e.student_id
          JOIN groups g ON g.id = e.group_id
-         WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL
+         WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
            AND COALESCE(i.status, 'impayé') <> 'payé'
            AND COALESCE(i.paid_amount_cents, 0) < i.amount_cents
            AND COALESCE(i.due_date, '') <> ''

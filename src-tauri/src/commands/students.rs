@@ -356,7 +356,7 @@ fn build_filters(
     level_id: Option<i64>,
     status: Option<&str>,
 ) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
-    let mut clauses: Vec<String> = vec!["s.deleted_at IS NULL".to_string()];
+    let mut clauses: Vec<String> = vec!["s.deleted_at IS NULL".to_string(), "EXISTS (SELECT 1 FROM student_school_years sy WHERE sy.student_id=s.id AND sy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1))".to_string()];
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(term) = search.map(str::trim).filter(|term| !term.is_empty()) {

@@ -1177,5 +1177,39 @@
     "teacher": "L’enseignant {{teacher}} est déjà occupé le {{day}} de {{start}} à {{end}} avec le groupe « {{group}} ».",
     "ignore": "Ignorer et continuer",
     "check_error": "La recherche de conflits est indisponible. Vous pouvez continuer."
+  },
+  "schoolYearSwitch": {
+    "title": "Changer d’année ?",
+    "message": "Les données affichées seront celles de {{year}}.",
+    "confirm": "Changer",
+    "unattributed": "{{count}} paiement(s) historique(s) n’ont pas d’année identifiable. Ils restent visibles dans l’historique, mais sont exclus des totaux annuels ; les exports financiers sont bloqués jusqu’à leur attribution."
+  },
+  "import": {
+    "title_students": "Importer des élèves depuis {{year}}",
+    "title_groups": "Importer des groupes depuis {{year}}",
+    "title_teachers": "Importer des enseignants depuis {{year}}",
+    "button": "Importer depuis l’année précédente",
+    "select_all": "Tout sélectionner",
+    "deselect_all": "Tout désélectionner",
+    "import_n": "Importer {{n}} éléments",
+    "already_imported": "Déjà importé",
+    "no_data": "Aucune donnée à importer",
+    "success": "{{n}} éléments importés avec succès"
+  },
+  "export": {
+    "pdf": "Export PDF (Résumé)",
+    "excel": "Export Excel (Détails)",
+    "section_students": "Élèves",
+    "section_groups": "Groupes",
+    "section_teachers": "Enseignants",
+    "section_payments": "Paiements",
+    "section_expenses": "Dépenses",
+    "section_salaries": "Salaires",
+    "generating": "Génération en cours...",
+    "summary": "Résumé {{year}}",
+    "revenue": "Encaissements",
+    "net": "Net",
+    "subject": "Matière",
+    "note": "Les avances sans facture ne sont pas ventilées par matière. Les salaires sont rattachés au mois de paie."
   }
 }

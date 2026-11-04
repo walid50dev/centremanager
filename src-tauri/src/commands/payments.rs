@@ -78,7 +78,8 @@ pub fn record_payment(
                 "SELECT EXISTS(
                     SELECT 1 FROM invoices i
                     JOIN enrollments e ON e.id = i.enrollment_id
-                    WHERE i.id = ?1 AND e.student_id = ?2
+                    JOIN groups g ON g.id=e.group_id
+                    WHERE i.id = ?1 AND e.student_id = ?2 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
                  )",
                 params![invoice_id, student_id],
                 |row| row.get(0),
@@ -195,7 +196,7 @@ pub fn record_payment(
     let first_id = first_payment_id.ok_or_else(|| "Aucun montant à affecter".to_string())?;
 
     for id in &payment_ids {
-        tx.execute("UPDATE payments SET batch_id = ?1 WHERE id = ?2", params![first_id, id])
+        tx.execute("UPDATE payments SET batch_id = ?1, school_year_id = (SELECT id FROM school_years WHERE is_active=1 LIMIT 1) WHERE id = ?2", params![first_id, id])
             .map_err(|err| db_err("Regroupement du paiement", err))?;
     }
 
@@ -251,7 +252,7 @@ pub fn payments_history(
     let limit = limit.clamp(1, 100);
     let offset = (page - 1) * limit;
 
-    let where_clause = "WHERE (?1 IS NULL OR p.student_id = ?1)
+    let where_clause = "WHERE (p.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) OR p.school_year_id IS NULL) AND (?1 IS NULL OR p.student_id = ?1)
         AND (?2 IS NULL OR (i.period_month = ?2 AND i.period_year = ?3))";
 
     let total: i32 = conn
@@ -681,6 +682,12 @@ pub fn receipt_data(conn: &Connection, receipt_id: i64) -> Result<ReceiptData, S
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn cmd_get_unattributed_payment_count(db: State<'_, Db>) -> Result<i64, String> {
+    db.conn().query_row("SELECT count(*) FROM payments WHERE school_year_id IS NULL", [], |r| r.get(0))
+        .map_err(|err| db_err("Vérification des paiements", err))
+}
 
 #[tauri::command]
 pub fn cmd_record_payment(

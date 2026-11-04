@@ -173,7 +173,7 @@ const SELECT_TEACHER: &str = "
                )
            ), ''),
            (SELECT COUNT(*) FROM groups g
-             WHERE g.teacher_id = t.id AND g.deleted_at IS NULL AND g.status = 'actif'),
+             WHERE g.teacher_id = t.id AND g.deleted_at IS NULL AND g.status = 'actif' AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)),
            t.compensation_mode,
            t.compensation_value_cents,
            t.bonus_pct,
@@ -242,7 +242,7 @@ pub fn list_teachers(conn: &Connection, status: Option<&str>) -> Result<Vec<Teac
 
     let sql = format!(
         "{SELECT_TEACHER}
-         WHERE t.deleted_at IS NULL AND (?1 IS NULL OR COALESCE(t.status, 'actif') = ?1)
+         WHERE t.deleted_at IS NULL AND (?1 IS NULL OR COALESCE(t.status, 'actif') = ?1) AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups gy WHERE gy.teacher_id=t.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
          ORDER BY t.full_name COLLATE NOCASE ASC"
     );
     let mut stmt = conn
@@ -298,7 +298,7 @@ pub fn teacher_groups(conn: &Connection, teacher_id: i64) -> Result<Vec<TeacherG
                LEFT JOIN subjects s ON s.id = g.subject_id
                LEFT JOIN levels l ON l.id = g.level_id
                LEFT JOIN branches b ON b.id = g.branch_id
-              WHERE g.teacher_id = ?1 AND g.status = 'actif'
+              WHERE g.teacher_id = ?1 AND g.deleted_at IS NULL AND g.status = 'actif' AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
               ORDER BY s.name COLLATE NOCASE, l.sort_order, g.id",
         )
         .map_err(|err| db_err("Préparation des groupes de l'enseignant", err))?;

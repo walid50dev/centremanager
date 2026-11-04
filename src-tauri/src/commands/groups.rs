@@ -439,7 +439,7 @@ pub fn list_groups(
     school_year_id: Option<i64>,
     status: Option<&str>,
 ) -> Result<Vec<GroupRow>, String> {
-    let mut clauses: Vec<String> = vec!["g.deleted_at IS NULL".to_string()];
+    let mut clauses: Vec<String> = vec!["g.deleted_at IS NULL".to_string(), "g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)".to_string()];
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(year) = school_year_id {
@@ -587,7 +587,7 @@ pub fn available_groups_for_student(
 ) -> Result<Vec<GroupRow>, String> {
     let mut sql = format!(
         "{SELECT_GROUP}
-         WHERE g.deleted_at IS NULL AND COALESCE(g.status, 'actif') = 'actif'
+         WHERE g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND COALESCE(g.status, 'actif') = 'actif'
            AND g.id NOT IN (
                 SELECT group_id FROM enrollments
                 WHERE student_id = ?1 AND COALESCE(status, 'actif') = 'actif')"
@@ -624,7 +624,7 @@ pub fn list_teachers(conn: &Connection) -> Result<Vec<TeacherOption>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, full_name FROM teachers
-             WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'
+             WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups gy WHERE gy.teacher_id=teachers.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
              ORDER BY full_name COLLATE NOCASE",
         )
         .map_err(|err| db_err("Préparation de la liste des enseignants", err))?;

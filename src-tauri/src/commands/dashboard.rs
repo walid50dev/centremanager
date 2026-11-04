@@ -106,9 +106,9 @@ fn iso(day: NaiveDate) -> String {
 pub fn revenue_of(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
     scalar(
         conn,
-        "SELECT COALESCE(SUM(amount_cents), 0) FROM payments
-          WHERE CAST(strftime('%m', created_at) AS INTEGER) = ?1
-            AND CAST(strftime('%Y', created_at) AS INTEGER) = ?2",
+        "SELECT COALESCE(SUM(p.amount_cents), 0) FROM payments p
+          WHERE p.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND CAST(strftime('%m', p.created_at) AS INTEGER) = ?1
+            AND CAST(strftime('%Y', p.created_at) AS INTEGER) = ?2",
         params![month, year],
     )
 }
@@ -117,8 +117,8 @@ pub fn revenue_of(conn: &Connection, month: i32, year: i32) -> Result<i64, Strin
 fn theoretical_of(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
     scalar(
         conn,
-        "SELECT COALESCE(SUM(amount_cents), 0) FROM invoices
-          WHERE period_month = ?1 AND period_year = ?2",
+        "SELECT COALESCE(SUM(i.amount_cents), 0) FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id
+          WHERE g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND i.period_month = ?1 AND i.period_year = ?2",
         params![month, year],
     )
 }
@@ -150,8 +150,8 @@ fn students_during(conn: &Connection, month: i32, year: i32) -> Result<i32, Stri
     let to = iso(last_day_of(month, year));
     let count = scalar(
         conn,
-        "SELECT COUNT(DISTINCT e.student_id) FROM enrollments e
-          WHERE date(e.start_date) <= date(?1)
+        "SELECT COUNT(DISTINCT e.student_id) FROM enrollments e JOIN groups g ON g.id=e.group_id
+          WHERE g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND date(e.start_date) <= date(?1)
             AND (e.end_date IS NULL OR TRIM(e.end_date) = '' OR date(e.end_date) >= date(?2))",
         params![to, from],
     )?;
@@ -174,19 +174,19 @@ pub fn dashboard_kpis(conn: &Connection, month: i32, year: i32) -> Result<Dashbo
 
     let total_active_students = scalar(
         conn,
-        "SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'",
+        "SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND EXISTS(SELECT 1 FROM student_school_years sy WHERE sy.student_id=students.id AND sy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1))",
         &[],
     )?;
     let monthly_revenue_cents = revenue_of(conn, month, year)?;
     let theoretical_revenue_cents = theoretical_of(conn, month, year)?;
     let active_groups = scalar(
         conn,
-        "SELECT COUNT(*) FROM groups WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'",
+        "SELECT COUNT(*) FROM groups WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)",
         &[],
     )?;
     let active_teachers = scalar(
         conn,
-        "SELECT COUNT(*) FROM teachers WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif'",
+        "SELECT COUNT(*) FROM teachers WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND (EXISTS(SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS(SELECT 1 FROM groups gy WHERE gy.teacher_id=teachers.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))",
         &[],
     )?;
     let prev_month_revenue_cents = revenue_of(conn, prev_month, prev_year)?;
@@ -261,7 +261,7 @@ pub fn dashboard_alerts_on(
              LEFT JOIN groups g   ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
-             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND COALESCE(i.status, 'impayé') <> 'payé'
+             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND COALESCE(i.status, 'impayé') <> 'payé'
                AND COALESCE(i.paid_amount_cents, 0) < i.amount_cents
                AND i.due_date IS NOT NULL
                AND date(i.due_date) BETWEEN date(?1) AND date(?2)
@@ -329,6 +329,7 @@ pub fn recent_payments(conn: &Connection, limit: i32) -> Result<Vec<RecentPaymen
                     COALESCE(p.created_at, '')
              FROM payments p
              LEFT JOIN students s ON s.id = p.student_id
+             WHERE p.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
              ORDER BY datetime(p.created_at) DESC, p.id DESC
              LIMIT ?1",
         )

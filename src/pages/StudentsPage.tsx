@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import StudentModal from '../components/students/StudentModal';
+import ImportButton from '../components/year-import/ImportButton';
 import { toast } from '../components/ui/Toast';
 import { levelsApi } from '../services/settings';
 import { studentsApi } from '../services/students';
@@ -133,9 +134,10 @@ export function StudentsPage() {
             {result.total}
           </Badge>
         </div>
+        <div className="flex flex-wrap gap-2"><ImportButton kind="students" onImported={onSaved} />
         <Button onClick={openCreate} leftIcon={<UserPlus className="h-4 w-4" aria-hidden="true" />}>
           {t('students.new')}
-        </Button>
+        </Button></div>
       </div>
 
       {/* Filters */}

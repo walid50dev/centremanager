@@ -440,6 +440,7 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
 
         <Select
           label={t('groups.schoolYear')}
+          disabled
           required
           placeholder={t('groups.selectSchoolYear')}
           value={form.schoolYearId}

@@ -33,6 +33,7 @@ export interface PaymentHistoryFilters {
 }
 
 export const paymentsApi = {
+  unattributedCount: () => call<number>('cmd_get_unattributed_payment_count'),
   /** Returns the id of the first allocation row (used for the receipt). */
   record: (input: PaymentInput) =>
     call<number>('cmd_record_payment', {

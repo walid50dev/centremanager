@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import i18n, { LANGUAGE_STORAGE_KEY, type Language } from '../i18n';
 import { invoicesApi } from '../services/invoices';
+import { schoolYearsApi } from '../services/settings';
+import type { SchoolYear } from '../types';
 
 /**
  * Closers of the currently open modals, keyed by instance id.
@@ -20,6 +22,10 @@ interface AppState {
   modalStack: string[];
   /** Late invoices of the current period, shown as a badge on Payments. */
   latePaymentCount: number;
+  activeSchoolYear: SchoolYear | null;
+  schoolYears: SchoolYear[];
+  loadSchoolYears: () => Promise<void>;
+  switchSchoolYear: (id: number) => Promise<void>;
 
   setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
@@ -71,6 +77,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarOpen: true,
   modalStack: [],
   latePaymentCount: 0,
+  activeSchoolYear: null,
+  schoolYears: [],
+  loadSchoolYears: async () => {
+    const [years, active] = await Promise.all([schoolYearsApi.list(), schoolYearsApi.active()]);
+    set({ schoolYears: years, activeSchoolYear: active });
+  },
+  switchSchoolYear: async (id) => {
+    await schoolYearsApi.switch(id);
+    await get().loadSchoolYears();
+    void get().refreshLatePaymentCount();
+  },
 
   applyLanguage: (lang) => {
     syncLanguage(lang);
