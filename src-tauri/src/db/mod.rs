@@ -143,6 +143,15 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
             conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN deleted_at TEXT;"))?;
         }
     }
+    // Old soft-deleted students have no identifiable trash owner: leave them
+    // untouched instead of silently assigning them to the current year.
+    if !column_exists(conn, "students", "trash_school_year_id")? {
+        conn.execute_batch("ALTER TABLE students ADD COLUMN trash_school_year_id INTEGER REFERENCES school_years(id);")?;
+    }
+    if !column_exists(conn, "invoices", "type")? {
+        conn.execute_batch("ALTER TABLE invoices ADD COLUMN type TEXT NOT NULL DEFAULT 'groupe';")?;
+    }
+    conn.execute_batch("UPDATE invoices SET type='frais_inscription' WHERE id IN (SELECT invoice_id FROM enrollment_fees) AND type <> 'frais_inscription';")?;
     for (table, column, kind) in [("payments", "batch_id", "INTEGER"), ("receipts", "student_level", "TEXT"), ("receipts", "items_json", "TEXT")] {
         if !column_exists(conn, table, column)? {
             conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind};"))?;
@@ -151,6 +160,9 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     migrate_group_schedules(conn)?;
     seed_reference_data(conn)?;
     migrate_school_year_membership(conn)?;
+    // Existing enrollments represent decisions already made; changing the fee
+    // must never retroactively charge them on a later group enrollment.
+    conn.execute_batch("INSERT OR IGNORE INTO enrollment_fee_attempts(student_id,school_year_id) SELECT e.student_id,g.school_year_id FROM enrollments e JOIN groups g ON g.id=e.group_id WHERE e.student_id IS NOT NULL AND g.school_year_id IS NOT NULL; INSERT OR IGNORE INTO enrollment_fee_attempts(student_id,school_year_id) SELECT student_id,school_year_id FROM enrollment_fees;")?;
     migrate_teacher_year_trash(conn)?;
     migrate_payment_school_year(conn)
 }
@@ -329,6 +341,7 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
     };
     let first = expr(&["first_name"], "CASE WHEN instr(trim(full_name), ' ') > 0 THEN substr(trim(full_name), 1, instr(trim(full_name), ' ') - 1) ELSE trim(full_name) END")?;
     let last = expr(&["last_name"], "CASE WHEN instr(trim(full_name), ' ') > 0 THEN trim(substr(trim(full_name), instr(trim(full_name), ' ') + 1)) ELSE '' END")?;
+    let trash_year = expr(&["trash_school_year_id"], "NULL")?;
     let birth = expr(&["birth_date", "date_of_birth"], "NULL")?;
     let guardian = expr(&["guardian_name", "father_name"], "NULL")?;
     let guardian_phone = expr(&["guardian_phone", "phone"], "NULL")?;
@@ -351,14 +364,15 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
             level_id INTEGER REFERENCES levels(id) ON DELETE SET NULL,
             branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
             address TEXT, notes TEXT, status TEXT DEFAULT 'actif',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT,
+            trash_school_year_id INTEGER REFERENCES school_years(id)
         );
         INSERT INTO students_new (id, full_name, first_name, last_name, birth_date, phone,
           guardian_name, guardian_phone, guardian_relation, secondary_contact_name, secondary_contact_phone,
-          school_name, enrollment_date, level_id, branch_id, address, notes, status, created_at, updated_at, deleted_at)
+          school_name, enrollment_date, level_id, branch_id, address, notes, status, created_at, updated_at, deleted_at, trash_school_year_id)
         SELECT id, full_name, {first}, {last}, {birth}, {guardian_phone}, {guardian}, {guardian_phone},
           {relation}, {secondary_name}, {secondary_phone}, {school}, {enrollment}, level_id, branch_id,
-          {address}, notes, status, created_at, updated_at, {deleted_at} FROM students;
+          {address}, notes, status, created_at, updated_at, {deleted_at}, {trash_year} FROM students;
         DROP TABLE students;
         ALTER TABLE students_new RENAME TO students;
         CREATE INDEX idx_students_level ON students(level_id);

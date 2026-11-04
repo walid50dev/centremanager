@@ -106,6 +106,8 @@ pub fn delete_year(conn: &Connection, year_id: i64) -> Result<(), String> {
     let tx = conn.unchecked_transaction().map_err(|e| db_err("Transaction", e))?;
     let active: Option<bool> = tx.query_row("SELECT COALESCE(is_active,0) FROM school_years WHERE id=?1", params![year_id], |r| r.get(0)).optional().map_err(|e| db_err("Année scolaire", e))?;
     match active { None => return Err("Année scolaire introuvable".into()), Some(true) => return Err("Impossible de supprimer l'année active".into()), Some(false) => {} }
+    let trashed_students: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM students WHERE deleted_at IS NOT NULL AND trash_school_year_id=?1)", params![year_id], |r| r.get(0)).map_err(|e| db_err("Corbeille", e))?;
+    if trashed_students { return Err("Restaurez ou supprimez définitivement les élèves dans la corbeille de cette année avant de la supprimer".into()); }
     // Include advances attributed directly to the year, as well as invoices'
     // payments. Receipts, invoices, enrollments and schedules cascade via FKs.
     tx.execute("DELETE FROM payments WHERE school_year_id=?1 OR invoice_id IN (SELECT invoice_id FROM enrollment_fees WHERE school_year_id=?1) OR invoice_id IN (SELECT i.id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE g.school_year_id=?1)", params![year_id]).map_err(|e| db_err("Suppression des paiements", e))?;

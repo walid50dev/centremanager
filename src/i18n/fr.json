@@ -366,7 +366,7 @@
     "logo_preview": "Aperçu du logo",
     "enrollment_fee": "Frais d'inscription",
     "enrollment_fee_label": "Frais d'inscription (par élève, par an)",
-    "enrollment_fee_hint": "Montant par élève, une seule fois par an. 0 = pas de frais.",
+    "enrollment_fee_hint": "Montant par élève à la première inscription de l’année. 0 = pas de frais ; les modifications ne sont pas rétroactives.",
     "enrollment_fee_saved": "Frais d’inscription enregistrés"
   },
   "students": {
@@ -1145,7 +1145,7 @@
     "name": "Nom",
     "deleted_at": "Date de suppression",
     "actions": "Actions",
-    "retention": "Les éléments sans historique financier sont supprimés automatiquement après 30 jours. Le vidage supprime immédiatement les éléments affichés.",
+    "retention": "Les élèves sont supprimés définitivement après 30 jours, avec leurs données de toutes les années. Les autres éléments avec historique financier sont conservés à l’expiration.",
     "preserved": "Conservé après expiration automatique",
     "financial_warning": "Conservé après expiration automatique ; la suppression manuelle est définitive.",
     "moved": "Déplacé vers la corbeille",
@@ -1155,8 +1155,10 @@
     "days_count_two": "{{count}} jours",
     "days_count_few": "{{count}} jours",
     "days_count_many": "{{count}} jours",
-    "empty_confirm": "Vider la corbeille de cette année ? Les éléments affichés et leurs données liées seront supprimés. Cette action est irréversible.",
-    "teacher_confirm_permanent": "Retirer définitivement cet enseignant de l’année active ? Ses groupes seront dissociés et ses règlements et activités attribuables à cette année supprimés. Les autres années et les périodes ambiguës sont conservées."
+    "empty_confirm": "Supprimer définitivement tous les éléments visibles de cette année ? Pour chaque élève, ses inscriptions, factures, paiements et reçus de toutes les années seront aussi supprimés. Cette action est irréversible.",
+    "teacher_confirm_permanent": "Retirer définitivement cet enseignant de l’année active ? Ses groupes seront dissociés et ses règlements et activités attribuables à cette année supprimés. Les autres années et les périodes ambiguës sont conservées.",
+    "confirm_student_delete": "Mettre « {{name}} » à la corbeille ? L’élève disparaîtra de toutes les années. Après 30 jours, il sera supprimé définitivement avec ses inscriptions, factures, paiements et reçus de toutes les années.",
+    "confirm_student_purge": "Supprimer définitivement « {{name}} » ? Toutes ses inscriptions, factures, paiements et reçus de toutes les années seront supprimés. Cette action est irréversible."
   },
   "nav": {
     "trash": "Corbeille"

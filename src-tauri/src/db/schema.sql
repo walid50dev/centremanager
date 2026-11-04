@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS students (
     status TEXT DEFAULT 'actif',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TEXT
+    deleted_at TEXT,
+    trash_school_year_id INTEGER REFERENCES school_years(id)
 );
 
 -- 7. teachers
@@ -128,6 +129,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
 CREATE TABLE IF NOT EXISTS invoices (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     enrollment_id     INTEGER REFERENCES enrollments(id) ON DELETE CASCADE,
+    type              TEXT NOT NULL DEFAULT 'groupe',
     period_month      INTEGER,
     period_year       INTEGER,
     amount_cents      INTEGER NOT NULL,
@@ -148,6 +150,14 @@ CREATE TABLE IF NOT EXISTS enrollment_fees (
     invoice_id INTEGER NOT NULL UNIQUE REFERENCES invoices(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(student_id, school_year_id)
+);
+
+-- Records that the annual fee decision was made at the first enrollment,
+-- including when the configured fee was zero. Independent of group deletion.
+CREATE TABLE IF NOT EXISTS enrollment_fee_attempts (
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    school_year_id INTEGER NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+    PRIMARY KEY(student_id, school_year_id)
 );
 
 -- 12. payments

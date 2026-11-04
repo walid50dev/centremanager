@@ -53,6 +53,12 @@ try {
   const zero = await call('cmd_enroll_student', { studentId:zeroStudent, groupId:newGroups[0].id, startDate:'2030-09-01' });
   assert.equal(zero.enrollment_fee_invoice_id, null);
   assert.equal((await call('cmd_get_student_invoices', { studentId:zeroStudent })).filter(i => i.kind === 'enrollment_fee').length, 0);
+  await call('cmd_set_enrollment_fee', { amount:25000 });
+  await call('cmd_delete_to_trash', { entityType:'group', entityId:newGroups[0].id });
+  await call('cmd_empty_trash');
+  const later = await call('cmd_enroll_student', { studentId:zeroStudent, groupId:newGroups[1].id, startDate:'2030-09-01' });
+  assert.equal(later.enrollment_fee_invoice_id, null, 'zero decision survives deleting the first group and is never charged later');
+  assert.equal((await call('cmd_get_student_invoices', {studentId:zeroStudent})).filter(i => i.kind === 'enrollment_fee').length, 0);
   await call('cmd_switch_school_year', { yearId:old.id }); assert.equal(await call('cmd_get_enrollment_fee'), 20000);
   await assert.rejects(call('cmd_set_enrollment_fee', { amount:123, yearId:next }), /changé/);
   await call('cmd_delete_to_trash', { entityType:'group', entityId:groups[0].id });

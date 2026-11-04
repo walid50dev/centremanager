@@ -101,6 +101,8 @@ interface DevStore {
   studentYears?: Record<number, number[]>;
   teacherYears?: Record<number, number[]>;
   teacherYearTrash?: Record<string, string>;
+  studentTrashYears?: Record<number, number>;
+  feeHandledYears?: Record<string, boolean>;
   expenseYears?: Record<number, number | null>;
   groupImports?: Record<string, number>;
   settings: Record<string, string>;
@@ -191,6 +193,7 @@ interface DevEnrollment {
 }
 
 interface DevInvoice {
+  type?: string;
   fee_student_id?: number;
   fee_school_year_id?: number;
   id: number;
@@ -1188,10 +1191,13 @@ function enrollOne(
 
   const schoolYear = activeYearId(store)!;
   const fee = Number(store.settings[`enrollment_fee:${schoolYear}`] ?? 0);
+  const decisionKey = `${studentId}:${schoolYear}`;
+  const firstEnrollment = !store.feeHandledYears![decisionKey];
+  store.feeHandledYears![decisionKey] = true;
   let feeInvoiceId: number | null = null;
-  if (fee > 0 && !store.invoices.some(i => i.fee_student_id === studentId && i.fee_school_year_id === schoolYear)) {
+  if (fee > 0 && firstEnrollment && !store.invoices.some(i => i.fee_student_id === studentId && i.fee_school_year_id === schoolYear)) {
     feeInvoiceId = store.nextInvoiceId++;
-    store.invoices.push({ id: feeInvoiceId, enrollment_id: 0, fee_student_id: studentId, fee_school_year_id: schoolYear,
+    store.invoices.push({ id: feeInvoiceId, enrollment_id: 0, type: 'frais_inscription', fee_student_id: studentId, fee_school_year_id: schoolYear,
       period_month: month, period_year: year, amount_cents: fee, paid_amount_cents: 0,
       status: 'impayé', due_date: startDate, created_at: nowTimestamp() });
   }
@@ -2067,7 +2073,7 @@ function trashRows(store: DevStore, type: TrashEntityType): DevTrashable[] {
 }
 function trashHasHistory(store: DevStore, type: TrashEntityType, id: number): boolean {
   const enrolled = store.enrollments.filter(e => type === 'student' ? e.student_id === id : type === 'group' ? e.group_id === id : type === 'teacher' && store.groups.some(g => g.id === e.group_id && g.teacher_id === id));
-  if (type === 'student' && store.payments.some(p => p.student_id === id)) return true;
+  if (type === 'student' && (store.payments.some(p => p.student_id === id) || store.invoices.some(i => i.fee_student_id === id))) return true;
   if (type === 'teacher' && store.teacherSettlements.some(s => s.teacher_id === id)) return true;
   if ((type === 'student' || type === 'group') && store.groups.some(g =>
       (type === 'group' ? g.id === id : enrolled.some(e => e.group_id === g.id)) &&
@@ -2079,6 +2085,7 @@ function devTrashList(store: DevStore): TrashItem[] {
   const year = activeYearId(store);
   if (year === null) return [];
   const items: Array<{ type: TrashEntityType; row: DevTrashable; deleted: string }> = [];
+  for (const student of store.students) if (student.deleted_at && store.studentTrashYears?.[student.id] === year) items.push({ type: 'student', row: student, deleted: student.deleted_at });
   for (const teacher of store.teachers) {
     const deleted = store.teacherYearTrash?.[`${teacher.id}:${year}`];
     if (deleted) items.push({ type: 'teacher', row: teacher, deleted });
@@ -2086,11 +2093,11 @@ function devTrashList(store: DevStore): TrashItem[] {
   for (const group of store.groups) if (group.deleted_at && group.school_year_id === year) items.push({ type: 'group', row: group, deleted: group.deleted_at });
   for (const expense of store.expenses) if (expense.deleted_at && store.expenseYears?.[expense.id] === year) items.push({ type: 'expense', row: expense, deleted: expense.deleted_at });
   return items.map(({ type, row, deleted }) => {
-    const record = row as DevTrashable & { full_name?: string; label?: string; subject_name?: string; level_name?: string };
+    const record = row as DevTrashable & { full_name?: string; label?: string; subject_name?: string; level_name?: string; guardian_phone?: string | null; phone?: string | null };
     const deadline = new Date(`${deleted.replace(' ', 'T')}${deleted.includes('Z') ? '' : 'Z'}`).getTime() + 30 * 86400000;
     const days = Math.max(0, Math.ceil((deadline - Date.now()) / 86400000));
     const financial = trashHasHistory(store, type, row.id);
-    return { entity_type: type, entity_id: row.id, name: record.full_name ?? record.label ?? `${record.subject_name ?? 'Groupe'} — ${record.level_name ?? ''}`, deleted_at: deleted, expires_at: new Date(deadline).toISOString(), days_remaining: days, permanent: days === 0 && financial, has_financial_history: financial };
+    return { entity_type: type, entity_id: row.id, name: record.full_name ?? record.label ?? `${record.subject_name ?? 'Groupe'} — ${record.level_name ?? ''}`, guardian_phone: type === 'student' ? (record.guardian_phone || record.phone || null) : null, deleted_at: deleted, expires_at: new Date(deadline).toISOString(), days_remaining: days, permanent: days === 0 && financial && type !== 'student', has_financial_history: financial };
   }).sort((a,b) => b.deleted_at.localeCompare(a.deleted_at));
 }
 function removePayments(store: DevStore, ids: Set<number>) {
@@ -2111,11 +2118,30 @@ function removeGroup(store: DevStore, id: number) {
   store.groups = store.groups.filter(g => g.id !== id);
   for (const [key,value] of Object.entries(store.groupImports ?? {})) if (Number(key.split(':')[0]) === id || value === id) delete store.groupImports![key];
 }
+function removeStudent(store: DevStore, id: number) {
+  const enrollments = new Set(store.enrollments.filter(e => e.student_id === id).map(e => e.id));
+  const invoices = new Set(store.invoices.filter(i => enrollments.has(i.enrollment_id)).map(i => i.id));
+  const paymentIds = new Set(store.payments.filter(p => p.student_id === id || (p.invoice_id !== null && invoices.has(p.invoice_id))).map(p => p.id));
+  const receiptIds = new Set(store.receipts.filter(r => paymentIds.has(r.payment_id)).map(r => r.id));
+  store.auditLog = store.auditLog.filter(row => {
+    if ((row.entity_type === 'enrollment' && enrollments.has(row.entity_id)) || (row.entity_type === 'payment' && paymentIds.has(row.entity_id)) || (row.entity_type === 'receipt' && receiptIds.has(row.entity_id))) return false;
+    if (row.entity_type !== 'payment' && row.entity_type !== 'receipt') return true;
+    try { return JSON.parse(row.details ?? '{}').student_id !== id; } catch { return true; }
+  });
+  removePayments(store, paymentIds);
+  store.invoices = store.invoices.filter(i => !invoices.has(i.id) && i.fee_student_id !== id);
+  store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
+  store.students = store.students.filter(s => s.id !== id); delete store.studentYears![id];
+  store.auditLog = store.auditLog.filter(row => row.entity_type !== 'student' || row.entity_id !== id);
+  delete store.studentTrashYears?.[id];
+  for (const key of Object.keys(store.feeHandledYears ?? {})) if (key.startsWith(`${id}:`)) delete store.feeHandledYears![key];
+}
 function devRemovePermanent(store: DevStore, type: TrashEntityType, id: number): void {
   const item = devTrashList(store).find(row => row.entity_type === type && row.entity_id === id);
   if (!item) throw new Error('Élément introuvable dans la corbeille');
   const year = activeYearId(store)!;
-  if (type === 'group') removeGroup(store,id);
+  if (type === 'student') removeStudent(store,id);
+  else if (type === 'group') removeGroup(store,id);
   else if (type === 'expense') { store.expenses = store.expenses.filter(e => e.id !== id); delete store.expenseYears![id]; }
   else if (type === 'teacher') {
     const belongsOnlyToYear = (date: string, month = false) => {
@@ -2163,6 +2189,14 @@ function initialiseYearMembership(store: DevStore) {
       if (years.size) teacher.deleted_at = null;
     }
   }
+  if (!store.feeHandledYears) {
+    store.feeHandledYears = {};
+    for (const e of store.enrollments) {
+      const year = store.groups.find(g => g.id === e.group_id)?.school_year_id;
+      if (year != null) store.feeHandledYears[`${e.student_id}:${year}`] = true;
+    }
+    for (const invoice of store.invoices) if (invoice.fee_student_id != null && invoice.fee_school_year_id != null) store.feeHandledYears[`${invoice.fee_student_id}:${invoice.fee_school_year_id}`] = true;
+  }
   store.expenseYears ??= Object.fromEntries(store.expenses.map(expense => [expense.id, active]));
   store.groupImports ??= {};
   for (const payment of store.payments) {
@@ -2205,7 +2239,7 @@ function invoiceInActiveYear(store: DevStore, id: number | null): boolean {
 export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
   await delay();
   const store = load();
-  const needsMembership = !store.studentYears || !store.teacherYears || !store.teacherYearTrash || !store.expenseYears || !store.groupImports || store.payments.some(row => row.school_year_id === undefined);
+  const needsMembership = !store.feeHandledYears || !store.studentYears || !store.teacherYears || !store.teacherYearTrash || !store.expenseYears || !store.groupImports || store.payments.some(row => row.school_year_id === undefined);
   initialiseYearMembership(store);
   if (needsMembership) save(store);
 
@@ -2235,12 +2269,18 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return result.sort((a, b) => rank[a.match_type] - rank[b.match_type] || a.entity_id - b.entity_id);
     }
     case 'cmd_delete_to_trash':
+    case 'cmd_delete_student':
     case 'cmd_delete_expense': {
-      const type = (cmd === 'cmd_delete_expense' ? 'expense' : asString(args, 'entityType')) as TrashEntityType;
-      const id = cmd === 'cmd_delete_expense' ? asNumber(args, 'id') : asNumber(args, 'entityId');
+      const type = (cmd === 'cmd_delete_expense' ? 'expense' : cmd === 'cmd_delete_student' ? 'student' : asString(args, 'entityType')) as TrashEntityType;
+      const id = cmd === 'cmd_delete_expense' || cmd === 'cmd_delete_student' ? asNumber(args, 'id') : asNumber(args, 'entityId');
       const year = activeYearId(store);
-      if (year === null || type === 'student') throw new Error('Type de corbeille invalide');
-      if (type === 'teacher') {
+      if (year === null) throw new Error('Type de corbeille invalide');
+      if (type === 'student') {
+        const student = store.students.find(s => s.id === id && !s.deleted_at);
+        if (!student || !studentInYear(store,id,year)) throw new Error('Élément introuvable ou déjà supprimé');
+        student.deleted_at = new Date().toISOString();
+        store.studentTrashYears ??= {}; store.studentTrashYears[id] = year;
+      } else if (type === 'teacher') {
         if (!store.teachers.some(t => t.id === id && !t.deleted_at) || !teacherInYear(store,id,year)) throw new Error('Élément introuvable ou déjà supprimé');
         if (!(store.teacherYears![id] ?? []).includes(year)) (store.teacherYears![id] ??= []).push(year);
         store.teacherYearTrash![`${id}:${year}`] = new Date().toISOString();
@@ -2256,7 +2296,8 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_restore_from_trash': {
       const type = asString(args, 'entityType') as TrashEntityType, id = asNumber(args, 'entityId');
       if (!devTrashList(store).some(item => item.entity_type === type && item.entity_id === id)) throw new Error('Élément introuvable dans la corbeille');
-      if (type === 'teacher') delete store.teacherYearTrash![`${id}:${activeYearId(store)}`];
+      if (type === 'student') { store.students.find(row => row.id === id)!.deleted_at = null; delete store.studentTrashYears![id]; }
+      else if (type === 'teacher') delete store.teacherYearTrash![`${id}:${activeYearId(store)}`];
       else trashRows(store,type).find(row => row.id === id)!.deleted_at = null;
       logAudit(store, 'RESTORE', id, null, type); save(store); return undefined;
     }
@@ -2267,27 +2308,12 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_purge_trash':
     case 'cmd_empty_trash': {
       let count = 0;
+      if (cmd === 'cmd_purge_trash') {
+        const expired = store.students.filter(s => s.deleted_at && store.studentTrashYears?.[s.id] != null && new Date(s.deleted_at.replace(' ', 'T') + (s.deleted_at.includes('Z') ? '' : 'Z')).getTime() + 30 * 86400000 <= Date.now());
+        for (const student of expired) { removeStudent(store, student.id); logAudit(store, 'PURGE', student.id, null, 'student'); count++; }
+      }
       for (const item of devTrashList(store)) if (cmd === 'cmd_empty_trash' || (item.days_remaining === 0 && !item.has_financial_history)) { devRemovePermanent(store, item.entity_type, item.entity_id); count++; }
       save(store); return count;
-    }
-    case 'cmd_delete_student': {
-      const id = asNumber(args, 'id');
-      if (!store.students.some(s => s.id === id && !s.deleted_at && studentInYear(store, id))) throw new Error('Élève introuvable');
-      const enrollments = new Set(store.enrollments.filter(e => e.student_id === id).map(e => e.id));
-      const invoices = new Set(store.invoices.filter(i => enrollments.has(i.enrollment_id)).map(i => i.id));
-      const paymentIds = new Set(store.payments.filter(p => p.student_id === id || (p.invoice_id !== null && invoices.has(p.invoice_id))).map(p => p.id));
-      const receiptIds = new Set(store.receipts.filter(r => paymentIds.has(r.payment_id)).map(r => r.id));
-      store.auditLog = store.auditLog.filter(row => {
-        if ((row.entity_type === 'enrollment' && enrollments.has(row.entity_id)) || (row.entity_type === 'payment' && paymentIds.has(row.entity_id)) || (row.entity_type === 'receipt' && receiptIds.has(row.entity_id))) return false;
-        if (row.entity_type !== 'payment' && row.entity_type !== 'receipt') return true;
-        try { return JSON.parse(row.details ?? '{}').student_id !== id; } catch { return true; }
-      });
-      removePayments(store, paymentIds);
-      store.invoices = store.invoices.filter(i => !invoices.has(i.id) && i.fee_student_id !== id);
-      store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
-      store.students = store.students.filter(s => s.id !== id); delete store.studentYears![id];
-      store.auditLog = store.auditLog.filter(row => row.entity_type !== 'student' || row.entity_id !== id);
-      save(store); return undefined;
     }
     // -- Settings ---------------------------------------------------------
     case 'cmd_get_enrollment_fee': {
@@ -2384,6 +2410,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const year = store.schoolYears.find(y => y.id === id);
       if (!year) throw new Error('Année scolaire introuvable');
       if (year.is_active) throw new Error("Impossible de supprimer l'année active");
+      if (Object.values(store.studentTrashYears ?? {}).includes(id)) throw new Error("Cette année contient des élèves dans la corbeille. Restaurez-les ou videz sa corbeille avant de supprimer l’année.");
       const belongsOnlyToYear = (date: string, month = false) => {
         if (!date || !year.start_date || !year.end_date) return false;
         const value = month ? date.slice(0, 7) : date;
@@ -2396,6 +2423,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       for (const group of [...store.groups]) if (group.school_year_id === id) removeGroup(store,group.id);
       store.invoices = store.invoices.filter(i => i.fee_school_year_id !== id);
       delete store.settings[`enrollment_fee:${id}`];
+      for (const key of Object.keys(store.feeHandledYears ?? {})) if (key.endsWith(`:${id}`)) delete store.feeHandledYears![key];
       store.expenses = store.expenses.filter(e => { if (store.expenseYears?.[e.id] !== id) return true; delete store.expenseYears![e.id]; return false; });
       for (const years of Object.values(store.studentYears!)) { const i = years.indexOf(id); if (i >= 0) years.splice(i,1); }
       for (const years of Object.values(store.teacherYears!)) { const i = years.indexOf(id); if (i >= 0) years.splice(i,1); }

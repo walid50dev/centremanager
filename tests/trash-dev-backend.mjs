@@ -66,21 +66,55 @@ try {
   assert.ok(!store.payments.some(p => p.id === 90011)); assert.ok(store.payments.some(p => p.id === 90012));
   assert.ok(!store.receipts.some(r => r.id === 90011), 'a receipt covering a deleted allocation is removed');
   assert.ok(store.expenses.some(e => e.id === otherExpense.id));
-  const student = (await devInvoke('cmd_get_students', {})).data[0].id;
   store = get();
+  const student = store.enrollments.find(e => store.students.some(s => s.id === e.student_id && !s.deleted_at) && (store.studentYears[e.student_id] ?? []).includes(active)).student_id;
   const enrollment = store.enrollments.find(e => e.student_id === student);
   const invoice = store.invoices.find(i => i.enrollment_id === enrollment?.id);
   const payId = 90002;
   store.payments.push({ id: payId, student_id: student, invoice_id: invoice?.id ?? null, amount_cents: 100, payment_method: 'cash', notes: null, created_at: '2025-01-01', school_year_id: active });
   store.receipts.push({ id: 90002, payment_id: payId }); put(store);
+  const studentName = store.students.find(s => s.id === student).full_name;
+  const phone = store.students.find(s => s.id === student).guardian_phone || store.students.find(s => s.id === student).phone;
+  store.studentYears[student] = [active, other]; put(store);
   await devInvoke('cmd_delete_student', { id: student }); store = get();
+  assert.ok(store.students.find(s => s.id === student).deleted_at);
+  assert.ok(store.enrollments.some(e => e.student_id === student));
+  assert.ok(store.payments.some(p => p.student_id === student));
+  assert.ok(store.receipts.some(r => r.payment_id === payId));
+  assert.ok(!(await devInvoke('cmd_get_students', {})).data.some(s => s.id === student));
+  let item = (await list()).find(i => i.entity_type === 'student' && i.entity_id === student);
+  assert.equal(item.name, studentName); assert.equal(item.guardian_phone, phone); assert.ok(item.has_financial_history);
+  await switchYear(other);
+  assert.ok(!(await list()).some(i => i.entity_type === 'student' && i.entity_id === student));
+  await assert.rejects(devInvoke('cmd_delete_school_year', { yearId:active }), /corbeille/i);
+  await devInvoke('cmd_empty_trash');
+  assert.ok(get().students.some(s => s.id === student), 'empty other year preserves student');
+  await switchYear(active);
+  await devInvoke('cmd_restore_from_trash', { entityType:'student', entityId:student });
+  assert.equal(get().students.find(s => s.id === student).deleted_at, null);
+  assert.ok((await devInvoke('cmd_get_students', {})).data.some(s => s.id === student));
+  await remove('student', student);
+  // Explicit empty cascades visible student financial history, even with a fee.
+  store = get(); store.invoices.push({ ...store.invoices[0], id:99801, enrollment_id:0, type:'frais_inscription', fee_student_id:student, fee_school_year_id:active }); put(store);
+  await devInvoke('cmd_empty_trash'); store = get();
   assert.ok(!store.students.some(s => s.id === student));
   assert.ok(!store.enrollments.some(e => e.student_id === student));
+  assert.ok(!store.invoices.some(i => i.fee_student_id === student));
   assert.ok(!store.payments.some(p => p.student_id === student));
   assert.ok(!store.receipts.some(r => r.payment_id === payId));
-  assert.ok(!(await list()).some(i => i.entity_type === 'student'));
-  await assert.rejects(remove('student', student));
-  // Expired or financial rows must be removed immediately on explicit empty.
+  // Expiry purges financial student records across all years, not unknown legacy rows.
+  const expiring = (await devInvoke('cmd_get_students', {})).data[0].id;
+  await remove('student', expiring);
+  store = get(); store.students.find(s => s.id === expiring).deleted_at = '2020-01-01T00:00:00.000Z';
+  const legacy = store.students.find(s => s.id !== expiring && !s.deleted_at);
+  legacy.deleted_at = '2020-01-01T00:00:00.000Z'; delete store.studentTrashYears[legacy.id];
+  put(store); await switchYear(other);
+  assert.ok(await devInvoke('cmd_purge_trash') >= 1);
+  assert.ok(!get().students.some(s => s.id === expiring));
+  assert.ok(get().students.some(s => s.id === legacy.id), 'unknown legacy owner preserved');
+  // Restore test fixture for remaining assertions.
+  store = get(); store.students.find(s => s.id === legacy.id).deleted_at = null; put(store);
+  await switchYear(active);
   store = get(); const expense = store.expenses.find(e => store.expenseYears[e.id] === active); put(store);
   await remove('expense', expense.id);
   assert.equal(await devInvoke('cmd_empty_trash'), 1);
@@ -90,5 +124,5 @@ try {
   assert.ok(!store.schoolYears.some(y => y.id === other)); assert.ok(!store.groups.some(g => g.id === otherGroup.id));
   assert.ok(!store.expenses.some(e => e.id === otherExpense.id));
   assert.ok(store.teachers.some(t => t.id === teacher)); assert.ok(!store.teacherSettlements.some(s => s.id === settlement.id));
-  console.log('Trash: scoped empty, shared teacher, student hard delete and school year removal passed');
+  console.log('Trash: scoped empty, shared teacher, student trash, restore, expiry, cascading empty and school year removal passed');
 } finally { await server.close(); }
