@@ -392,6 +392,13 @@ mod tests {
     fn test_conn() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::run_migrations(&conn).unwrap();
+        // Migrations seed one active year; use the period covered by these fixtures.
+        conn.execute(
+            "UPDATE school_years SET label = '2025-2026', start_date = '2025-09-01',
+                                     end_date = '2026-06-30' WHERE is_active = 1",
+            [],
+        )
+        .unwrap();
         conn
     }
 
@@ -413,7 +420,8 @@ mod tests {
         conn.execute(
             "INSERT INTO groups (subject_id, level_id, school_year_id, day_of_week,
                                  start_time, end_time, monthly_fee_cents, capacity, status)
-             VALUES (1, 10, 1, 'Lundi', '16:00', '18:00', ?1, 20, ?2)",
+             VALUES (1, 10, (SELECT id FROM school_years WHERE is_active = 1 LIMIT 1),
+                     'Lundi', '16:00', '18:00', ?1, 20, ?2)",
             params![fee_cents, status],
         )
         .unwrap();
@@ -465,8 +473,8 @@ mod tests {
 
     fn payment(conn: &Connection, student_id: i64, amount: i64, method: &str, created_at: &str) {
         conn.execute(
-            "INSERT INTO payments (student_id, invoice_id, amount_cents, payment_method, created_at)
-             VALUES (?1, NULL, ?2, ?3, ?4)",
+            "INSERT INTO payments (student_id, invoice_id, amount_cents, payment_method, created_at, school_year_id)
+             VALUES (?1, NULL, ?2, ?3, ?4, (SELECT id FROM school_years WHERE is_active = 1 LIMIT 1))",
             params![student_id, amount, method, created_at],
         )
         .unwrap();
@@ -649,6 +657,48 @@ mod tests {
         assert_eq!(february.theoretical_revenue_cents, 30_000);
         assert_eq!(february.monthly_revenue_cents, 30_000);
         assert_eq!(february.collection_rate, 100.0);
+
+        // Another school year must not contribute to the active year's totals,
+        // and switching years must use the new active id rather than a fixed id.
+        conn.execute(
+            "INSERT INTO school_years (label, start_date, end_date, is_active)
+             VALUES ('Année témoin', '2025-09-01', '2026-06-30', 0)",
+            [],
+        )
+        .unwrap();
+        let other_year = conn.last_insert_rowid();
+        let other_group = group(&conn, 12_000, "actif");
+        conn.execute(
+            "UPDATE groups SET school_year_id = ?1 WHERE id = ?2",
+            params![other_year, other_group],
+        )
+        .unwrap();
+        let other_enrollment = enrollment(&conn, s1, other_group, "2025-09-01", None);
+        invoice(&conn, other_enrollment, 3, 2026, 12_000, 0, "2026-03-10");
+        conn.execute(
+            "INSERT INTO payments (student_id, amount_cents, payment_method, created_at, school_year_id)
+             VALUES (?1, 7000, 'espèces', '2026-03-10 09:00:00', ?2)",
+            params![s1, other_year],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO monthly_expenses (label, amount_cents, category, month, year, school_year_id)
+             VALUES ('Autre année', 1000, 'Loyer', 3, 2026, ?1)",
+            params![other_year],
+        )
+        .unwrap();
+        let active = dashboard_kpis(&conn, 3, 2026).unwrap();
+        assert_eq!(active.theoretical_revenue_cents, 60_000);
+        assert_eq!(active.monthly_revenue_cents, 45_000);
+        assert_eq!(active.total_expenses_cents, 0);
+
+        conn.execute("UPDATE school_years SET is_active = (id = ?1)", params![other_year])
+            .unwrap();
+        let switched = dashboard_kpis(&conn, 3, 2026).unwrap();
+        assert_eq!(switched.theoretical_revenue_cents, 12_000);
+        assert_eq!(switched.monthly_revenue_cents, 7_000);
+        assert_eq!(switched.total_expenses_cents, 1_000);
+        assert_eq!(switched.net_income_cents, 6_000);
     }
 
     #[test]
