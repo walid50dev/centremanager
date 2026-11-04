@@ -186,7 +186,7 @@ pub fn dashboard_kpis(conn: &Connection, month: i32, year: i32) -> Result<Dashbo
     )?;
     let active_teachers = scalar(
         conn,
-        "SELECT COUNT(*) FROM teachers WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND (EXISTS(SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS(SELECT 1 FROM groups gy WHERE gy.teacher_id=teachers.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))",
+        "SELECT COUNT(*) FROM teachers WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND NOT EXISTS (SELECT 1 FROM teacher_school_years trashed WHERE trashed.teacher_id=teachers.id AND trashed.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND trashed.deleted_at IS NOT NULL) AND (EXISTS(SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS(SELECT 1 FROM groups gy WHERE gy.teacher_id=teachers.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))",
         &[],
     )?;
     let prev_month_revenue_cents = revenue_of(conn, prev_month, prev_year)?;

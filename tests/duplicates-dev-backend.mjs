@@ -26,9 +26,9 @@ try {
   // The warning is advisory: the backend still accepts a second record.
   const secondId = await devInvoke('cmd_create_student', { data: payload });
   assert.notEqual(id, secondId);
-  await devInvoke('cmd_delete_to_trash', { entityType: 'student', entityId: secondId });
+  await devInvoke('cmd_delete_student', { id: secondId });
   assert.deepEqual((await check('student', data)).map(x => x.entity_id), [id]);
-  await devInvoke('cmd_delete_to_trash', { entityType: 'student', entityId: id });
+  await devInvoke('cmd_delete_student', { id });
   assert.deepEqual(await check('student', data), []);
 
   const teacherId = await devInvoke('cmd_create_teacher', { data: { full_name: 'ÉLODIE   Lahlou', phone: '06 87 65 43 21', email: null, notes: null, subject_ids: [] } });

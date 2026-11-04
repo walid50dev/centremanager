@@ -36,7 +36,8 @@ pub fn importable(conn: &Connection, kind: &str, previous: i64) -> Result<Vec<Im
         "teachers" => "SELECT t.id, t.full_name, COALESCE(t.phone,''),
             (EXISTS(SELECT 1 FROM teacher_school_years x WHERE x.teacher_id=t.id AND x.school_year_id=?2)
              OR EXISTS(SELECT 1 FROM groups g WHERE g.teacher_id=t.id AND g.school_year_id=?2 AND g.deleted_at IS NULL))
-            FROM teachers t WHERE t.deleted_at IS NULL AND
+            FROM teachers t WHERE t.deleted_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM teacher_school_years trashed WHERE trashed.teacher_id=t.id AND trashed.school_year_id=?1 AND trashed.deleted_at IS NOT NULL) AND
             (EXISTS(SELECT 1 FROM teacher_school_years x WHERE x.teacher_id=t.id AND x.school_year_id=?1)
              OR EXISTS(SELECT 1 FROM groups g WHERE g.teacher_id=t.id AND g.school_year_id=?1 AND g.deleted_at IS NULL))
             ORDER BY t.full_name COLLATE NOCASE",

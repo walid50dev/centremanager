@@ -298,7 +298,7 @@ export function StudentsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-muted">{formatDate(student.enrollment_date)}</td>
-                    <td className="px-4 py-3"><TrashButton type="student" id={student.id} onDeleted={() => void load()} /></td>
+                    <td className="px-4 py-3"><TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} /></td>
                   </tr>
                 ))}
             </tbody>

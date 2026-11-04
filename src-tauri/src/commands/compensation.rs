@@ -560,7 +560,7 @@ pub fn compensation_summary(
     let mut stmt = conn
         .prepare(
             "SELECT id, full_name FROM teachers
-              WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups g WHERE g.teacher_id=teachers.id AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
+              WHERE deleted_at IS NULL AND COALESCE(status, 'actif') = 'actif' AND NOT EXISTS (SELECT 1 FROM teacher_school_years trashed WHERE trashed.teacher_id=teachers.id AND trashed.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND trashed.deleted_at IS NOT NULL) AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups g WHERE g.teacher_id=teachers.id AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
               ORDER BY full_name COLLATE NOCASE ASC",
         )
         .map_err(|err| db_err("Préparation du résumé de compensation", err))?;

@@ -487,7 +487,9 @@
     "notes_placeholder": "Besoins spécifiques, disponibilités, remarques...",
     "quick_required": "Le prénom, le nom, le niveau et le nom du tuteur sont obligatoires.",
     "guardian_column": "Tuteur",
-    "enrollment_column": "Inscription"
+    "enrollment_column": "Inscription",
+    "delete_confirm": "Supprimer définitivement {{name}} ? Toutes ses données de toutes les années (inscriptions, paiements, reçus) seront perdues.",
+    "deleted": "Élève supprimé définitivement"
   },
   "groups": {
     "title": "Groupes",
@@ -1145,16 +1147,18 @@
     "name": "Nom",
     "deleted_at": "Date de suppression",
     "actions": "Actions",
-    "retention": "Les éléments sont conservés 30 jours. Les historiques financiers restent protégés et restaurables.",
-    "preserved": "Conservé pour historique financier",
-    "financial_warning": "Sera conservé pour historique financier",
+    "retention": "Les éléments sans historique financier sont supprimés automatiquement après 30 jours. Le vidage supprime immédiatement les éléments affichés.",
+    "preserved": "Conservé après expiration automatique",
+    "financial_warning": "Conservé après expiration automatique ; la suppression manuelle est définitive.",
     "moved": "Déplacé vers la corbeille",
     "restored": "Élément restauré",
     "purged": "Corbeille mise à jour",
     "days_count_zero": "{{count}} jour",
     "days_count_two": "{{count}} jours",
     "days_count_few": "{{count}} jours",
-    "days_count_many": "{{count}} jours"
+    "days_count_many": "{{count}} jours",
+    "empty_confirm": "Vider la corbeille de cette année ? Les éléments affichés et leurs données liées seront supprimés. Cette action est irréversible.",
+    "teacher_confirm_permanent": "Retirer définitivement cet enseignant de l’année active ? Ses groupes seront dissociés et ses règlements et activités attribuables à cette année supprimés. Les autres années et les périodes ambiguës sont conservées."
   },
   "nav": {
     "trash": "Corbeille"
@@ -1211,5 +1215,12 @@
     "net": "Net",
     "subject": "Matière",
     "note": "Les avances sans facture ne sont pas ventilées par matière. Les salaires sont rattachés au mois de paie."
+  },
+  "school_year": {
+    "delete": "Supprimer l’année",
+    "delete_confirm": "Supprimer l’année {{label}} ? Toutes les données associées seront perdues.",
+    "cannot_delete_active": "Impossible de supprimer l’année active",
+    "deleted": "Année supprimée",
+    "ambiguous_note": "Les paiements sans année identifiable et les règlements de période ambiguë sont conservés."
   }
 }

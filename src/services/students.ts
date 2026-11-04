@@ -37,6 +37,8 @@ export const studentsApi = {
 
   detail: (id: number) => call<StudentDetail>('cmd_get_student_detail', { id }),
 
+  remove: (id: number) => call<void>('cmd_delete_student', { id }),
+
   create: (data: StudentInput) => call<number>('cmd_create_student', { data }),
 
   update: (id: number, data: StudentInput) => call<void>('cmd_update_student', { id, data }),

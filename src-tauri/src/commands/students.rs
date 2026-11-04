@@ -1,8 +1,6 @@
 //! Student management (Phase 3).
 //!
-//! Students are **never deleted** in V1: they are deactivated
-//! (`status = 'inactif'`) so that historical invoices, payments and receipts
-//! keep pointing at a real person. Every mutation writes an `audit_log` row.
+//! Deactivation preserves student data; explicit deletion is permanent.
 //!
 //! The core functions take `&Connection` so the tests can run them against an
 //! in-memory database; the `#[tauri::command]` wrappers only unwrap the state.
@@ -569,6 +567,21 @@ pub fn set_student_status(conn: &Connection, id: i64, status: &str) -> Result<()
     )
 }
 
+/// Permanently remove a student and their financial records atomically.
+pub fn delete_student(conn: &Connection, id: i64) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(|e| db_err("Transaction", e))?;
+    let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM students s WHERE s.id=?1 AND s.deleted_at IS NULL AND EXISTS(SELECT 1 FROM student_school_years sy WHERE sy.student_id=s.id AND sy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))", params![id], |r| r.get(0)).map_err(|e| db_err("Élève", e))?;
+    if !exists { return Err("Élève introuvable".into()); }
+    tx.execute("DELETE FROM audit_log WHERE (entity_type='enrollment' AND entity_id IN (SELECT id FROM enrollments WHERE student_id=?1)) OR (entity_type='payment' AND (entity_id IN (SELECT id FROM payments WHERE student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1)) OR (entity_type='receipt' AND (entity_id IN (SELECT r.id FROM receipts r JOIN payments p ON p.id=r.payment_id WHERE p.student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1))", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
+    tx.execute("DELETE FROM payments WHERE student_id=?1 OR invoice_id IN (SELECT i.id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id WHERE e.student_id=?1)", params![id]).map_err(|e| db_err("Suppression des paiements", e))?;
+    tx.execute("DELETE FROM audit_log WHERE entity_type='student' AND entity_id=?1", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
+    tx.execute("DELETE FROM students WHERE id=?1", params![id]).map_err(|e| db_err("Suppression de l'élève", e))?;
+    tx.commit().map_err(|e| db_err("Transaction", e))
+}
+
+#[tauri::command]
+pub fn cmd_delete_student(db: State<'_, Db>, id: i64) -> Result<(), String> { delete_student(&db.conn(), id) }
+
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
@@ -684,6 +697,20 @@ mod tests {
             address: None,
             notes: None,
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn permanent_delete_removes_student_and_financial_data_atomically() {
+        let conn = test_conn();
+        conn.execute_batch("INSERT INTO students(full_name) VALUES('S'); INSERT INTO groups(school_year_id,monthly_fee_cents,capacity) VALUES(1,100,10); INSERT INTO enrollments(student_id,group_id,start_date) VALUES(1,1,'2024-09-01'); INSERT INTO invoices(enrollment_id,amount_cents) VALUES(1,100); INSERT INTO payments(student_id,invoice_id,amount_cents) VALUES(1,1,100); INSERT INTO payments(student_id,amount_cents) VALUES(1,50); INSERT INTO receipts(payment_id) VALUES(1),(2);").unwrap();
+        conn.execute_batch("CREATE TRIGGER prevent_student_delete BEFORE DELETE ON students BEGIN SELECT RAISE(ABORT, 'blocked'); END;").unwrap();
+        assert!(delete_student(&conn,1).is_err());
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM payments",[],|r|r.get::<_,i64>(0)).unwrap(),2);
+        conn.execute_batch("DROP TRIGGER prevent_student_delete").unwrap();
+        delete_student(&conn,1).unwrap();
+        for table in ["students","enrollments","invoices","payments","receipts","student_school_years"] {
+            assert_eq!(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"),[],|r|r.get::<_,i64>(0)).unwrap(),0,"{table}");
         }
     }
 

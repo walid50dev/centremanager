@@ -10,9 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 db_source = (ROOT / 'src-tauri/src/db/mod.rs').read_text()
 import_source = (ROOT / 'src-tauri/src/commands/year_import.rs').read_text()
-part = db_source.split('fn migrate_school_year_membership', 1)[1].split('fn migrate_payment_school_year', 1)[0]
+part = db_source.split('fn migrate_school_year_membership', 1)[1].split('fn migrate_teacher_year_trash', 1)[0]
 blocks = re.findall(r'r#"(.*?)"#', part, re.S)
 assert len(blocks) == 3
+teacher_part = db_source.split('fn migrate_teacher_year_trash', 1)[1].split('fn migrate_payment_school_year', 1)[0]
+teacher_sql = re.findall(r'r#"(.*?)"#', teacher_part, re.S)[0]
 payment_part = db_source.split('fn migrate_payment_school_year', 1)[1].split('/// Columns introduced', 1)[0]
 payment_sql = re.findall(r'r#"(.*?)"#', payment_part, re.S)[0]
 
@@ -28,6 +30,9 @@ def migrate(conn):
             and conn.execute("SELECT 1 FROM school_years WHERE is_active=1").fetchone()):
         conn.executescript(blocks[1])
     conn.executescript(blocks[2])
+    if 'deleted_at' not in [row[1] for row in conn.execute('PRAGMA table_info(teacher_school_years)')]:
+        conn.execute('ALTER TABLE teacher_school_years ADD COLUMN deleted_at TEXT')
+    conn.executescript(teacher_sql)
     if 'school_year_id' not in [row[1] for row in conn.execute('PRAGMA table_info(payments)')]:
         conn.execute('ALTER TABLE payments ADD COLUMN school_year_id INTEGER REFERENCES school_years(id)')
     conn.executescript(payment_sql)
