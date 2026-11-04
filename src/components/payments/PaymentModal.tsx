@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Printer } from 'lucide-react';
 import Button from '../ui/Button';
-import CreatableSelect from '../ui/CreatableSelect';
+import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import EmptyState from '../ui/EmptyState';
 import Modal from '../ui/Modal';
 import MoneyInput from '../ui/MoneyInput';
 import { toast } from '../ui/Toast';
 import { LATE_PAYMENTS_EVENT } from '../../stores/appStore';
 import ReceiptPreviewModal from './ReceiptPreviewModal';
-import QuickCreateStudent from '../quick-create/QuickCreateStudent';
+import StudentModal from '../students/StudentModal';
 import { invoicesApi } from '../../services/invoices';
 import { paymentsApi } from '../../services/payments';
 import { studentsApi } from '../../services/students';
@@ -106,7 +106,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
 
   // Reset on open, and pre-load a fixed student.
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setQuickStudent(false); return; }
     setStep(studentId ? 2 : 1);
     setStudent(null);
     setInvoices([]);
@@ -323,7 +323,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
             {/* The list is searched by the backend (debounced) and the popup
                 filters what came back — plus “+ Nouveau…” for a first payment
                 taken before the student exists in the app. */}
-            <CreatableSelect
+            <CreatableEntitySelect
               testId="payment-student"
               placeholder={t('payment.searchPlaceholder')}
               options={results}
@@ -543,8 +543,11 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         ) : null}
       </Modal>
 
-      {quickStudent ? (
-        <QuickCreateStudent
+      {quickStudent && open ? (
+        <StudentModal
+          open
+          zIndex={60}
+          onSaved={() => {}}
           onClose={() => setQuickStudent(false)}
           onCreated={(created) => {
             setQuickStudent(false);

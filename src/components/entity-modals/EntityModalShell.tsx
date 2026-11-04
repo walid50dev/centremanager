@@ -1,35 +1,28 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Zap } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 
-export interface QuickCreateShellProps {
+export interface EntityModalShellProps {
   open: boolean;
-  /** Entity name, without the "(rapide)" suffix — used in the title. */
+  /** Entity name shown in the title. */
   title: string;
   description?: string;
   /** `id` of the `<form>` the footer button submits. */
   formId: string;
   saving: boolean;
-  /** Disables "Créer" while the minimal form is incomplete. */
+  /** Disables the submit button while the form is incomplete. */
   canSubmit?: boolean;
   onClose: () => void;
   children: ReactNode;
-  /** `quick-create-<entity>` — the panel, its form and its buttons hang off it. */
+  /** Test hook for the panel and submit button. */
   testId: string;
   zIndex?: number;
   footer?: ReactNode;
 }
 
-/**
- * Frame shared by every quick-create dialog.
- *
- * All of them are the same object: a small modal stacked **above** the form that
- * opened it (`z-60`, or `z-70` when it is opened from another quick-create),
- * two buttons, and the reminder that the parent form is not going anywhere.
- */
-export function QuickCreateShell({
+/** Shared frame for small entities without an existing full form. */
+export function EntityModalShell({
   open,
   title,
   description,
@@ -41,7 +34,7 @@ export function QuickCreateShell({
   testId,
   zIndex = 60,
   footer,
-}: QuickCreateShellProps) {
+}: EntityModalShellProps) {
   const { t } = useTranslation();
 
   return (
@@ -51,12 +44,7 @@ export function QuickCreateShell({
       size="sm"
       zIndex={zIndex}
       testId={testId}
-      title={
-        <span className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-primary" aria-hidden="true" />
-          {title}
-        </span>
-      }
+      title={title}
       description={description}
       footer={
         footer ?? (
@@ -78,11 +66,8 @@ export function QuickCreateShell({
       }
     >
       {children}
-      <p className="mt-3 border-t border-border pt-2 text-[11px] leading-4 text-muted">
-        {t('quickCreate.hint')}
-      </p>
     </Modal>
   );
 }
 
-export default QuickCreateShell;
+export default EntityModalShell;
