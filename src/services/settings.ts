@@ -32,6 +32,7 @@ export const schoolYearsApi = {
     call<number>('cmd_create_school_year', { label, startDate, endDate }),
   setActive: (id: number) => call<void>('cmd_set_active_year', { id }),
   active: () => call<SchoolYear | null>('cmd_get_active_school_year'),
+  remove: (yearId: number) => call<void>('cmd_delete_school_year', { yearId }),
   switch: (yearId: number) => call<void>('cmd_switch_school_year', { yearId }),
 };
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, Check, Plus } from 'lucide-react';
+import { CalendarDays, Check, Plus, Trash2 } from 'lucide-react';
 import Badge from '../ui/Badge';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useAppStore } from '../../stores/appStore';
@@ -30,6 +30,8 @@ export function SchoolYearSection() {
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [exporting, setExporting] = useState<number | null>(null);
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [deleteYear, setDeleteYear] = useState<SchoolYear | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const switchYear = useAppStore(state => state.switchSchoolYear);
   const loadYears = useAppStore(state => state.loadSchoolYears);
 
@@ -61,6 +63,14 @@ export function SchoolYearSection() {
     } finally {
       setActivatingId(null);
     }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteYear || deleting) return;
+    setDeleting(true);
+    try { await schoolYearsApi.remove(deleteYear.id); setDeleteYear(null); await Promise.all([loadYears(), load()]); toast.success(t('school_year.deleted')); }
+    catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setDeleting(false); }
   };
 
   const handleExport = async (year: SchoolYear, section: ExportSection | 'pdf') => {
@@ -122,6 +132,9 @@ export function SchoolYearSection() {
       <ConfirmDialog open={pendingId !== null} title={t('schoolYearSwitch.title')} message={t('schoolYearSwitch.message', { year: years.find(year => year.id === pendingId)?.label ?? '' })}
         confirmLabel={t('schoolYearSwitch.confirm')} cancelLabel={t('common.cancel')} destructive={false} loading={activatingId !== null}
         onClose={() => { if (activatingId === null) setPendingId(null); }} onConfirm={() => { if (pendingId !== null) void handleActivate(pendingId); }} />
+      <ConfirmDialog open={deleteYear !== null} title={t('school_year.delete')} message={`${t('school_year.delete_confirm', { label: deleteYear?.label ?? '' })} ${t('school_year.ambiguous_note')}`}
+        confirmLabel={t('school_year.delete')} cancelLabel={t('common.cancel')} loading={deleting}
+        onClose={() => { if (!deleting) setDeleteYear(null); }} onConfirm={() => void handleDelete()} />
       {loading ? (
         <p className="text-[13px] text-muted">{t('common.loading')}</p>
       ) : (
@@ -167,6 +180,10 @@ export function SchoolYearSection() {
                   <option value="">📊 {t('export.excel')}</option>
                   {(['students','groups','teachers','payments','expenses','salaries'] as const).map(section => <option key={section} value={section}>{t(`export.section_${section}`)}</option>)}
                 </select>
+                <span title={year.is_active ? t('school_year.cannot_delete_active') : t('school_year.delete')}>
+                  <Button size="icon" variant="ghost" aria-label={year.is_active ? t('school_year.cannot_delete_active') : t('school_year.delete')}
+                    data-testid={`year-delete-${year.id}`} disabled={year.is_active || deleting} onClick={() => setDeleteYear(year)}><Trash2 className="h-4 w-4" aria-hidden="true" /></Button>
+                </span>
                 {!year.is_active && (
                   <Button
                     size="sm"

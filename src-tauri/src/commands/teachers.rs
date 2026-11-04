@@ -242,7 +242,7 @@ pub fn list_teachers(conn: &Connection, status: Option<&str>) -> Result<Vec<Teac
 
     let sql = format!(
         "{SELECT_TEACHER}
-         WHERE t.deleted_at IS NULL AND (?1 IS NULL OR COALESCE(t.status, 'actif') = ?1) AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups gy WHERE gy.teacher_id=t.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
+         WHERE t.deleted_at IS NULL AND (?1 IS NULL OR COALESCE(t.status, 'actif') = ?1) AND NOT EXISTS (SELECT 1 FROM teacher_school_years trashed WHERE trashed.teacher_id=t.id AND trashed.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND trashed.deleted_at IS NOT NULL) AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups gy WHERE gy.teacher_id=t.id AND gy.deleted_at IS NULL AND gy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
          ORDER BY t.full_name COLLATE NOCASE ASC"
     );
     let mut stmt = conn
@@ -257,7 +257,7 @@ pub fn list_teachers(conn: &Connection, status: Option<&str>) -> Result<Vec<Teac
 
 fn teacher_by_id(conn: &Connection, id: i64) -> Result<TeacherRow, String> {
     conn.query_row(
-        &format!("{SELECT_TEACHER} WHERE t.id = ?1 AND t.deleted_at IS NULL"),
+        &format!("{SELECT_TEACHER} WHERE t.id = ?1 AND t.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND ty.deleted_at IS NOT NULL) AND (EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR EXISTS (SELECT 1 FROM groups g WHERE g.teacher_id=t.id AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND g.deleted_at IS NULL))"),
         params![id],
         map_teacher,
     )

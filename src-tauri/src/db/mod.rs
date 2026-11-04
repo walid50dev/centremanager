@@ -151,6 +151,7 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     migrate_group_schedules(conn)?;
     seed_reference_data(conn)?;
     migrate_school_year_membership(conn)?;
+    migrate_teacher_year_trash(conn)?;
     migrate_payment_school_year(conn)
 }
 
@@ -190,13 +191,13 @@ fn migrate_school_year_membership(conn: &Connection) -> rusqlite::Result<()> {
             INSERT OR IGNORE INTO student_school_years
               SELECT e.student_id, g.school_year_id FROM enrollments e JOIN groups g ON g.id=e.group_id
               WHERE e.student_id IS NOT NULL AND g.school_year_id IS NOT NULL;
-            INSERT OR IGNORE INTO teacher_school_years
+            INSERT OR IGNORE INTO teacher_school_years (teacher_id, school_year_id)
               SELECT teacher_id, school_year_id FROM groups
               WHERE teacher_id IS NOT NULL AND school_year_id IS NOT NULL;
             INSERT OR IGNORE INTO student_school_years
               SELECT s.id, y.id FROM students s JOIN school_years y ON y.is_active=1
               WHERE NOT EXISTS (SELECT 1 FROM student_school_years sy WHERE sy.student_id=s.id);
-            INSERT OR IGNORE INTO teacher_school_years
+            INSERT OR IGNORE INTO teacher_school_years (teacher_id, school_year_id)
               SELECT t.id, y.id FROM teachers t JOIN school_years y ON y.is_active=1
               WHERE NOT EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id);
             UPDATE monthly_expenses SET school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
@@ -209,8 +210,9 @@ fn migrate_school_year_membership(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TRIGGER IF NOT EXISTS student_active_school_year AFTER INSERT ON students BEGIN
           INSERT OR IGNORE INTO student_school_years SELECT NEW.id, id FROM school_years WHERE is_active=1;
         END;
-        CREATE TRIGGER IF NOT EXISTS teacher_active_school_year AFTER INSERT ON teachers BEGIN
-          INSERT OR IGNORE INTO teacher_school_years SELECT NEW.id, id FROM school_years WHERE is_active=1;
+        DROP TRIGGER IF EXISTS teacher_active_school_year;
+        CREATE TRIGGER teacher_active_school_year AFTER INSERT ON teachers BEGIN
+          INSERT OR IGNORE INTO teacher_school_years (teacher_id, school_year_id) SELECT NEW.id, id FROM school_years WHERE is_active=1;
         END;
         CREATE TRIGGER IF NOT EXISTS enrollment_student_school_year AFTER INSERT ON enrollments BEGIN
           INSERT OR IGNORE INTO student_school_years SELECT NEW.student_id, school_year_id FROM groups
@@ -220,6 +222,26 @@ fn migrate_school_year_membership(conn: &Connection) -> rusqlite::Result<()> {
           WHEN NEW.school_year_id IS NULL BEGIN
           UPDATE monthly_expenses SET school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) WHERE id=NEW.id;
         END;
+    "#)?;
+    tx.commit()
+}
+
+/// Move legacy global teacher deletion into each year membership. A teacher can
+/// be trashed independently in each year without hiding other years.
+fn migrate_teacher_year_trash(conn: &Connection) -> rusqlite::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    if !column_exists(&tx, "teacher_school_years", "deleted_at")? {
+        tx.execute_batch("ALTER TABLE teacher_school_years ADD COLUMN deleted_at TEXT;")?;
+    }
+    tx.execute_batch(r#"
+        INSERT OR IGNORE INTO teacher_school_years (teacher_id, school_year_id)
+          SELECT teacher_id, school_year_id FROM groups
+          WHERE teacher_id IS NOT NULL AND school_year_id IS NOT NULL;
+        UPDATE teacher_school_years SET deleted_at=(SELECT t.deleted_at FROM teachers t WHERE t.id=teacher_id)
+          WHERE EXISTS(SELECT 1 FROM teachers t WHERE t.id=teacher_id AND t.deleted_at IS NOT NULL)
+            AND deleted_at IS NULL;
+        UPDATE teachers SET deleted_at=NULL WHERE deleted_at IS NOT NULL
+          AND EXISTS(SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id);
     "#)?;
     tx.commit()
 }

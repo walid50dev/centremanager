@@ -101,6 +101,30 @@ pub fn set_active(conn: &Connection, id: i64) -> Result<(), String> {
         .map_err(|err| db_err("Validation de la transaction", err))
 }
 
+/// Permanently remove an inactive year's data in a single transaction.
+pub fn delete_year(conn: &Connection, year_id: i64) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(|e| db_err("Transaction", e))?;
+    let active: Option<bool> = tx.query_row("SELECT COALESCE(is_active,0) FROM school_years WHERE id=?1", params![year_id], |r| r.get(0)).optional().map_err(|e| db_err("Année scolaire", e))?;
+    match active { None => return Err("Année scolaire introuvable".into()), Some(true) => return Err("Impossible de supprimer l'année active".into()), Some(false) => {} }
+    // Include advances attributed directly to the year, as well as invoices'
+    // payments. Receipts, invoices, enrollments and schedules cascade via FKs.
+    tx.execute("DELETE FROM payments WHERE school_year_id=?1 OR invoice_id IN (SELECT i.id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE g.school_year_id=?1)", params![year_id]).map_err(|e| db_err("Suppression des paiements", e))?;
+    // Salary/activity records have no year FK. Delete only dates mapping
+    // unambiguously to this year; preserve unknown or overlapping periods.
+    tx.execute("DELETE FROM teacher_settlements WHERE EXISTS (SELECT 1 FROM school_years y WHERE y.id=?1 AND date(printf('%04d-%02d-01',year,month)) BETWEEN date(y.start_date,'start of month') AND date(y.end_date,'start of month')) AND NOT EXISTS (SELECT 1 FROM school_years y WHERE y.id<>?1 AND date(printf('%04d-%02d-01',year,month)) BETWEEN date(y.start_date,'start of month') AND date(y.end_date,'start of month'))",params![year_id]).map_err(|e|db_err("Suppression des règlements enseignants",e))?;
+    tx.execute("DELETE FROM teacher_compensation WHERE EXISTS (SELECT 1 FROM school_years y WHERE y.id=?1 AND date(printf('%04d-%02d-01',year,month)) BETWEEN date(y.start_date,'start of month') AND date(y.end_date,'start of month')) AND NOT EXISTS (SELECT 1 FROM school_years y WHERE y.id<>?1 AND date(printf('%04d-%02d-01',year,month)) BETWEEN date(y.start_date,'start of month') AND date(y.end_date,'start of month'))",params![year_id]).map_err(|e|db_err("Suppression des rémunérations",e))?;
+    tx.execute("DELETE FROM teacher_activities WHERE EXISTS (SELECT 1 FROM school_years y WHERE y.id=?1 AND date(activity_date) BETWEEN date(y.start_date) AND date(y.end_date)) AND NOT EXISTS (SELECT 1 FROM school_years y WHERE y.id<>?1 AND date(activity_date) BETWEEN date(y.start_date) AND date(y.end_date))",params![year_id]).map_err(|e|db_err("Suppression des activités",e))?;
+    tx.execute("DELETE FROM monthly_expenses WHERE school_year_id=?1", params![year_id]).map_err(|e| db_err("Suppression des dépenses", e))?;
+    tx.execute("DELETE FROM groups WHERE school_year_id=?1", params![year_id]).map_err(|e| db_err("Suppression des groupes", e))?;
+    tx.execute("DELETE FROM student_school_years WHERE school_year_id=?1", params![year_id]).map_err(|e| db_err("Suppression des liens élèves", e))?;
+    tx.execute("DELETE FROM teacher_school_years WHERE school_year_id=?1", params![year_id]).map_err(|e| db_err("Suppression des liens enseignants", e))?;
+    tx.execute("DELETE FROM school_years WHERE id=?1", params![year_id]).map_err(|e| db_err("Suppression de l'année", e))?;
+    tx.commit().map_err(|e| db_err("Transaction", e))
+}
+
+#[tauri::command]
+pub fn cmd_delete_school_year(db: State<'_, Db>, year_id: i64) -> Result<(), String> { delete_year(&db.conn(), year_id) }
+
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
@@ -152,6 +176,31 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::run_migrations(&conn).unwrap();
         conn
+    }
+
+    #[test]
+    fn delete_inactive_year_cascades_only_its_data() {
+        let conn = test_conn();
+        let old = create(&conn, "2023-2024", "2023-09-01", "2024-06-30").unwrap();
+        conn.execute_batch("INSERT INTO students(full_name) VALUES('S'); INSERT INTO teachers(full_name) VALUES('T');").unwrap();
+        conn.execute("INSERT INTO groups(teacher_id,school_year_id,monthly_fee_cents,capacity) VALUES(1,?1,100,10)", params![old]).unwrap();
+        conn.execute_batch("INSERT INTO group_schedules(group_id,day_of_week,start_time,end_time) VALUES(1,'Lundi','09:00','10:00'); INSERT INTO enrollments(student_id,group_id,start_date) VALUES(1,1,'2023-09-01'); INSERT INTO invoices(enrollment_id,amount_cents) VALUES(1,100); INSERT INTO payments(student_id,invoice_id,amount_cents) VALUES(1,1,100); INSERT INTO receipts(payment_id) VALUES(1);").unwrap();
+        conn.execute("INSERT INTO payments(student_id,amount_cents,school_year_id) VALUES(1,50,?1)",params![old]).unwrap();
+        conn.execute("INSERT INTO monthly_expenses(label,amount_cents,category,month,year,school_year_id) VALUES('E',100,'x',1,2024,?1)",params![old]).unwrap();
+        conn.execute("INSERT INTO student_school_years(student_id,school_year_id) VALUES(1,?1)",params![old]).unwrap();
+        conn.execute("INSERT INTO teacher_school_years(teacher_id,school_year_id) VALUES(1,?1)",params![old]).unwrap();
+        delete_year(&conn,old).unwrap();
+        for table in ["groups","group_schedules","enrollments","invoices","payments","receipts","monthly_expenses"] {
+            let n: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {table}"),[],|r|r.get(0)).unwrap(); assert_eq!(n,0,"{table}");
+        }
+        assert_eq!(list(&conn).unwrap().len(),1);
+        assert_eq!(conn.query_row("SELECT count(*) FROM student_school_years",[],|r|r.get::<_,i64>(0)).unwrap(),1);
+        assert_eq!(conn.query_row("SELECT count(*) FROM teacher_school_years",[],|r|r.get::<_,i64>(0)).unwrap(),1);
+    }
+    #[test]
+    fn delete_active_year_is_rejected() {
+        let conn=test_conn(); let year=list(&conn).unwrap()[0].id;
+        assert!(delete_year(&conn,year).is_err()); assert_eq!(list(&conn).unwrap().len(),1);
     }
 
     #[test]

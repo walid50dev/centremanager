@@ -46,7 +46,7 @@ fn split_full_name(value: &str) -> (String, String) {
 pub fn check_duplicates(conn: &Connection, entity_type: &str, data: &CheckDuplicateInput) -> Result<Vec<DuplicateMatch>, String> {
     let sql = match entity_type {
         "student" => "SELECT id, full_name, first_name, last_name, COALESCE(NULLIF(guardian_phone, ''), phone, '') FROM students WHERE deleted_at IS NULL AND (?1 IS NULL OR id <> ?1)",
-        "teacher" => "SELECT id, COALESCE(full_name, ''), NULL, NULL, COALESCE(phone, '') FROM teachers WHERE deleted_at IS NULL AND (?1 IS NULL OR id <> ?1)",
+        "teacher" => "SELECT id, COALESCE(full_name, ''), NULL, NULL, COALESCE(phone, '') FROM teachers WHERE deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=teachers.id AND ty.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND ty.deleted_at IS NOT NULL) AND (?1 IS NULL OR id <> ?1)",
         _ => return Err("Type d'entité invalide".to_string()),
     };
     let first = normalize_name(&data.first_name);

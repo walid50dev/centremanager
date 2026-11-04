@@ -46,16 +46,16 @@ export function Sidebar() {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const [trashCount, setTrashCount] = useState(0);
+  const activeYear = useAppStore(state => state.activeSchoolYear);
   useEffect(() => {
     let active = true;
     const refresh = () => { void trashApi.list().then(items => { if (active) setTrashCount(items.length); }).catch(() => {}); };
     window.addEventListener(TRASH_CHANGED, refresh);
     void trashApi.purge().then(refresh).catch(refresh);
     return () => { active = false; window.removeEventListener(TRASH_CHANGED, refresh); };
-  }, []);
+  }, [activeYear?.id]);
   const latePaymentCount = useAppStore((state) => state.latePaymentCount);
   const years = useAppStore(state => state.schoolYears);
-  const activeYear = useAppStore(state => state.activeSchoolYear);
   const switchYear = useAppStore(state => state.switchSchoolYear);
   const [pendingYear, setPendingYear] = useState<number | null>(null);
   const [switching, setSwitching] = useState(false);

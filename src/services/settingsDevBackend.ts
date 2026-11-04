@@ -100,6 +100,7 @@ const SEED_SUBJECTS = [
 interface DevStore {
   studentYears?: Record<number, number[]>;
   teacherYears?: Record<number, number[]>;
+  teacherYearTrash?: Record<string, string>;
   expenseYears?: Record<number, number | null>;
   groupImports?: Record<string, number>;
   settings: Record<string, string>;
@@ -1672,7 +1673,7 @@ function teacherRow(store: DevStore, teacher: DevTeacher): Teacher {
 
 function findTeacher(store: DevStore, id: number): DevTeacher {
   const teacher = store.teachers.find((entry) => entry.id === id);
-  if (!teacher) throw new Error('Enseignant introuvable');
+  if (!teacher || teacher.deleted_at || (store.teacherYears && !teacherInYear(store, id))) throw new Error('Enseignant introuvable');
   return teacher;
 }
 
@@ -2414,25 +2415,66 @@ function trashHasHistory(store: DevStore, type: TrashEntityType, id: number): bo
   return store.invoices.some(i => enrolled.some(e => e.id === i.enrollment_id));
 }
 function devTrashList(store: DevStore): TrashItem[] {
-  return (['student', 'teacher', 'group', 'expense'] as TrashEntityType[]).flatMap(type => trashRows(store, type).filter(row => row.deleted_at).map(row => {
+  const year = activeYearId(store);
+  if (year === null) return [];
+  const items: Array<{ type: TrashEntityType; row: DevTrashable; deleted: string }> = [];
+  for (const teacher of store.teachers) {
+    const deleted = store.teacherYearTrash?.[`${teacher.id}:${year}`];
+    if (deleted) items.push({ type: 'teacher', row: teacher, deleted });
+  }
+  for (const group of store.groups) if (group.deleted_at && group.school_year_id === year) items.push({ type: 'group', row: group, deleted: group.deleted_at });
+  for (const expense of store.expenses) if (expense.deleted_at && store.expenseYears?.[expense.id] === year) items.push({ type: 'expense', row: expense, deleted: expense.deleted_at });
+  return items.map(({ type, row, deleted }) => {
     const record = row as DevTrashable & { full_name?: string; label?: string; subject_name?: string; level_name?: string };
-    const deadline = new Date(`${row.deleted_at!.replace(' ', 'T')}${row.deleted_at!.includes('Z') ? '' : 'Z'}`).getTime() + 30 * 86400000;
+    const deadline = new Date(`${deleted.replace(' ', 'T')}${deleted.includes('Z') ? '' : 'Z'}`).getTime() + 30 * 86400000;
     const days = Math.max(0, Math.ceil((deadline - Date.now()) / 86400000));
     const financial = trashHasHistory(store, type, row.id);
-    return { entity_type: type, entity_id: row.id, name: record.full_name ?? record.label ?? `${record.subject_name ?? 'Groupe'} — ${record.level_name ?? ''}`, deleted_at: row.deleted_at!, expires_at: new Date(deadline).toISOString(), days_remaining: days, permanent: days === 0 && financial, has_financial_history: financial };
-  })).sort((a,b) => b.deleted_at.localeCompare(a.deleted_at));
+    return { entity_type: type, entity_id: row.id, name: record.full_name ?? record.label ?? `${record.subject_name ?? 'Groupe'} — ${record.level_name ?? ''}`, deleted_at: deleted, expires_at: new Date(deadline).toISOString(), days_remaining: days, permanent: days === 0 && financial, has_financial_history: financial };
+  }).sort((a,b) => b.deleted_at.localeCompare(a.deleted_at));
 }
-function devRemovePermanent(store: DevStore, type: TrashEntityType, id: number): boolean {
-  const rows = trashRows(store, type); const index = rows.findIndex(row => row.id === id && row.deleted_at);
-  if (index < 0) throw new Error('Élément introuvable dans la corbeille');
-  if (trashHasHistory(store, type, id)) return false;
-  if (type === 'student') store.enrollments = store.enrollments.filter(e => e.student_id !== id);
-  if (type === 'group') store.enrollments = store.enrollments.filter(e => e.group_id !== id);
-  if (type === 'teacher') {
-    store.teacherActivities = store.teacherActivities.filter(a => a.teacher_id !== id);
-    store.groups.forEach(group => { if (group.teacher_id === id) { group.teacher_id = null; group.teacher_name = null; } });
+function removePayments(store: DevStore, ids: Set<number>) {
+  store.receipts = store.receipts.filter(receipt => !ids.has(receipt.payment_id));
+  store.payments = store.payments.filter(payment => !ids.has(payment.id));
+}
+function removeGroup(store: DevStore, id: number) {
+  const enrollments = new Set(store.enrollments.filter(e => e.group_id === id).map(e => e.id));
+  const invoices = new Set(store.invoices.filter(i => enrollments.has(i.enrollment_id)).map(i => i.id));
+  const affected = store.payments.filter(p => p.invoice_id !== null && invoices.has(p.invoice_id));
+  const batches = new Set(affected.filter(p => p.batch_id != null).map(p => p.batch_id));
+  const year = store.groups.find(g => g.id === id)?.school_year_id;
+  const batchReceipts = new Set(store.payments.filter(p => p.batch_id != null && batches.has(p.batch_id) && p.school_year_id === year).map(p => p.id));
+  store.receipts = store.receipts.filter(receipt => !batchReceipts.has(receipt.payment_id));
+  removePayments(store, new Set(affected.map(p => p.id)));
+  store.invoices = store.invoices.filter(i => !invoices.has(i.id));
+  store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
+  store.groups = store.groups.filter(g => g.id !== id);
+  for (const [key,value] of Object.entries(store.groupImports ?? {})) if (Number(key.split(':')[0]) === id || value === id) delete store.groupImports![key];
+}
+function devRemovePermanent(store: DevStore, type: TrashEntityType, id: number): void {
+  const item = devTrashList(store).find(row => row.entity_type === type && row.entity_id === id);
+  if (!item) throw new Error('Élément introuvable dans la corbeille');
+  const year = activeYearId(store)!;
+  if (type === 'group') removeGroup(store,id);
+  else if (type === 'expense') { store.expenses = store.expenses.filter(e => e.id !== id); delete store.expenseYears![id]; }
+  else if (type === 'teacher') {
+    const belongsOnlyToYear = (date: string, month = false) => {
+      if (!date) return false;
+      const value = month ? date.slice(0,7) : date;
+      const matches = store.schoolYears.filter(y => y.start_date && y.end_date && value >= (month ? y.start_date.slice(0,7) : y.start_date) && value <= (month ? y.end_date.slice(0,7) : y.end_date));
+      return matches.length === 1 && matches[0].id === year;
+    };
+    store.teacherSettlements = store.teacherSettlements.filter(s => s.teacher_id !== id || !s.year || !s.month || !belongsOnlyToYear(`${s.year}-${String(s.month).padStart(2,'0')}-01`,true));
+    store.teacherActivities = store.teacherActivities.filter(a => a.teacher_id !== id || !a.activity_date || !belongsOnlyToYear(a.activity_date));
+    store.groups.forEach(group => { if (group.teacher_id === id && group.school_year_id === year) { group.teacher_id = null; group.teacher_name = null; } });
+    store.teacherYears![id] = (store.teacherYears![id] ?? []).filter(y => y !== year);
+    delete store.teacherYearTrash![`${id}:${year}`];
+    if (!store.teacherYears![id].length && !store.groups.some(g => g.teacher_id === id) && !store.teacherSettlements.some(s => s.teacher_id === id) && !store.teacherActivities.some(a => a.teacher_id === id)) {
+      store.teachers = store.teachers.filter(t => t.id !== id);
+      store.teacherActivities = store.teacherActivities.filter(a => a.teacher_id !== id);
+      store.teacherSettlements = store.teacherSettlements.filter(a => a.teacher_id !== id);
+    }
   }
-  rows.splice(index, 1); logAudit(store, 'PURGE', id, null, type); return true;
+  logAudit(store, 'PURGE', id, null, type);
 }
 
 function activeYearId(store: DevStore): number | null { return store.schoolYears.find(year => year.is_active)?.id ?? null; }
@@ -2450,6 +2492,14 @@ function initialiseYearMembership(store: DevStore) {
     for (const teacher of store.teachers) {
       const ids = store.groups.filter(group => group.teacher_id === teacher.id && group.school_year_id != null).map(group => group.school_year_id!);
       store.teacherYears[teacher.id] = [...new Set(ids.length ? ids : active === null ? [] : [active])];
+    }
+  }
+  if (!store.teacherYearTrash) {
+    store.teacherYearTrash = {};
+    for (const teacher of store.teachers) if (teacher.deleted_at) {
+      const years = new Set([...(store.teacherYears?.[teacher.id] ?? []), ...store.groups.filter(g => g.teacher_id === teacher.id && g.school_year_id != null).map(g => g.school_year_id!)]);
+      for (const year of years) store.teacherYearTrash[`${teacher.id}:${year}`] = teacher.deleted_at;
+      if (years.size) teacher.deleted_at = null;
     }
   }
   store.expenseYears ??= Object.fromEntries(store.expenses.map(expense => [expense.id, active]));
@@ -2482,7 +2532,7 @@ function studentInYear(store: DevStore, id: number, year: number | null = active
   return year !== null && (store.studentYears?.[id]?.includes(year) ?? false);
 }
 function teacherInYear(store: DevStore, id: number, year: number | null = activeYearId(store)): boolean {
-  return year !== null && ((store.teacherYears?.[id]?.includes(year) ?? false) || store.groups.some(group => !group.deleted_at && group.teacher_id === id && group.school_year_id === year));
+  return year !== null && !store.teacherYearTrash?.[`${id}:${year}`] && ((store.teacherYears?.[id]?.includes(year) ?? false) || store.groups.some(group => !group.deleted_at && group.teacher_id === id && group.school_year_id === year));
 }
 function invoiceInActiveYear(store: DevStore, id: number | null): boolean {
   const invoice = store.invoices.find(row => row.id === id);
@@ -2493,7 +2543,7 @@ function invoiceInActiveYear(store: DevStore, id: number | null): boolean {
 export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
   await delay();
   const store = load();
-  const needsMembership = !store.studentYears || !store.teacherYears || !store.expenseYears || !store.groupImports || store.payments.some(row => row.school_year_id === undefined);
+  const needsMembership = !store.studentYears || !store.teacherYears || !store.teacherYearTrash || !store.expenseYears || !store.groupImports || store.payments.some(row => row.school_year_id === undefined);
   initialiseYearMembership(store);
   if (needsMembership) save(store);
 
@@ -2512,7 +2562,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const rows: Array<{ id: number; full_name: string; deleted_at?: string | null; phone: string | null; first_name?: string | null; last_name?: string | null; guardian_phone?: string | null }> = type === 'student' ? store.students : store.teachers;
       const result: DuplicateMatch[] = [];
       for (const row of rows) {
-        if (row.deleted_at || row.id === data.id) continue;
+        if (row.deleted_at || row.id === data.id || (type === 'teacher' && store.teacherYearTrash?.[`${row.id}:${activeYearId(store)}`])) continue;
         const [fallbackFirst = '', ...fallbackLast] = row.full_name.trim().split(/\s+/);
         const nameMatch = Boolean(first && last && normalizeName(row.first_name?.trim() || fallbackFirst) === first && normalizeName(row.last_name?.trim() || fallbackLast.join(' ')) === last);
         const storedPhone = type === 'student' ? row.guardian_phone || row.phone || '' : row.phone || '';
@@ -2526,26 +2576,56 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_delete_expense': {
       const type = (cmd === 'cmd_delete_expense' ? 'expense' : asString(args, 'entityType')) as TrashEntityType;
       const id = cmd === 'cmd_delete_expense' ? asNumber(args, 'id') : asNumber(args, 'entityId');
-      const row = trashRows(store, type).find(item => item.id === id && !item.deleted_at);
-      if (!row) throw new Error('Élément introuvable ou déjà supprimé');
-      row.deleted_at = new Date().toISOString(); logAudit(store, 'TRASH', id, null, type); save(store); return undefined;
+      const year = activeYearId(store);
+      if (year === null || type === 'student') throw new Error('Type de corbeille invalide');
+      if (type === 'teacher') {
+        if (!store.teachers.some(t => t.id === id && !t.deleted_at) || !teacherInYear(store,id,year)) throw new Error('Élément introuvable ou déjà supprimé');
+        if (!(store.teacherYears![id] ?? []).includes(year)) (store.teacherYears![id] ??= []).push(year);
+        store.teacherYearTrash![`${id}:${year}`] = new Date().toISOString();
+      } else {
+        const row = trashRows(store, type).find(item => item.id === id && !item.deleted_at);
+        const inYear = type === 'group' ? store.groups.some(g => g.id === id && g.school_year_id === year) : type === 'expense' && store.expenseYears?.[id] === year;
+        if (!row || !inYear) throw new Error('Élément introuvable ou déjà supprimé');
+        row.deleted_at = new Date().toISOString();
+      }
+      logAudit(store, 'TRASH', id, null, type); save(store); return undefined;
     }
     case 'cmd_list_trash': return clone(devTrashList(store));
     case 'cmd_restore_from_trash': {
       const type = asString(args, 'entityType') as TrashEntityType, id = asNumber(args, 'entityId');
-      const row = trashRows(store, type).find(item => item.id === id && item.deleted_at);
-      if (!row) throw new Error('Élément introuvable dans la corbeille');
-      row.deleted_at = null; logAudit(store, 'RESTORE', id, null, type); save(store); return undefined;
+      if (!devTrashList(store).some(item => item.entity_type === type && item.entity_id === id)) throw new Error('Élément introuvable dans la corbeille');
+      if (type === 'teacher') delete store.teacherYearTrash![`${id}:${activeYearId(store)}`];
+      else trashRows(store,type).find(row => row.id === id)!.deleted_at = null;
+      logAudit(store, 'RESTORE', id, null, type); save(store); return undefined;
     }
     case 'cmd_delete_permanently': {
-      if (!devRemovePermanent(store, asString(args, 'entityType') as TrashEntityType, asNumber(args, 'entityId'))) throw new Error('Conservé pour historique financier');
+      devRemovePermanent(store, asString(args, 'entityType') as TrashEntityType, asNumber(args, 'entityId'));
       save(store); return undefined;
     }
     case 'cmd_purge_trash':
     case 'cmd_empty_trash': {
       let count = 0;
-      for (const item of devTrashList(store)) if ((cmd === 'cmd_empty_trash' || item.days_remaining === 0) && devRemovePermanent(store, item.entity_type, item.entity_id)) count++;
+      for (const item of devTrashList(store)) if (cmd === 'cmd_empty_trash' || (item.days_remaining === 0 && !item.has_financial_history)) { devRemovePermanent(store, item.entity_type, item.entity_id); count++; }
       save(store); return count;
+    }
+    case 'cmd_delete_student': {
+      const id = asNumber(args, 'id');
+      if (!store.students.some(s => s.id === id && !s.deleted_at && studentInYear(store, id))) throw new Error('Élève introuvable');
+      const enrollments = new Set(store.enrollments.filter(e => e.student_id === id).map(e => e.id));
+      const invoices = new Set(store.invoices.filter(i => enrollments.has(i.enrollment_id)).map(i => i.id));
+      const paymentIds = new Set(store.payments.filter(p => p.student_id === id || (p.invoice_id !== null && invoices.has(p.invoice_id))).map(p => p.id));
+      const receiptIds = new Set(store.receipts.filter(r => paymentIds.has(r.payment_id)).map(r => r.id));
+      store.auditLog = store.auditLog.filter(row => {
+        if ((row.entity_type === 'enrollment' && enrollments.has(row.entity_id)) || (row.entity_type === 'payment' && paymentIds.has(row.entity_id)) || (row.entity_type === 'receipt' && receiptIds.has(row.entity_id))) return false;
+        if (row.entity_type !== 'payment' && row.entity_type !== 'receipt') return true;
+        try { return JSON.parse(row.details ?? '{}').student_id !== id; } catch { return true; }
+      });
+      removePayments(store, paymentIds);
+      store.invoices = store.invoices.filter(i => !invoices.has(i.id));
+      store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
+      store.students = store.students.filter(s => s.id !== id); delete store.studentYears![id];
+      store.auditLog = store.auditLog.filter(row => row.entity_type !== 'student' || row.entity_id !== id);
+      save(store); return undefined;
     }
     // -- Settings ---------------------------------------------------------
     case 'cmd_get_centre_info':
@@ -2622,6 +2702,30 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return year.id;
     }
 
+    case 'cmd_delete_school_year': {
+      const id = asNumber(args, 'yearId');
+      const year = store.schoolYears.find(y => y.id === id);
+      if (!year) throw new Error('Année scolaire introuvable');
+      if (year.is_active) throw new Error("Impossible de supprimer l'année active");
+      const belongsOnlyToYear = (date: string, month = false) => {
+        if (!date || !year.start_date || !year.end_date) return false;
+        const value = month ? date.slice(0, 7) : date;
+        const matches = store.schoolYears.filter(y => y.start_date && y.end_date && value >= (month ? y.start_date.slice(0, 7) : y.start_date) && value <= (month ? y.end_date.slice(0, 7) : y.end_date));
+        return matches.length === 1 && matches[0].id === id;
+      };
+      store.teacherSettlements = store.teacherSettlements.filter(s => !s.year || !s.month || !belongsOnlyToYear(`${s.year}-${String(s.month).padStart(2, '0')}-01`, true));
+      store.teacherActivities = store.teacherActivities.filter(a => !a.activity_date || !belongsOnlyToYear(a.activity_date));
+      removePayments(store, new Set(store.payments.filter(p => p.school_year_id === id).map(p => p.id)));
+      for (const group of [...store.groups]) if (group.school_year_id === id) removeGroup(store,group.id);
+      store.expenses = store.expenses.filter(e => { if (store.expenseYears?.[e.id] !== id) return true; delete store.expenseYears![e.id]; return false; });
+      for (const years of Object.values(store.studentYears!)) { const i = years.indexOf(id); if (i >= 0) years.splice(i,1); }
+      for (const years of Object.values(store.teacherYears!)) { const i = years.indexOf(id); if (i >= 0) years.splice(i,1); }
+      for (const key of Object.keys(store.teacherYearTrash!)) if (key.endsWith(`:${id}`)) delete store.teacherYearTrash![key];
+      for (const key of Object.keys(store.groupImports!)) if (key.endsWith(`:${id}`)) delete store.groupImports![key];
+      store.schoolYears = store.schoolYears.filter(y => y.id !== id);
+      save(store); return undefined;
+    }
+
     case 'cmd_set_active_year':
     case 'cmd_switch_school_year': {
       const id = cmd === 'cmd_switch_school_year' ? asNumber(args, 'yearId') : asNumber(args, 'id');
@@ -2643,7 +2747,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const active = activeYearId(store);
       if (active === null || prev === active) throw new Error('Année source invalide');
       if (cmd === 'cmd_get_importable_students') return clone(store.students.filter(row => !row.deleted_at && studentInYear(store, row.id, prev)).map(row => ({ id: row.id, label: row.full_name, detail: `${row.phone ?? ''} · ${row.level_name ?? ''}`, already_imported: studentInYear(store, row.id, active) })));
-      if (cmd === 'cmd_get_importable_teachers') return clone(store.teachers.filter(row => !row.deleted_at && teacherInYear(store, row.id, prev)).map(row => ({ id: row.id, label: row.full_name, detail: row.phone ?? '', already_imported: teacherInYear(store, row.id, active) })));
+      if (cmd === 'cmd_get_importable_teachers') return clone(store.teachers.filter(row => !row.deleted_at && teacherInYear(store, row.id, prev)).map(row => ({ id: row.id, label: row.full_name, detail: row.phone ?? '', already_imported: teacherInYear(store, row.id, active) || Boolean(store.teacherYearTrash?.[`${row.id}:${active}`]) })));
       return clone(store.groups.filter(row => !row.deleted_at && row.school_year_id === prev).map(row => {
         const group = groupRow(store, row);
         return { id: row.id, label: `${group.subject_name} — ${group.level_name}`, detail: `${group.teacher_name ?? ''} · ${group.schedule_text}`, already_imported: Boolean(store.groupImports?.[`${row.id}:${active}`]) };
@@ -2664,7 +2768,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
           if (row && !studentInYear(store, id, target)) { (store.studentYears![id] ??= []).push(target); count++; }
         } else if (cmd === 'cmd_import_teachers') {
           const row = store.teachers.find(row => row.id === id && !row.deleted_at);
-          if (row && !teacherInYear(store, id, target)) { (store.teacherYears![id] ??= []).push(target); row.status = 'actif'; count++; }
+          if (row && !store.teacherYearTrash?.[`${id}:${target}`] && !teacherInYear(store, id, target)) { (store.teacherYears![id] ??= []).push(target); row.status = 'actif'; count++; }
         } else {
           const source = store.groups.find(row => row.id === id && !row.deleted_at && row.school_year_id !== target && row.school_year_id !== null);
           if (store.groupImports![`${id}:${target}`]) continue;

@@ -71,6 +71,7 @@ fn main() {
             commands::school_years::cmd_get_active_school_year,
             commands::school_years::cmd_switch_school_year,
             commands::school_years::cmd_create_school_year,
+            commands::school_years::cmd_delete_school_year,
             commands::school_years::cmd_set_active_year,
             // Levels & branches
             commands::levels::cmd_get_levels,
@@ -89,6 +90,7 @@ fn main() {
             commands::backup::cmd_get_db_info,
             // Students (Phase 3)
             commands::students::cmd_create_student,
+            commands::students::cmd_delete_student,
             commands::students::cmd_update_student,
             commands::students::cmd_get_students,
             commands::students::cmd_get_student_detail,
