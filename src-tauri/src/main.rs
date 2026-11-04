@@ -57,8 +57,16 @@ fn main() {
             commands::schedules::cmd_get_timetable,
             commands::schedules::cmd_get_timetable_rooms,
             commands::settings::cmd_set_setting,
+            commands::year_import::cmd_get_importable_students,
+            commands::year_import::cmd_get_importable_groups,
+            commands::year_import::cmd_get_importable_teachers,
+            commands::year_import::cmd_import_students,
+            commands::year_import::cmd_import_groups,
+            commands::year_import::cmd_import_teachers,
             // School years
             commands::school_years::cmd_get_school_years,
+            commands::school_years::cmd_get_active_school_year,
+            commands::school_years::cmd_switch_school_year,
             commands::school_years::cmd_create_school_year,
             commands::school_years::cmd_set_active_year,
             // Levels & branches
