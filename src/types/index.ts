@@ -736,6 +736,7 @@ export interface TrashItem {
   entity_type: TrashEntityType;
   entity_id: number;
   name: string;
+  guardian_phone: string | null;
   deleted_at: string;
   expires_at: string;
   days_remaining: number;

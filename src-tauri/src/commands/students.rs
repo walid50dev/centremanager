@@ -567,17 +567,20 @@ pub fn set_student_status(conn: &Connection, id: i64, status: &str) -> Result<()
     )
 }
 
-/// Permanently remove a student and their financial records atomically.
+/// Send a student to the current year's trash. No financial data is removed.
 pub fn delete_student(conn: &Connection, id: i64) -> Result<(), String> {
-    let tx = conn.unchecked_transaction().map_err(|e| db_err("Transaction", e))?;
-    let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM students s WHERE s.id=?1 AND s.deleted_at IS NULL AND EXISTS(SELECT 1 FROM student_school_years sy WHERE sy.student_id=s.id AND sy.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))", params![id], |r| r.get(0)).map_err(|e| db_err("Élève", e))?;
-    if !exists { return Err("Élève introuvable".into()); }
-    tx.execute("DELETE FROM audit_log WHERE (entity_type='enrollment' AND entity_id IN (SELECT id FROM enrollments WHERE student_id=?1)) OR (entity_type='payment' AND (entity_id IN (SELECT id FROM payments WHERE student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1)) OR (entity_type='receipt' AND (entity_id IN (SELECT r.id FROM receipts r JOIN payments p ON p.id=r.payment_id WHERE p.student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1))", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
-    tx.execute("DELETE FROM payments WHERE student_id=?1 OR invoice_id IN (SELECT i.id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id WHERE e.student_id=?1)", params![id]).map_err(|e| db_err("Suppression des paiements", e))?;
-    tx.execute("DELETE FROM audit_log WHERE entity_type='student' AND entity_id=?1", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
-    tx.execute("DELETE FROM invoices WHERE id IN (SELECT invoice_id FROM enrollment_fees WHERE student_id=?1)", params![id]).map_err(|e| db_err("Suppression des frais d’inscription", e))?;
-    tx.execute("DELETE FROM students WHERE id=?1", params![id]).map_err(|e| db_err("Suppression de l'élève", e))?;
-    tx.commit().map_err(|e| db_err("Transaction", e))
+    super::trash::delete_to_trash(conn, "student", id)
+}
+
+/// Permanently remove the student and all related financial data. Caller owns
+/// the transaction and has already checked that this is a trashed student.
+pub(crate) fn purge_student_data(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM audit_log WHERE (entity_type='enrollment' AND entity_id IN (SELECT id FROM enrollments WHERE student_id=?1)) OR (entity_type='payment' AND (entity_id IN (SELECT id FROM payments WHERE student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1)) OR (entity_type='receipt' AND (entity_id IN (SELECT r.id FROM receipts r JOIN payments p ON p.id=r.payment_id WHERE p.student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1))", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
+    conn.execute("DELETE FROM payments WHERE student_id=?1 OR invoice_id IN (SELECT i.id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id WHERE e.student_id=?1)", params![id]).map_err(|e| db_err("Suppression des paiements", e))?;
+    conn.execute("DELETE FROM audit_log WHERE entity_type='student' AND entity_id=?1", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
+    conn.execute("DELETE FROM invoices WHERE id IN (SELECT invoice_id FROM enrollment_fees WHERE student_id=?1)", params![id]).map_err(|e| db_err("Suppression des frais d’inscription", e))?;
+    conn.execute("DELETE FROM students WHERE id=?1", params![id]).map_err(|e| db_err("Suppression de l'élève", e))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -702,14 +705,22 @@ mod tests {
     }
 
     #[test]
-    fn permanent_delete_removes_student_and_financial_data_atomically() {
+    fn student_trash_restore_and_permanent_delete_are_atomic() {
         let conn = test_conn();
-        conn.execute_batch("INSERT INTO students(full_name) VALUES('S'); INSERT INTO groups(school_year_id,monthly_fee_cents,capacity) VALUES(1,100,10); INSERT INTO enrollments(student_id,group_id,start_date) VALUES(1,1,'2024-09-01'); INSERT INTO invoices(enrollment_id,amount_cents) VALUES(1,100); INSERT INTO payments(student_id,invoice_id,amount_cents) VALUES(1,1,100); INSERT INTO payments(student_id,amount_cents) VALUES(1,50); INSERT INTO receipts(payment_id) VALUES(1),(2);").unwrap();
+        conn.execute_batch("INSERT INTO students(full_name,guardian_phone) VALUES('S','0612345678'); INSERT INTO groups(school_year_id,monthly_fee_cents,capacity) VALUES(1,100,10); INSERT INTO enrollments(student_id,group_id,start_date) VALUES(1,1,'2024-09-01'); INSERT INTO invoices(enrollment_id,amount_cents) VALUES(1,100); INSERT INTO payments(student_id,invoice_id,amount_cents) VALUES(1,1,100); INSERT INTO payments(student_id,amount_cents) VALUES(1,50); INSERT INTO receipts(payment_id) VALUES(1),(2);").unwrap();
+        delete_student(&conn,1).unwrap();
+        assert_eq!(list_students(&conn,None,None,None,1,20).unwrap().total,0);
+        let items = super::super::trash::list(&conn).unwrap();
+        assert_eq!(items[0].guardian_phone.as_deref(),Some("0612345678"));
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM payments",[],|r|r.get::<_,i64>(0)).unwrap(),2);
+        super::super::trash::restore(&conn,"student",1).unwrap();
+        assert_eq!(list_students(&conn,None,None,None,1,20).unwrap().total,1);
+        delete_student(&conn,1).unwrap();
         conn.execute_batch("CREATE TRIGGER prevent_student_delete BEFORE DELETE ON students BEGIN SELECT RAISE(ABORT, 'blocked'); END;").unwrap();
-        assert!(delete_student(&conn,1).is_err());
+        assert!(super::super::trash::empty(&conn).is_err());
         assert_eq!(conn.query_row("SELECT COUNT(*) FROM payments",[],|r|r.get::<_,i64>(0)).unwrap(),2);
         conn.execute_batch("DROP TRIGGER prevent_student_delete").unwrap();
-        delete_student(&conn,1).unwrap();
+        assert_eq!(super::super::trash::empty(&conn).unwrap(),1);
         for table in ["students","enrollments","invoices","payments","receipts","student_school_years"] {
             assert_eq!(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"),[],|r|r.get::<_,i64>(0)).unwrap(),0,"{table}");
         }

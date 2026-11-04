@@ -91,6 +91,34 @@ class DestructiveSqlTests(unittest.TestCase):
         for table in ('students','enrollments','invoices','payments','receipts'):
             self.assertEqual(db.execute(f'SELECT id FROM {table}').fetchall(),[(2,)], table)
 
+    def test_student_trash_scope_restore_and_expiry_with_fees(self):
+        db = self.db
+        db.execute("UPDATE students SET guardian_phone='0612345678' WHERE id=1")
+        db.execute("INSERT INTO invoices(id,amount_cents,type) VALUES(3,20000,'frais_inscription')")
+        db.execute("INSERT INTO enrollment_fees(student_id,school_year_id,invoice_id,amount) VALUES(1,1,3,20000)")
+        db.execute(literal('trash.rs', "UPDATE students SET deleted_at=datetime('now'), trash_school_year_id"),(1,1))
+        query = literal('trash.rs', "SELECT 'student', st.id")
+        row = next(r for r in db.execute(query,(1,)) if r[0] == 'student')
+        self.assertEqual(row[2], 'S'); self.assertEqual(row[4], '0612345678')
+        self.assertFalse(any(r[0] == 'student' for r in db.execute(query,(2,))))
+        self.assertEqual(db.execute('SELECT count(*) FROM enrollment_fees').fetchone()[0],1)
+        db.execute(literal('trash.rs', 'UPDATE students SET deleted_at=NULL, trash_school_year_id=NULL'),(1,1))
+        self.assertIsNone(db.execute('SELECT deleted_at FROM students WHERE id=1').fetchone()[0])
+        db.execute(literal('trash.rs', "UPDATE students SET deleted_at=datetime('now'), trash_school_year_id"),(1,1))
+        db.execute("UPDATE students SET deleted_at=datetime('now','-31 days') WHERE id=1")
+        db.execute("UPDATE students SET deleted_at=datetime('now','-31 days') WHERE id=2")
+        self.assertEqual(db.execute(literal('trash.rs', 'SELECT id FROM students WHERE deleted_at IS NOT NULL AND trash_school_year_id IS NOT NULL')).fetchall(),[(1,)])
+        db.execute(literal('students.rs', "DELETE FROM audit_log WHERE (entity_type='enrollment'"),(1,))
+        db.execute(literal('students.rs', 'DELETE FROM payments WHERE student_id=?1 OR invoice_id IN'),(1,))
+        db.execute(literal('students.rs', 'DELETE FROM invoices WHERE id IN (SELECT invoice_id FROM enrollment_fees'),(1,))
+        db.execute(literal('students.rs', "DELETE FROM audit_log WHERE entity_type='student'"),(1,))
+        db.execute(literal('students.rs', 'DELETE FROM students WHERE id=?1'),(1,))
+        self.assertEqual(db.execute('SELECT id FROM students').fetchall(),[(2,)])
+        self.assertEqual(db.execute('SELECT count(*) FROM enrollment_fees').fetchone()[0],0)
+        self.assertEqual(db.execute('SELECT id FROM invoices').fetchall(),[(2,)])
+        self.assertEqual(db.execute('SELECT id FROM payments').fetchall(),[(2,)])
+        self.assertEqual(db.execute('SELECT id FROM receipts').fetchall(),[(2,)])
+
     def test_year_delete_rolls_back_on_failure(self):
         db = self.db
         db.commit()

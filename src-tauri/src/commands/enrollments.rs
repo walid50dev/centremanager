@@ -250,11 +250,16 @@ fn enroll_on(
         params![group_id], |r| r.get(0))
         .map_err(|_| "Groupe hors de l'année scolaire active".to_string())?;
     let fee = super::settings::enrollment_fee(conn)?;
+    // Persist even the zero-fee decision, so later groups cannot charge it
+    // retroactively and deleting a group cannot reset the decision.
+    let first_enrollment = conn.execute(
+        "INSERT OR IGNORE INTO enrollment_fee_attempts(student_id,school_year_id) VALUES(?1,?2)",
+        params![student_id,year_id]).map_err(|e| db_err("Décision des frais d'inscription", e))? == 1;
     let exists: bool = conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM enrollment_fees WHERE student_id=?1 AND school_year_id=?2)",
         params![student_id, year_id], |r| r.get(0)).map_err(|e| db_err("Lecture des frais d'inscription", e))?;
-    let fee_invoice_id = if fee > 0 && !exists {
-        conn.execute("INSERT INTO invoices(enrollment_id, period_month, period_year, amount_cents, paid_amount_cents, status, due_date) VALUES(NULL, ?1, ?2, ?3, 0, 'impayé', ?4)",
+    let fee_invoice_id = if fee > 0 && first_enrollment && !exists {
+        conn.execute("INSERT INTO invoices(enrollment_id, period_month, period_year, amount_cents, paid_amount_cents, status, due_date, type) VALUES(NULL, ?1, ?2, ?3, 0, 'impayé', ?4, 'frais_inscription')",
             params![date.month() as i32, date.year(), fee, start]).map_err(|e| db_err("Création des frais d'inscription", e))?;
         let id = conn.last_insert_rowid();
         conn.execute("INSERT INTO enrollment_fees(student_id, school_year_id, amount, invoice_id) VALUES(?1, ?2, ?3, ?4)",
@@ -562,6 +567,8 @@ mod tests {
         let charge = invoices.iter().find(|i| i.id == fee).unwrap();
         assert_eq!(charge.kind, "enrollment_fee");
         assert_eq!(charge.amount_cents, 20_000);
+        let stored: (i64, String, i64, i64) = conn.query_row("SELECT i.amount_cents, i.type, f.student_id, f.school_year_id FROM invoices i JOIN enrollment_fees f ON f.invoice_id=i.id WHERE i.id=?1", params![fee], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+        assert_eq!(stored, (20_000, "frais_inscription".to_string(), s, 1));
         let payment = super::super::payments::record_payment(&conn, s, &[fee], 5_000, "espèces", None).unwrap();
         let partial = super::super::invoices::student_invoices(&conn, s).unwrap();
         assert_eq!(partial.iter().find(|i| i.id == fee).unwrap().status, "partiel");
@@ -591,6 +598,11 @@ mod tests {
         super::super::settings::set_enrollment_fee(&conn, 0).unwrap();
         let other = student(&conn, "No Fee", "0612345679");
         enroll_student(&conn, other, a, "2026-09-01").unwrap();
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![other], |r| r.get::<_, i64>(0)).unwrap(), 0);
+        super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
+        super::super::trash::delete_group_data(&conn, a).unwrap();
+        let result = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:other, group_id:b, start_date:"2026-09-01".into() }]).unwrap();
+        assert!(result[0].enrollment_fee_invoice_id.is_none(), "zero decision survives deleting the first group");
         assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![other], |r| r.get::<_, i64>(0)).unwrap(), 0);
     }
 

@@ -14,12 +14,36 @@ def literal(file, fragment):
     return next(s for s in re.findall(r'"((?:[^"\\]|\\.)*)"', source, re.S) if fragment in s)
 
 class EnrollmentFeeSqlTests(base.YearImportTests):
+    def test_legacy_backfill_and_first_enrollment_decision_survive_group_deletion(self):
+        db = self.db
+        source = (here.parent / 'src-tauri/src/db/mod.rs').read_text()
+        migration = next(s for s in re.findall(r'"((?:[^"\\]|\\.)*)"', source, re.S) if 'INSERT OR IGNORE INTO enrollment_fee_attempts(student_id,school_year_id) SELECT e.student_id' in s)
+        db.executescript(migration)
+        self.assertEqual(db.execute('SELECT student_id,school_year_id FROM enrollment_fee_attempts').fetchall(), [(1,1)])
+        decision = literal('enrollments.rs', 'INSERT OR IGNORE INTO enrollment_fee_attempts(student_id,school_year_id) VALUES')
+        self.assertEqual(db.execute(decision,(2,1)).rowcount,1)
+        self.assertEqual(db.execute(decision,(2,1)).rowcount,0)
+        db.execute('DELETE FROM groups WHERE id=1')
+        self.assertEqual(db.execute('SELECT count(*) FROM enrollment_fee_attempts').fetchone()[0],2)
+        db.execute('DELETE FROM students WHERE id=2')
+        self.assertEqual(db.execute('SELECT count(*) FROM enrollment_fee_attempts').fetchone()[0],1)
+
+    def test_legacy_invoice_type_backfill(self):
+        db = self.db
+        invoice = db.execute("INSERT INTO invoices(amount_cents,type) VALUES(20000,'groupe')").lastrowid
+        db.execute('INSERT INTO enrollment_fees(student_id,school_year_id,amount,invoice_id) VALUES(1,1,20000,?)',(invoice,))
+        source = (here.parent / 'src-tauri/src/db/mod.rs').read_text()
+        backfill = next(s for s in re.findall(r'"((?:[^"\\]|\\.)*)"', source, re.S) if s.startswith("UPDATE invoices SET type='frais_inscription'"))
+        db.execute(backfill)
+        self.assertEqual(db.execute('SELECT type FROM invoices WHERE id=?',(invoice,)).fetchone(),('frais_inscription',))
+
     def test_fee_sql_ownership_receipt_export_and_year_scope(self):
         db = self.db
         insert_invoice = literal('enrollments.rs', 'INSERT INTO invoices(enrollment_id, period_month')
         insert_fee = literal('enrollments.rs', 'INSERT INTO enrollment_fees(student_id')
         fee_invoice = db.execute(insert_invoice, (9, 2024, 20000, '2024-09-01')).lastrowid
         db.execute(insert_fee, (1, 1, 20000, fee_invoice))
+        self.assertEqual(db.execute('SELECT amount_cents,type FROM invoices WHERE id=?', (fee_invoice,)).fetchone(), (20000,'frais_inscription'))
         with self.assertRaises(sqlite3.IntegrityError): db.execute(insert_fee, (1, 1, 20000, fee_invoice))
         student_sql = literal('invoices.rs', 'CASE WHEN f.id IS NOT NULL THEN \'enrollment_fee\'')
         rows = db.execute(student_sql, (1,)).fetchall()

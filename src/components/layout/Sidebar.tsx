@@ -51,8 +51,10 @@ export function Sidebar() {
     let active = true;
     const refresh = () => { void trashApi.list().then(items => { if (active) setTrashCount(items.length); }).catch(() => {}); };
     window.addEventListener(TRASH_CHANGED, refresh);
-    void trashApi.purge().then(refresh).catch(refresh);
-    return () => { active = false; window.removeEventListener(TRASH_CHANGED, refresh); };
+    const purge = () => { void trashApi.purge().then(refresh).catch(refresh); };
+    purge();
+    const timer = window.setInterval(purge, 60 * 60 * 1000);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener(TRASH_CHANGED, refresh); };
   }, [activeYear?.id]);
   const latePaymentCount = useAppStore((state) => state.latePaymentCount);
   const years = useAppStore(state => state.schoolYears);
