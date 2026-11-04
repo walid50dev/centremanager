@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
+import { createServer } from 'vite';
+const dom = new JSDOM('<!doctype html><div id="root"></div>', { url:'http://localhost/' });
+Object.assign(globalThis, { window:dom.window, document:dom.window.document, localStorage:dom.window.localStorage, Element:dom.window.Element, HTMLElement:dom.window.HTMLElement, Event:dom.window.Event, CustomEvent:dom.window.CustomEvent, IS_REACT_ACT_ENVIRONMENT:true });
+const React = await import('react'); const { act } = React; const { createRoot } = await import('react-dom/client');
+const server = await createServer({ optimizeDeps:{ noDiscovery:true }, server:{ middlewareMode:true, hmr:false }, appType:'custom' });
+const wait = ms => new Promise(resolve => setTimeout(resolve,ms));
+const query = selector => { const result=document.querySelector(selector); assert.ok(result, `Missing ${selector}`); return result; };
+const click = async el => act(async () => { el.click(); await wait(150); });
+try {
+  const i18n = (await server.ssrLoadModule('/src/i18n/index.ts')).default; await i18n.changeLanguage('fr');
+  const { devInvoke: call } = await server.ssrLoadModule('/src/services/settingsDevBackend.ts');
+  const { useAppStore } = await server.ssrLoadModule('/src/stores/appStore.ts'); await useAppStore.getState().loadSchoolYears();
+  const { default: Settings } = await server.ssrLoadModule('/src/components/settings/SchoolYearSection.tsx');
+  const { default: Finances } = await server.ssrLoadModule('/src/components/students/StudentFinancesTab.tsx');
+  const { default: Payment } = await server.ssrLoadModule('/src/components/payments/PaymentModal.tsx');
+  const { buildReceiptLabels, buildReceiptDocument } = await server.ssrLoadModule('/src/components/print/receiptLabels.ts');
+  const root = createRoot(query('#root'));
+  await act(async () => { root.render(React.createElement(Settings)); }); await act(async () => { await wait(250); });
+  await click(query('section button[aria-expanded]')); await act(async () => { await wait(100); });
+  const input = query('[data-testid="enrollment-fee-input"]');
+  await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(input, '200'); input.dispatchEvent(new dom.window.Event('input', { bubbles:true })); await wait(50); });
+  await click(query('[data-testid="enrollment-fee-save"]')); assert.equal(await call('cmd_get_enrollment_fee'), 20000);
+  const year = await call('cmd_get_active_school_year'); const group = (await call('cmd_get_groups'))[0];
+  const student = await call('cmd_create_student', { data:{ full_name:'Nadia Alaoui', first_name:'Nadia', last_name:'Alaoui', phone:'0661234567', guardian_name:'Rachid Alaoui', guardian_phone:'0661234567', enrollment_date:'2026-09-01', level_id:1, status:'actif' } });
+  const result = await call('cmd_enroll_student', { studentId:student, groupId:group.id, startDate:'2026-09-01' });
+  await act(async () => { root.render(React.createElement(Finances, { studentId:student })); }); await act(async () => { await wait(300); });
+  const table = query('[data-testid="student-invoices"]'); assert.match(table.textContent, /Frais d'inscription/); assert.ok(table.textContent.includes(year.label)); assert.match(table.textContent, /Impayé/i);
+  await act(async () => { root.render(React.createElement(Payment, { open:true, studentId:student, onClose:()=>{}, onSaved:()=>{} })); }); await act(async () => { await wait(350); });
+  const choices = query('[data-testid="payment-invoices"]'); assert.match(choices.textContent, /Frais d'inscription/); assert.ok(choices.textContent.includes(year.label));
+  const paymentId = await call('cmd_record_payment', { studentId:student, invoiceIds:[result.enrollment_fee_invoice_id], amountCents:20000, method:'espèces' });
+  const receipt = await call('cmd_get_receipt_data', { paymentId });
+  const labels = buildReceiptLabels(i18n.t.bind(i18n)); const pdf = buildReceiptDocument(receipt, labels, '', '');
+  assert.equal(pdf.items[0].subject, "Frais d'inscription"); assert.equal(pdf.items[0].month, year.label); assert.equal(pdf.items[0].group, '—'); assert.equal(pdf.items[0].amount, '200,00 DH');
+  await act(async () => { root.unmount(); });
+  console.log('Enrollment fee settings, student finances, payment selection and PDF line passed');
+} finally { await server.close(); dom.window.close(); }

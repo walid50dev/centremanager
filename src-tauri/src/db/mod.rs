@@ -255,8 +255,8 @@ fn migrate_payment_school_year(conn: &Connection) -> rusqlite::Result<()> {
         tx.execute_batch("ALTER TABLE payments ADD COLUMN school_year_id INTEGER REFERENCES school_years(id);")?;
     }
     tx.execute_batch(r#"
-      UPDATE payments SET school_year_id=(SELECT g.school_year_id FROM invoices i
-        JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE i.id=payments.invoice_id)
+      UPDATE payments SET school_year_id=COALESCE((SELECT f.school_year_id FROM enrollment_fees f WHERE f.invoice_id=payments.invoice_id), (SELECT g.school_year_id FROM invoices i
+        JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE i.id=payments.invoice_id))
         WHERE school_year_id IS NULL AND invoice_id IS NOT NULL;
       UPDATE payments SET school_year_id=(SELECT MIN(other.school_year_id) FROM payments other
         WHERE other.batch_id=payments.batch_id AND other.school_year_id IS NOT NULL
@@ -276,9 +276,10 @@ fn migrate_payment_school_year(conn: &Connection) -> rusqlite::Result<()> {
       UPDATE payments SET school_year_id=(SELECT c.year_id FROM candidates c WHERE c.payment_id=payments.id AND c.year_count=1)
         WHERE school_year_id IS NULL;
       CREATE INDEX IF NOT EXISTS idx_payments_school_year ON payments(school_year_id);
-      CREATE TRIGGER IF NOT EXISTS payment_invoice_school_year AFTER INSERT ON payments
+      DROP TRIGGER IF EXISTS payment_invoice_school_year;
+      CREATE TRIGGER payment_invoice_school_year AFTER INSERT ON payments
       WHEN NEW.invoice_id IS NOT NULL AND NEW.school_year_id IS NULL BEGIN
-        UPDATE payments SET school_year_id=(SELECT g.school_year_id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE i.id=NEW.invoice_id) WHERE id=NEW.id;
+        UPDATE payments SET school_year_id=COALESCE((SELECT f.school_year_id FROM enrollment_fees f WHERE f.invoice_id=NEW.invoice_id), (SELECT g.school_year_id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE i.id=NEW.invoice_id)) WHERE id=NEW.id;
       END;
     "#)?;
     tx.commit()
@@ -701,7 +702,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let tables = table_names(&conn).unwrap();
-        assert_eq!(tables.len(), 22, "expected 22 tables, got {tables:?}");
+        assert_eq!(tables.len(), 23, "expected 23 tables, got {tables:?}");
         for expected in [
             "settings",
             "school_years",
@@ -714,6 +715,7 @@ mod tests {
             "groups",
             "enrollments",
             "invoices",
+            "enrollment_fees",
             "payments",
             "receipts",
             "teacher_activities",

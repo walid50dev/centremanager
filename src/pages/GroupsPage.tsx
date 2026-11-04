@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { BookOpen, CalendarDays, Plus, UserRound, Wallet } from 'lucide-react';
 import Button from '../components/ui/Button';
 import TrashButton from '../components/ui/TrashButton';
+import ViewButton from '../components/ui/ViewButton';
 import Card from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
 import GroupModal from '../components/groups/GroupModal';
@@ -135,7 +136,10 @@ export function GroupsPage() {
                 }}
                 data-testid={`group-card-${group.id}`}
               >
-                <div className="flex justify-end"><TrashButton type="group" id={group.id} onDeleted={() => void load()} /></div>
+                <div className="flex justify-end gap-1">
+                  <ViewButton name={groupTitle(t, group)} testId={`view-group-${group.id}`} onView={() => setDetailId(group.id)} />
+                  <TrashButton type="group" id={group.id} onDeleted={() => void load()} />
+                </div>
                 <p dir="auto" className="text-body font-semibold text-foreground">
                   {groupTitle(t, group)}
                   {group.branch_name ? <span className="text-muted"> {group.branch_name}</span> : null}

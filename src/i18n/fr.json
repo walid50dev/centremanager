@@ -350,15 +350,6 @@
       "close": "Fermer",
       "selectedBackup": "Sauvegarde sélectionnée"
     },
-    "demo": {
-      "title": "Données de démonstration",
-      "button": "Charger données de démonstration",
-      "message": "Cela ajoutera des données de démonstration (15 élèves, 5 enseignants, 8 groupes, factures, paiements, activités). Continuer ?",
-      "hint": "Réservé à une base vide. Les données existantes ne sont pas modifiées.",
-      "confirm": "Charger",
-      "success": "Données de démonstration chargées",
-      "failed": "Impossible de charger les données de démonstration"
-    },
     "expenseCategories": "Catégories de dépenses",
     "expenseCategoriesDescription": "Les catégories proposées dans le formulaire de dépense (Loyer, WiFi, Électricité…).",
     "addCategory": "Ajouter une catégorie",
@@ -372,7 +363,11 @@
     "centre_logo": "Logo du centre",
     "upload_logo": "Choisir un logo",
     "remove_logo": "Supprimer le logo",
-    "logo_preview": "Aperçu du logo"
+    "logo_preview": "Aperçu du logo",
+    "enrollment_fee": "Frais d'inscription",
+    "enrollment_fee_label": "Frais d'inscription (par élève, par an)",
+    "enrollment_fee_hint": "Montant par élève, une seule fois par an. 0 = pas de frais.",
+    "enrollment_fee_saved": "Frais d’inscription enregistrés"
   },
   "students": {
     "new": "+ Nouvel élève",
@@ -489,7 +484,8 @@
     "guardian_column": "Tuteur",
     "enrollment_column": "Inscription",
     "delete_confirm": "Supprimer définitivement {{name}} ? Toutes ses données de toutes les années (inscriptions, paiements, reçus) seront perdues.",
-    "deleted": "Élève supprimé définitivement"
+    "deleted": "Élève supprimé définitivement",
+    "enrollment_fee": "Frais d'inscription"
   },
   "groups": {
     "title": "Groupes",
@@ -640,7 +636,8 @@
     "toast": {
       "ended": "Inscription terminée ✓",
       "created_one": "{{count}} inscription créée ✓",
-      "created_other": "{{count}} inscriptions créées ✓"
+      "created_other": "{{count}} inscriptions créées ✓",
+      "feeCreated": "Frais d'inscription facturés : {{amount}}"
     },
     "newGroup": "Nouveau groupe",
     "newStudent": "Nouvel élève"
@@ -903,7 +900,8 @@
     "studentInfo": "Informations élève",
     "paymentDetails": "Détails du paiement",
     "signature": "Signature / cachet",
-    "unavailable": "Détails historiques indisponibles"
+    "unavailable": "Détails historiques indisponibles",
+    "enrollment_fee": "Frais d'inscription"
   },
   "teachers": {
     "title": "Enseignants",
@@ -1222,5 +1220,8 @@
     "cannot_delete_active": "Impossible de supprimer l’année active",
     "deleted": "Année supprimée",
     "ambiguous_note": "Les paiements sans année identifiable et les règlements de période ambiguë sont conservés."
+  },
+  "actions": {
+    "view": "Voir la fiche"
   }
 }

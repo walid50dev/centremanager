@@ -191,6 +191,8 @@ interface DevEnrollment {
 }
 
 interface DevInvoice {
+  fee_student_id?: number;
+  fee_school_year_id?: number;
   id: number;
   enrollment_id: number;
   period_month: number;
@@ -1121,7 +1123,7 @@ function enrollOne(
   studentId: number,
   groupId: number,
   startDate: string,
-): number {
+): { id: number; enrollment_fee_invoice_id: number | null; enrollment_fee_amount_cents: number | null } {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
     throw new Error("Date d'inscription invalide (format attendu AAAA-MM-JJ)");
   }
@@ -1131,7 +1133,8 @@ function enrollOne(
     throw new Error("Cet élève est inactif : impossible de l'inscrire");
   }
   const raw = store.groups.find((entry) => entry.id === groupId);
-  if (!raw) throw new Error('Groupe introuvable');
+  if (!raw || raw.deleted_at || raw.school_year_id !== activeYearId(store)) throw new Error('Groupe introuvable');
+  if (student.deleted_at) throw new Error('Élève introuvable');
   if (raw.status !== 'actif') {
     throw new Error("Ce groupe est inactif : impossible d'y inscrire un élève");
   }
@@ -1183,6 +1186,16 @@ function enrollOne(
     store.invoices.push(invoice);
   }
 
+  const schoolYear = activeYearId(store)!;
+  const fee = Number(store.settings[`enrollment_fee:${schoolYear}`] ?? 0);
+  let feeInvoiceId: number | null = null;
+  if (fee > 0 && !store.invoices.some(i => i.fee_student_id === studentId && i.fee_school_year_id === schoolYear)) {
+    feeInvoiceId = store.nextInvoiceId++;
+    store.invoices.push({ id: feeInvoiceId, enrollment_id: 0, fee_student_id: studentId, fee_school_year_id: schoolYear,
+      period_month: month, period_year: year, amount_cents: fee, paid_amount_cents: 0,
+      status: 'impayé', due_date: startDate, created_at: nowTimestamp() });
+  }
+
   logAudit(
     store,
     'ENROLL',
@@ -1192,11 +1205,12 @@ function enrollOne(
       group_id: groupId,
       start_date: startDate,
       monthly_fee_cents: raw.monthly_fee_cents,
+      enrollment_fee_invoice_id: feeInvoiceId,
     }),
     'enrollment',
   );
 
-  return enrollment.id;
+  return { id: enrollment.id, enrollment_fee_invoice_id: feeInvoiceId, enrollment_fee_amount_cents: feeInvoiceId === null ? null : fee };
 }
 
 
@@ -1258,13 +1272,15 @@ function devInvoiceRows(store: DevStore, studentId: number): StudentInvoice[] {
     store.enrollments.filter((entry) => entry.student_id === studentId).map((entry) => entry.id),
   );
   return store.invoices
-    .filter((invoice) => enrollmentIds.has(invoice.enrollment_id) && invoiceInActiveYear(store, invoice.id))
-    .map((invoice) => {
+    .filter((invoice) => (enrollmentIds.has(invoice.enrollment_id) || invoice.fee_student_id === studentId) && invoiceInActiveYear(store, invoice.id))
+    .map((invoice): StudentInvoice => {
       const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
       const group = store.groups.find((entry) => entry.id === enrollment?.group_id);
       return {
         id: invoice.id,
-        enrollment_id: invoice.enrollment_id,
+        enrollment_id: invoice.fee_student_id ? null : invoice.enrollment_id,
+        kind: invoice.fee_student_id ? 'enrollment_fee' : 'invoice',
+        school_year_label: store.schoolYears.find(y => y.id === invoice.fee_school_year_id)?.label ?? null,
         group_subject: group?.subject_name ?? '—',
         group_level: group?.level_name ?? '—',
         group_branch: group?.branch_name ?? null,
@@ -1293,9 +1309,9 @@ function devAlerts(store: DevStore, month: number, year: number): PaymentAlerts 
   for (const invoice of store.invoices) {
     if (invoice.period_month !== month || invoice.period_year !== year || !invoiceInActiveYear(store, invoice.id)) continue;
     const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
-    const student = store.students.find((entry) => entry.id === enrollment?.student_id);
+    const student = store.students.find((entry) => entry.id === (invoice.fee_student_id ?? enrollment?.student_id));
     const group = store.groups.find(entry => entry.id === enrollment?.group_id);
-    if (!student || student.deleted_at || !group || group.deleted_at) continue;
+    if (!student || student.deleted_at || (!invoice.fee_student_id && (!group || group.deleted_at))) continue;
 
     const label = devGroupLabel(store, invoice);
     const current = byStudent.get(student.id) ?? {
@@ -1387,7 +1403,7 @@ function devRecordPayment(
     const enrollment = invoice
       ? store.enrollments.find((entry) => entry.id === invoice.enrollment_id)
       : undefined;
-    if (!invoice || enrollment?.student_id !== studentId || !store.groups.some(group => group.id === enrollment?.group_id && group.school_year_id === activeYearId(store))) {
+    if (!invoice || !invoiceInActiveYear(store, invoiceId) || (invoice.fee_student_id ?? enrollment?.student_id) !== studentId) {
       throw new Error(`La facture #${invoiceId} n'appartient pas à cet élève`);
     }
     return invoice;
@@ -1527,9 +1543,9 @@ function devReceiptItems(store: DevStore, session: DevPayment[]): ReceiptItem[] 
     return {
       subject: row?.subject_name && row.subject_name !== '—' ? row.subject_name : '',
       group_name: [row?.level_name, row?.branch_name].filter(v => v && v !== '—').join(' · '),
-      month: invoice ? `${MONTH_NAMES_FR[invoice.period_month - 1] ?? ''} ${invoice.period_year}`.trim() : '',
+      month: invoice?.fee_student_id ? store.schoolYears.find(y => y.id === invoice.fee_school_year_id)?.label ?? '' : invoice ? `${MONTH_NAMES_FR[invoice.period_month - 1] ?? ''} ${invoice.period_year}`.trim() : '',
       amount: payment.amount_cents,
-      kind: payment.invoice_id === null ? 'advance' : 'invoice',
+      kind: invoice?.fee_student_id ? 'enrollment_fee' : payment.invoice_id === null ? 'advance' : 'invoice',
     };
   });
 }
@@ -2008,7 +2024,7 @@ function devDashboardAlerts(store: DevStore): AlertItem[] {
     )
     .map((invoice) => {
       const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
-      const student = store.students.find((entry) => entry.id === enrollment?.student_id);
+      const student = store.students.find((entry) => entry.id === (invoice.fee_student_id ?? enrollment?.student_id));
       const group = store.groups.find((entry) => entry.id === enrollment?.group_id);
       const daysRemaining = daysBetween(today, invoice.due_date);
       return {
@@ -2044,361 +2060,6 @@ function devRecentPayments(store: DevStore, limit: number): RecentPayment[] {
     });
 }
 
-
-// ---------------------------------------------------------------------------
-// Phase 9 — demo data (browser mirror of `commands/demo.rs`)
-// ---------------------------------------------------------------------------
-
-/** Demo students: (name, level id, phone). */
-const DEMO_STUDENT_ROWS: Array<[string, number, string]> = [
-  ['Youssef El Amrani', 10, '0612345678'],
-  ['Fatima Zahra Bennis', 12, '0709876543'],
-  ['Amine Tazi', 11, '0611223344'],
-  ['Salma Idrissi', 9, '0705566778'],
-  ['Hamza Berrada', 7, '0698765432'],
-  ['Nadia Chraibi', 6, '0701234567'],
-  ['Mehdi Skalli', 8, '0612349876'],
-  ['Imane Fassi', 12, '0703456789'],
-  ['Omar Benjelloun', 5, '0655443322'],
-  ['Kenza Alaoui', 11, '0709871234'],
-  ['Rachid Chraibi', 10, '0666778899'],
-  ['Hajar Sabri', 4, '0702345678'],
-  ['Anas Ouazzani', 3, '0614567890'],
-  ['Layla Bennani', 2, '0708901234'],
-  ['Soufiane Cherkaoui', 1, '0612340987'],
-];
-
-/** Demo teachers: (name, subject, phone). */
-const DEMO_TEACHER_ROWS: Array<[string, string, string]> = [
-  ['Mohamed Alaoui', 'Mathématiques', '0661112233'],
-  ['Khadija Fassi', 'Physique-Chimie', '0708887766'],
-  ['Hassan Berrada', 'SVT', '0662223344'],
-  ['Nadia Cherkaoui', 'Français', '0709998887'],
-  ['Omar Skalli', 'Anglais', '0663334455'],
-];
-
-/** (mode, value, bonus %) — `percentage` is stored as percentage × 100. */
-const DEMO_COMPENSATION_ROWS: Array<[string, number, number | null]> = [
-  ['percentage', 4000, 5],
-  ['hourly', 15000, null],
-  ['per_session', 20000, null],
-  ['fixed_monthly', 300000, null],
-  ['percentage', 3500, null],
-];
-
-/** (subject, level id, teacher index, fee, capacity, day, start time). */
-const DEMO_GROUP_ROWS: Array<[string, number, number, number, number, string, string]> = [
-  ['Mathématiques', 11, 0, 45000, 20, 'Lundi', '16:00'],
-  ['Mathématiques', 10, 0, 30000, 18, 'Mercredi', '17:00'],
-  ['Physique-Chimie', 12, 1, 50000, 16, 'Mardi', '18:00'],
-  ['SVT', 11, 2, 35000, 12, 'Jeudi', '16:00'],
-  ['Français', 9, 3, 25000, 20, 'Samedi', '09:00'],
-  ['Français', 12, 3, 40000, 10, 'Vendredi', '10:00'],
-  ['Anglais', 8, 4, 20000, 20, 'Samedi', '11:00'],
-  ['Anglais', 10, 4, 30000, 14, 'Dimanche', '16:00'],
-];
-
-/** Which demo students join which demo groups (1–3 groups each). */
-const DEMO_ENROLLMENT_ROWS: number[][] = [
-  [0, 1],
-  [2],
-  [0, 1, 7],
-  [4, 6],
-  [4],
-  [5, 6],
-  [6, 7],
-  [2],
-  [4, 5],
-  [0, 7],
-  [1],
-  [3, 4],
-  [6],
-  [4],
-  [5, 0],
-];
-
-function pad2(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-/** Invoice for `(month, year)` if the enrollment does not have one yet. */
-function ensureDemoInvoice(
-  store: DevStore,
-  enrollment: DevEnrollment,
-  month: number,
-  year: number,
-): void {
-  const exists = store.invoices.some(
-    (invoice) =>
-      invoice.enrollment_id === enrollment.id &&
-      invoice.period_month === month &&
-      invoice.period_year === year,
-  );
-  if (exists) return;
-  const group = store.groups.find((entry) => entry.id === enrollment.group_id);
-  const day = Number(enrollment.start_date.slice(8, 10)) || 1;
-  store.invoices.push({
-    id: store.nextInvoiceId++,
-    enrollment_id: enrollment.id,
-    period_month: month,
-    period_year: year,
-    amount_cents: group?.monthly_fee_cents ?? 0,
-    paid_amount_cents: 0,
-    status: 'impayé',
-    due_date: adjustDueDate(year, month, day),
-    created_at: nowTimestamp(),
-  });
-}
-
-/**
- * Build the demo centre used by `cmd_seed_demo_data`.
- *
- * The browser stub is a throwaway mirror, so — unlike the Rust command, which
- * refuses to touch a database that already holds students — it simply replaces
- * the store (keeping the settings) to give the same catalogue as the desktop
- * build. The Settings button is shown in both cases and the real guard lives in
- * `commands/demo.rs`.
- */
-function buildDemoStore(previous: DevStore): DevStore {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const previousMonth = month === 1 ? 12 : month - 1;
-  const previousYear = month === 1 ? year - 1 : year;
-  const previousStart = `${previousYear}-${pad2(previousMonth)}-05`;
-  const currentStart = `${year}-${pad2(month)}-01`;
-
-  const base = seed();
-  const store: DevStore = {
-    ...base,
-    settings: { ...base.settings, ...previous.settings },
-    students: [],
-    groups: [],
-    enrollments: [],
-    invoices: [],
-    payments: [],
-    receipts: [],
-    teachers: [],
-    teacherActivities: [],
-    teacherSettlements: [],
-    expenses: [],
-    auditLog: [],
-    nextStudentId: 1,
-    nextGroupId: 1,
-    nextEnrollmentId: 1,
-    nextInvoiceId: 1,
-    nextPaymentId: 1,
-    nextReceiptId: 1,
-    nextTeacherId: 1,
-    nextActivityId: 1,
-    nextSettlementId: 1,
-    nextExpenseId: 1,
-    nextAuditId: 1,
-  };
-
-  // -- monthly charges (Phase 11) -------------------------------------------
-  // Same shape as `demo.rs`: the seven charges of the month plus the previous
-  // month's (without the supplies run) so the net card has a trend.
-  const charges: Array<[string, number, string]> = [
-    ['Loyer local principal', 1200, 'Loyer'],
-    ['Abonnement fibre', 250, 'WiFi'],
-    ['Facture électricité', 380, 'Électricité'],
-    ['Facture eau', 150, 'Eau'],
-    ['Salaire assistante', 800, 'Assistance'],
-    ['Fournitures pédagogiques', 220, 'Fournitures'],
-    ['Photocopies', 90, 'Fournitures'],
-  ];
-  charges.forEach(([label, dirhams, category], index) => {
-    const periods: Array<[number, number]> = [
-      [month, year],
-      [previousMonth, previousYear],
-    ];
-    for (const [periodMonth, periodYear] of periods) {
-      if (periodMonth !== month && index >= 5) continue;
-      const amount = periodMonth !== month && category === 'Électricité' ? dirhams + 40 : dirhams;
-      store.expenses.push({
-        id: store.nextExpenseId++,
-        label,
-        amount_cents: amount * 100,
-        category,
-        month: periodMonth,
-        year: periodYear,
-        notes: null,
-        created_at: nowTimestamp(),
-      });
-    }
-  });
-
-  // -- teachers -------------------------------------------------------------
-  const teacherIds = DEMO_TEACHER_ROWS.map(([name, subject, phone], index) => {
-    const subjectId = store.subjects.find((entry) => entry.name === subject)?.id ?? null;
-    const [mode, value, bonus] = DEMO_COMPENSATION_ROWS[index];
-    const teacher: DevTeacher = {
-      id: store.nextTeacherId++,
-      full_name: name,
-      phone,
-      email: `${name.toLowerCase().replace(' ', '.')}@centre-demo.ma`,
-      notes: 'Enseignant de démonstration',
-      status: 'actif',
-      subject_ids: subjectId ? [subjectId] : [],
-      compensation_mode: mode,
-      compensation_value_cents: value,
-      bonus_pct: bonus,
-      created_at: nowTimestamp(),
-      updated_at: nowTimestamp(),
-    };
-    store.teachers.push(teacher);
-    return teacher.id;
-  });
-
-  // -- groups ---------------------------------------------------------------
-  const groupIds = DEMO_GROUP_ROWS.map(([subject, levelId, teacher, fee, capacity, day, time], index) => {
-    const subjectId = store.subjects.find((entry) => entry.name === subject)?.id ?? null;
-    const level = store.levels.find((entry) => entry.id === levelId);
-    const teacherId = teacherIds[teacher];
-    const startHour = Number(time.slice(0, 2)) + 2;
-    const group: Group = {
-      id: store.nextGroupId++,
-      subject_id: subjectId,
-      subject_name: subject,
-      level_id: levelId,
-      level_name: level?.name ?? '—',
-      branch_id: null,
-      branch_name: null,
-      teacher_id: teacherId,
-      teacher_name: store.teachers.find((entry) => entry.id === teacherId)?.full_name ?? null,
-      school_year_id: 1,
-      day_of_week: day,
-      start_time: time,
-      end_time: `${pad2(startHour)}:${time.slice(3, 5)}`,
-      room: `Salle ${index + 1}`,
-      monthly_fee_cents: fee,
-      capacity,
-      enrolled_count: 0,
-      status: 'actif',
-      schedules: [
-        {
-          id: store.nextScheduleId++,
-          day_of_week: day,
-          start_time: time,
-          end_time: `${pad2(startHour)}:${time.slice(3, 5)}`,
-        },
-      ],
-      schedule_text: '',
-    };
-    store.groups.push(group);
-    return group.id;
-  });
-
-  // -- students -------------------------------------------------------------
-  const studentIds = DEMO_STUDENT_ROWS.map(([name, levelId, phone], index) => {
-    const level = store.levels.find((entry) => entry.id === levelId);
-    const student: Student = {
-      id: store.nextStudentId++,
-      full_name: name,
-      first_name: name.split(' ')[0], last_name: name.split(' ').slice(1).join(' '),
-      guardian_phone: phone, guardian_relation: null, secondary_contact_name: null,
-      school_name: null, enrollment_date: new Date().toISOString().slice(0, 10),
-      birth_date: `20${pad2(5 + (index % 12))}-${pad2(1 + (index % 12))}-${pad2(1 + (index % 27))}`,
-      phone,
-      secondary_contact_phone: `071${String(10000000 + index * 1111).slice(1)}`,
-      level_id: levelId,
-      level_name: level?.name ?? null,
-      branch_id: null,
-      branch_name: null,
-      guardian_name: `Abdelkader ${name.split(' ').slice(-1)[0]}`,
-      address: `${12 + index} rue Atlas, Casablanca`,
-      notes: null,
-      status: 'actif',
-      created_at: nowTimestamp(),
-      updated_at: nowTimestamp(),
-    };
-    store.students.push(student);
-    return student.id;
-  });
-
-  // -- enrollments (half last month, half this month) -----------------------
-  DEMO_ENROLLMENT_ROWS.forEach((groups, studentIndex) => {
-    groups.forEach((groupIndex, position) => {
-      const start = (studentIndex + position) % 2 === 0 ? previousStart : currentStart;
-      enrollOne(store, studentIds[studentIndex], groupIds[groupIndex], start);
-    });
-  });
-
-  // -- invoices: previous + current month ----------------------------------
-  const active = store.enrollments.filter((enrollment) => enrollment.status === 'actif');
-  for (const enrollment of active) {
-    ensureDemoInvoice(store, enrollment, previousMonth, previousYear);
-    ensureDemoInvoice(store, enrollment, month, year);
-  }
-
-  // -- payments: ~60 % of the current month, previous month left unpaid -----
-  const methods = ['espèces', 'virement', 'chèque'];
-  const currentInvoices = store.invoices
-    .filter((invoice) => invoice.period_month === month && invoice.period_year === year)
-    .sort((a, b) => a.id - b.id);
-  currentInvoices.forEach((invoice, index) => {
-    const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
-    if (!enrollment) return;
-    const method = methods[index % methods.length];
-    const pattern = index % 10;
-    if (pattern < 4) {
-      devRecordPayment(store, enrollment.student_id, [invoice.id], invoice.amount_cents, method, null);
-    } else if (pattern === 4 || pattern === 5) {
-      // Half the invoice, in two instalments (the multi-payment case).
-      const half = Math.floor(invoice.amount_cents / 2);
-      const first = Math.floor(half / 2);
-      devRecordPayment(store, enrollment.student_id, [invoice.id], first, method, '1ère tranche');
-      devRecordPayment(
-        store,
-        enrollment.student_id,
-        [invoice.id],
-        half - first,
-        method,
-        '2ème tranche',
-      );
-    }
-  });
-
-  // -- activities ----------------------------------------------------------
-  const types = ['cours', 'cours', 'rattrapage', 'examen', 'autre'];
-  teacherIds.forEach((teacherId, index) => {
-    const mode = DEMO_COMPENSATION_ROWS[index][0];
-    const entries = 6 + (index % 4);
-    for (let entry = 0; entry < entries; entry += 1) {
-      const day = 1 + ((entry * 2 + index) % 26);
-      store.teacherActivities.push({
-        id: store.nextActivityId++,
-        teacher_id: teacherId,
-        activity_date: `${year}-${pad2(month)}-${pad2(day)}`,
-        activity_type: types[(entry + index) % types.length],
-        hours: mode === 'per_session' ? null : 1.5,
-        sessions: mode === 'per_session' ? 1 : null,
-        notes: 'Séance de démonstration',
-      });
-    }
-  });
-
-  // -- settlements: the first teacher paid in full, the second halfway ------
-  teacherIds.slice(0, 2).forEach((teacherId, index) => {
-    const detail = calculateCompensation(store, teacherId, month, year);
-    if (detail.remaining_cents <= 0) return;
-    const amount = index === 0 ? detail.remaining_cents : Math.floor(detail.remaining_cents / 2);
-    if (amount <= 0) return;
-    store.teacherSettlements.push({
-      id: store.nextSettlementId++,
-      teacher_id: teacherId,
-      amount_cents: amount,
-      payment_method: 'virement',
-      notes: null,
-      month,
-      year,
-      created_at: nowTimestamp(),
-    });
-  });
-
-  return store;
-}
 
 type DevTrashable = { id: number; deleted_at?: string | null };
 function trashRows(store: DevStore, type: TrashEntityType): DevTrashable[] {
@@ -2508,7 +2169,7 @@ function initialiseYearMembership(store: DevStore) {
     if (payment.school_year_id !== undefined) continue;
     const invoice = store.invoices.find(row => row.id === payment.invoice_id);
     const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
-    payment.school_year_id = store.groups.find(row => row.id === enrollment?.group_id)?.school_year_id ?? null;
+    payment.school_year_id = invoice?.fee_school_year_id ?? store.groups.find(row => row.id === enrollment?.group_id)?.school_year_id ?? null;
   }
   for (const payment of store.payments.filter(row => row.school_year_id === null)) {
     const batchYears = new Set(store.payments.filter(row => payment.batch_id != null && row.batch_id === payment.batch_id && row.school_year_id != null).map(row => row.school_year_id!));
@@ -2522,7 +2183,7 @@ function initialiseYearMembership(store: DevStore) {
       const years = new Set((details.invoice_ids ?? []).map(id => {
         const invoice = store.invoices.find(row => row.id === id);
         const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
-        return store.groups.find(row => row.id === enrollment?.group_id)?.school_year_id;
+        return invoice?.fee_school_year_id ?? store.groups.find(row => row.id === enrollment?.group_id)?.school_year_id;
       }).filter((id): id is number => id != null));
       if (years.size === 1) payment.school_year_id = [...years][0];
     } catch { /* leave unknown rather than guessing */ }
@@ -2536,6 +2197,7 @@ function teacherInYear(store: DevStore, id: number, year: number | null = active
 }
 function invoiceInActiveYear(store: DevStore, id: number | null): boolean {
   const invoice = store.invoices.find(row => row.id === id);
+  if (invoice?.fee_school_year_id != null) return invoice.fee_school_year_id === activeYearId(store);
   const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
   return !!enrollment && store.groups.some(group => group.id === enrollment.group_id && group.school_year_id === activeYearId(store));
 }
@@ -2621,13 +2283,28 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         try { return JSON.parse(row.details ?? '{}').student_id !== id; } catch { return true; }
       });
       removePayments(store, paymentIds);
-      store.invoices = store.invoices.filter(i => !invoices.has(i.id));
+      store.invoices = store.invoices.filter(i => !invoices.has(i.id) && i.fee_student_id !== id);
       store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
       store.students = store.students.filter(s => s.id !== id); delete store.studentYears![id];
       store.auditLog = store.auditLog.filter(row => row.entity_type !== 'student' || row.entity_id !== id);
       save(store); return undefined;
     }
     // -- Settings ---------------------------------------------------------
+    case 'cmd_get_enrollment_fee': {
+      const year = activeYearId(store);
+      if (year === null) throw new Error('Aucune année scolaire active');
+      return Number(store.settings[`enrollment_fee:${year}`] ?? 0);
+    }
+    case 'cmd_set_enrollment_fee': {
+      const year = activeYearId(store);
+      if (year === null) throw new Error('Aucune année scolaire active');
+      if (args?.yearId != null && asNumber(args, 'yearId') !== year) throw new Error("L'année scolaire active a changé");
+      const amount = asNumber(args, 'amount');
+      if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('Montant invalide');
+      store.settings[`enrollment_fee:${year}`] = String(amount);
+      save(store);
+      return undefined;
+    }
     case 'cmd_get_centre_info':
       return { name: store.settings.centre_name?.trim() || store.settings.center_name?.trim() || 'CentreManager', logo: store.settings.centre_logo || store.settings.center_logo || null };
     case 'cmd_set_centre_info': {
@@ -2717,6 +2394,8 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       store.teacherActivities = store.teacherActivities.filter(a => !a.activity_date || !belongsOnlyToYear(a.activity_date));
       removePayments(store, new Set(store.payments.filter(p => p.school_year_id === id).map(p => p.id)));
       for (const group of [...store.groups]) if (group.school_year_id === id) removeGroup(store,group.id);
+      store.invoices = store.invoices.filter(i => i.fee_school_year_id !== id);
+      delete store.settings[`enrollment_fee:${id}`];
       store.expenses = store.expenses.filter(e => { if (store.expenseYears?.[e.id] !== id) return true; delete store.expenseYears![e.id]; return false; });
       for (const years of Object.values(store.studentYears!)) { const i = years.indexOf(id); if (i >= 0) years.splice(i,1); }
       for (const years of Object.values(store.teacherYears!)) { const i = years.indexOf(id); if (i >= 0) years.splice(i,1); }
@@ -2818,7 +2497,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         case 'students': rows = students.map(s => ({ id:s.id,first_name:s.first_name,last_name:s.last_name,full_name:s.full_name,phone:s.phone,level:s.level_name,branch:s.branch_name,guardian_name:s.guardian_name,school_name:s.school_name,status:s.status })); break;
         case 'groups': rows = groups.filter(g => !g.deleted_at).map(g => { const r = groupRow(store,g); return { id:r.id,subject:r.subject_name,level:r.level_name,branch:r.branch_name,teacher:r.teacher_name,day_of_week:r.day_of_week,start_time:r.start_time,end_time:r.end_time,schedules:r.schedules.map(s => `${s.day_of_week} ${s.start_time}-${s.end_time}`).join(', '),room:r.room,monthly_fee_cents:r.monthly_fee_cents,capacity:r.capacity,status:r.status }; }); break;
         case 'teachers': rows = teachers.map(t => ({id:t.id,full_name:t.full_name,phone:t.phone,email:t.email,status:t.status})); break;
-        case 'payments': rows = payments.map(p => ({id:p.id,student:store.students.find(s => s.id === p.student_id)?.full_name,invoice_id:p.invoice_id,amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
+        case 'payments': rows = payments.map(p => ({id:p.id,student:store.students.find(s => s.id === p.student_id)?.full_name,invoice_id:p.invoice_id,invoice_kind:store.invoices.find(i => i.id === p.invoice_id)?.fee_student_id ? 'enrollment_fee' : p.invoice_id === null ? 'advance' : 'invoice',amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
         case 'expenses': rows = expenses.map(e => ({id:e.id,label:e.label,amount_cents:e.amount_cents,category:e.category,month:e.month,year:e.year,notes:e.notes,created_at:e.created_at})); break;
         case 'salaries': rows = salaries.map(p => ({id:p.id,teacher:store.teachers.find(t => t.id === p.teacher_id)?.full_name,month:p.month,year:p.year,amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
         default: throw new Error("Section d'export invalide");
@@ -3810,7 +3489,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const today = new Date().toISOString().slice(0, 10);
       return store.invoices.filter(
         (invoice) =>
-          invoiceInActiveYear(store, invoice.id) && store.enrollments.some(e => e.id === invoice.enrollment_id && store.students.some(s => s.id === e.student_id && !s.deleted_at) && store.groups.some(g => g.id === e.group_id && !g.deleted_at)) &&
+          invoiceInActiveYear(store, invoice.id) && (invoice.fee_student_id ? store.students.some(s => s.id === invoice.fee_student_id && !s.deleted_at) : store.enrollments.some(e => e.id === invoice.enrollment_id && store.students.some(s => s.id === e.student_id && !s.deleted_at) && store.groups.some(g => g.id === e.group_id && !g.deleted_at))) &&
           invoice.status !== 'payé' &&
           invoice.paid_amount_cents < invoice.amount_cents &&
           Boolean(invoice.due_date) &&
@@ -4006,18 +3685,6 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const dest = asString(args, 'destPath').trim();
       if (!dest) throw new Error('Chemin de destination invalide');
       return undefined;
-    }
-
-    case 'cmd_seed_demo_data': {
-      const demo = buildDemoStore(store);
-      save(demo);
-      const invoiceCount = demo.invoices.length;
-      const paymentCount = demo.payments.length;
-      // Same template as the Rust command (see demo.rs): the specification's
-      // exact English sentence; the toast prefix is localised by the UI.
-      return `Demo data: ${demo.students.length} students, ${
-        demo.teachers.length
-      } teachers, ${demo.groups.length} groups, ${invoiceCount} invoices, ${paymentCount} payments`;
     }
 
     case 'cmd_get_db_info': {

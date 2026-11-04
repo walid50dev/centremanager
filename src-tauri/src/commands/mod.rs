@@ -22,6 +22,7 @@ pub mod auth;
 pub mod backup;
 pub mod compensation;
 pub mod dashboard;
+#[cfg(test)]
 pub mod demo;
 pub mod duplicates;
 #[cfg(test)]

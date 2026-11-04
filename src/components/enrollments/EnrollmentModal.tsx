@@ -20,6 +20,7 @@ import GroupModal from '../groups/GroupModal';
 import StudentModal from '../students/StudentModal';
 import { useDebounce } from '../../hooks/useDebounce';
 import { groupsApi, occupancyTone } from '../../services/groups';
+import { LATE_PAYMENTS_EVENT } from '../../stores/appStore';
 import { enrollmentsApi, todayIso } from '../../services/enrollments';
 import { studentsApi } from '../../services/students';
 import { cn, formatCurrency, formatDate, formatPhone } from '../../utils/format';
@@ -236,6 +237,9 @@ export function EnrollmentModal({
     try {
       const ids = await enrollmentsApi.enrollBatch(payload);
       toast.success(t('enrollment.toast.created', { count: ids.length }));
+      const fee = ids.find(result => result.enrollment_fee_invoice_id !== null);
+      if (fee) toast.info(t('enrollment.toast.feeCreated', { amount: formatCurrency(fee.enrollment_fee_amount_cents ?? 0) }));
+      window.dispatchEvent(new CustomEvent(LATE_PAYMENTS_EVENT));
       onSaved();
       onClose();
     } catch (error) {

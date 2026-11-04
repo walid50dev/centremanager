@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Search, UserPlus, Users } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import TrashButton from '../components/ui/TrashButton';
+import ViewButton from '../components/ui/ViewButton';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Input from '../components/ui/Input';
@@ -298,7 +299,10 @@ export function StudentsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-muted">{formatDate(student.enrollment_date)}</td>
-                    <td className="px-4 py-3"><TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} /></td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-1">
+                      <ViewButton name={student.full_name} testId={`view-student-${student.id}`} onView={() => navigate(`/students/${student.id}`)} />
+                      <TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} />
+                    </div></td>
                   </tr>
                 ))}
             </tbody>

@@ -575,6 +575,7 @@ pub fn delete_student(conn: &Connection, id: i64) -> Result<(), String> {
     tx.execute("DELETE FROM audit_log WHERE (entity_type='enrollment' AND entity_id IN (SELECT id FROM enrollments WHERE student_id=?1)) OR (entity_type='payment' AND (entity_id IN (SELECT id FROM payments WHERE student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1)) OR (entity_type='receipt' AND (entity_id IN (SELECT r.id FROM receipts r JOIN payments p ON p.id=r.payment_id WHERE p.student_id=?1) OR json_extract(CASE WHEN json_valid(details) THEN details ELSE '{}' END,'$.student_id')=?1))", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
     tx.execute("DELETE FROM payments WHERE student_id=?1 OR invoice_id IN (SELECT i.id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id WHERE e.student_id=?1)", params![id]).map_err(|e| db_err("Suppression des paiements", e))?;
     tx.execute("DELETE FROM audit_log WHERE entity_type='student' AND entity_id=?1", params![id]).map_err(|e| db_err("Suppression de l'historique", e))?;
+    tx.execute("DELETE FROM invoices WHERE id IN (SELECT invoice_id FROM enrollment_fees WHERE student_id=?1)", params![id]).map_err(|e| db_err("Suppression des frais d’inscription", e))?;
     tx.execute("DELETE FROM students WHERE id=?1", params![id]).map_err(|e| db_err("Suppression de l'élève", e))?;
     tx.commit().map_err(|e| db_err("Transaction", e))
 }

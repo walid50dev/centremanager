@@ -380,7 +380,9 @@ export interface StudentInput {
 /** One invoice of a student, with the joined group labels. */
 export interface StudentInvoice {
   id: number;
-  enrollment_id: number;
+  enrollment_id: number | null;
+  kind: 'invoice' | 'enrollment_fee';
+  school_year_label: string | null;
   group_subject: string;
   group_level: string;
   group_branch: string | null;
@@ -444,7 +446,7 @@ export interface ReceiptItem {
   group_name: string;
   month: string;
   amount: number;
-  kind: 'invoice' | 'advance' | 'unavailable';
+  kind: 'invoice' | 'enrollment_fee' | 'advance' | 'unavailable';
 }
 
 export interface CentreInfo { name: string; logo: string | null }

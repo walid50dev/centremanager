@@ -69,6 +69,37 @@ pub fn set_setting_value(conn: &Connection, key: &str, value: &str) -> Result<()
     .map_err(|err| db_err("Enregistrement du paramètre", err))
 }
 
+/// Fee settings are scoped to the active school year. A newly created year
+/// always starts at zero, rather than silently inheriting another year's rate.
+pub fn enrollment_fee(conn: &Connection) -> Result<i64, String> {
+    let year: i64 = conn.query_row("SELECT id FROM school_years WHERE is_active=1 LIMIT 1", [], |r| r.get(0))
+        .map_err(|_| "Aucune année scolaire active".to_string())?;
+    let raw = get_setting_value(conn, &format!("enrollment_fee:{year}"))?;
+    raw.map(|value| value.parse::<i64>().map_err(|_| "Frais d'inscription invalides".to_string()))
+        .unwrap_or(Ok(0))
+}
+
+pub fn set_enrollment_fee(conn: &Connection, amount: i64) -> Result<(), String> {
+    if !(0..=9_007_199_254_740_991).contains(&amount) { return Err("Montant invalide".to_string()); }
+    let year: i64 = conn.query_row("SELECT id FROM school_years WHERE is_active=1 LIMIT 1", [], |r| r.get(0))
+        .map_err(|_| "Aucune année scolaire active".to_string())?;
+    set_setting_value(conn, &format!("enrollment_fee:{year}"), &amount.to_string())
+}
+
+#[tauri::command]
+pub fn cmd_get_enrollment_fee(db: State<'_, Db>) -> Result<i64, String> { enrollment_fee(&db.conn()) }
+
+#[tauri::command]
+pub fn cmd_set_enrollment_fee(db: State<'_, Db>, amount: i64, year_id: Option<i64>) -> Result<(), String> {
+    let conn = db.conn();
+    if let Some(expected) = year_id {
+        let current: Option<i64> = conn.query_row("SELECT id FROM school_years WHERE is_active=1 LIMIT 1", [], |r| r.get(0))
+            .optional().map_err(|e| db_err("Année scolaire", e))?;
+        if current != Some(expected) { return Err("L'année scolaire active a changé".to_string()); }
+    }
+    set_enrollment_fee(&conn, amount)
+}
+
 #[derive(Debug, Serialize)]
 pub struct CentreInfo { pub name: String, pub logo: Option<String> }
 

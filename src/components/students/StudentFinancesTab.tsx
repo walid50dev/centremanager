@@ -154,11 +154,10 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
                 return (
                   <tr key={invoice.id} className="border-t border-border">
                     <td className="px-4 py-2.5 font-medium text-foreground">
-                      {periodLabel(t, invoice.period_month, invoice.period_year)}
+                      {invoice.kind === 'enrollment_fee' ? invoice.school_year_label : periodLabel(t, invoice.period_month, invoice.period_year)}
                     </td>
                     <td className="px-4 py-2.5 text-muted">
-                      {invoice.group_subject} — {invoice.group_level}
-                      {invoice.group_branch ? ` · ${invoice.group_branch}` : ''}
+                      {invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : <>{invoice.group_subject} — {invoice.group_level}{invoice.group_branch ? ` · ${invoice.group_branch}` : ''}</>}
                     </td>
                     <td className="px-4 py-2.5 text-end tabular-nums">
                       {formatCurrency(invoice.amount_cents)}

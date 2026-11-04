@@ -138,6 +138,18 @@ CREATE TABLE IF NOT EXISTS invoices (
     UNIQUE (enrollment_id, period_month, period_year)
 );
 
+-- Annual opening charges are independent of group enrollments. The invoice is
+-- a normal payable invoice with enrollment_id NULL, owned by this record.
+CREATE TABLE IF NOT EXISTS enrollment_fees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    school_year_id INTEGER NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL CHECK(amount > 0),
+    invoice_id INTEGER NOT NULL UNIQUE REFERENCES invoices(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(student_id, school_year_id)
+);
+
 -- 12. payments
 CREATE TABLE IF NOT EXISTS payments (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
