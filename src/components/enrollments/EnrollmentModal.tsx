@@ -16,8 +16,8 @@ import EmptyState from '../ui/EmptyState';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import { toast } from '../ui/Toast';
-import QuickCreateGroup from '../quick-create/QuickCreateGroup';
-import QuickCreateStudent from '../quick-create/QuickCreateStudent';
+import GroupModal from '../groups/GroupModal';
+import StudentModal from '../students/StudentModal';
 import { useDebounce } from '../../hooks/useDebounce';
 import { groupsApi, occupancyTone } from '../../services/groups';
 import { enrollmentsApi, todayIso } from '../../services/enrollments';
@@ -35,6 +35,7 @@ export interface EnrollmentModalProps {
   groupId?: number | null;
   onClose: () => void;
   onSaved: () => void;
+  zIndex?: number;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -67,6 +68,7 @@ export function EnrollmentModal({
   groupId = null,
   onClose,
   onSaved,
+  zIndex = 50,
 }: EnrollmentModalProps) {
   const { t } = useTranslation();
 
@@ -250,6 +252,7 @@ export function EnrollmentModal({
     <Modal
       open={open}
       onClose={onClose}
+      zIndex={zIndex}
       size="xl"
       title={t('enrollment.title')}
       description={
@@ -340,6 +343,7 @@ export function EnrollmentModal({
               variant="secondary"
               leftIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
               onClick={() => setQuickGroup(true)}
+              disabled={zIndex >= 70}
               data-testid="enrollment-create-group"
             >
               {t('enrollment.newGroup')}
@@ -447,6 +451,7 @@ export function EnrollmentModal({
               className="shrink-0"
               leftIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
               onClick={() => setQuickStudent(true)}
+              disabled={zIndex >= 70}
               data-testid="enrollment-create-student"
             >
               {t('enrollment.newStudent')}
@@ -617,30 +622,34 @@ export function EnrollmentModal({
       ) : null}
       </Modal>
 
-      {quickGroup ? (
-        <QuickCreateGroup
+      {quickGroup && open ? (
+        <GroupModal
+          open
+          zIndex={zIndex + 10}
           onClose={() => setQuickGroup(false)}
-          onCreated={(created) => {
-            setQuickGroup(false);
-            // Show it in the wizard's list and tick it: the group was created
-            // precisely because it had to be enrolled into.
-            setAvailableGroups((current) =>
-              current.some((entry) => entry.id === created.id) ? current : [created, ...current],
-            );
-            setSelectedGroupIds((current) =>
-              current.includes(created.id) ? current : [...current, created.id],
-            );
-            setDates((current) => (current[created.id] ? current : { ...current, [created.id]: todayIso() }));
+          onSaved={() => {}}
+          onCreated={(id) => {
+            void groupsApi.detail(id).then(({ group: created }) => {
+              setAvailableGroups(current => current.some(entry => entry.id === id) ? current : [created, ...current]);
+              setSelectedGroupIds(current => current.includes(id) ? current : [...current, id]);
+              setDates(current => current[id] ? current : { ...current, [id]: todayIso() });
+              if (studentId) void enrollmentsApi.availableForStudent(studentId).then(groups => {
+                setAvailableGroups(groups.some(group => group.id === id) ? groups : [created, ...groups]);
+              }).catch(() => {});
+            }).catch(error => toast.error(error instanceof Error ? error.message : String(error)));
           }}
         />
       ) : null}
 
-      {quickStudent ? (
-        <QuickCreateStudent
+      {quickStudent && open ? (
+        <StudentModal
+          open
+          zIndex={zIndex + 10}
           onClose={() => setQuickStudent(false)}
-          onCreated={(created) => {
-            setQuickStudent(false);
-            setSelectedStudent(created);
+          onSaved={() => {}}
+          onCreated={({ id }) => {
+            void studentsApi.detail(id).then(detail => setSelectedStudent(detail.student))
+              .catch(error => toast.error(error instanceof Error ? error.message : String(error)));
           }}
         />
       ) : null}

@@ -4,9 +4,9 @@ import Input from '../ui/Input';
 import { toast } from '../ui/Toast';
 import { subjectsApi } from '../../services/settings';
 import type { Subject } from '../../types';
-import QuickCreateShell from './QuickCreateShell';
+import EntityModalShell from './EntityModalShell';
 
-export interface QuickCreateSubjectProps {
+export interface SubjectModalProps {
   open?: boolean;
   zIndex?: number;
   onCreated: (subject: Subject) => void;
@@ -19,12 +19,12 @@ export interface QuickCreateSubjectProps {
  * `cmd_create_subject` returns the new id only, so the freshly created row is
  * read back from the list: the parent needs the whole object to auto-select it.
  */
-export function QuickCreateSubject({
+export function SubjectModal({
   open = true,
   zIndex = 60,
   onCreated,
   onClose,
-}: QuickCreateSubjectProps) {
+}: SubjectModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -53,9 +53,7 @@ export function QuickCreateSubject({
       setSaving(true);
       try {
         const id = await subjectsApi.create(trimmed);
-        const rows = await subjectsApi.list();
-        const created =
-          rows.find((row) => row.id === id) ?? ({ id, name: trimmed, is_active: true } as Subject);
+        const created: Subject = { id, name: trimmed, is_active: true };
         toast.success(t('quickCreate.created', { entity: created.name }));
         onCreated(created);
       } catch (caught) {
@@ -68,10 +66,10 @@ export function QuickCreateSubject({
   );
 
   return (
-    <QuickCreateShell
+    <EntityModalShell
       open={open}
       zIndex={zIndex}
-      testId="quick-create-subject"
+      testId="subject-modal"
       title={t('quickCreate.subject.title')}
       description={t('quickCreate.subject.description')}
       formId="quick-subject-form"
@@ -93,8 +91,8 @@ export function QuickCreateSubject({
           data-testid="quick-subject-name"
         />
       </form>
-    </QuickCreateShell>
+    </EntityModalShell>
   );
 }
 
-export default QuickCreateSubject;
+export default SubjectModal;

@@ -5,9 +5,9 @@ import Select from '../ui/Select';
 import { toast } from '../ui/Toast';
 import { levelsApi } from '../../services/settings';
 import type { Level } from '../../types';
-import QuickCreateShell from './QuickCreateShell';
+import EntityModalShell from './EntityModalShell';
 
-export interface QuickCreateLevelProps {
+export interface LevelModalProps {
   open?: boolean;
   zIndex?: number;
   onCreated: (level: Level) => void;
@@ -25,12 +25,12 @@ const CATEGORIES = [
 const LAST_SORT_ORDER = 99;
 
 /** “Nouveau niveau”, with its mandatory category. */
-export function QuickCreateLevel({
+export function LevelModal({
   open = true,
   zIndex = 60,
   onCreated,
   onClose,
-}: QuickCreateLevelProps) {
+}: LevelModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<string>('primaire');
@@ -61,10 +61,7 @@ export function QuickCreateLevel({
       setSaving(true);
       try {
         const id = await levelsApi.create(trimmed, category, LAST_SORT_ORDER);
-        const rows = await levelsApi.list();
-        const created =
-          rows.find((row) => row.id === id) ??
-          ({ id, name: trimmed, category, sort_order: LAST_SORT_ORDER } as Level);
+        const created: Level = { id, name: trimmed, category, sort_order: LAST_SORT_ORDER };
         toast.success(t('quickCreate.created', { entity: created.name }));
         onCreated(created);
       } catch (caught) {
@@ -77,10 +74,10 @@ export function QuickCreateLevel({
   );
 
   return (
-    <QuickCreateShell
+    <EntityModalShell
       open={open}
       zIndex={zIndex}
-      testId="quick-create-level"
+      testId="level-modal"
       title={t('quickCreate.level.title')}
       description={t('quickCreate.level.description')}
       formId="quick-level-form"
@@ -112,8 +109,8 @@ export function QuickCreateLevel({
           data-testid="quick-level-category"
         />
       </form>
-    </QuickCreateShell>
+    </EntityModalShell>
   );
 }
 
-export default QuickCreateLevel;
+export default LevelModal;

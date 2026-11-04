@@ -5,10 +5,10 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import MoneyInput from '../ui/MoneyInput';
-import CreatableSelect from '../ui/CreatableSelect';
+import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import Textarea from '../ui/Textarea';
 import { toast } from '../ui/Toast';
-import QuickCreateCategory from '../quick-create/QuickCreateCategory';
+import CategoryModal from '../entity-modals/CategoryModal';
 import { ExpenseCategoryBadge } from './ExpenseCategoryBadge';
 import { expensesApi } from '../../services/expenses';
 import { categoryLabel } from '../../utils/expenses';
@@ -65,6 +65,8 @@ export function ExpenseModal({
   const [categories, setCategories] = useState<string[]>([]);
   const [quickCategory, setQuickCategory] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (!open) setQuickCategory(false); }, [open]);
 
   // Categories of the current centre (they are editable in Settings).
   useEffect(() => {
@@ -186,7 +188,7 @@ export function ExpenseModal({
       <form id="expense-form" onSubmit={handleSubmit} noValidate className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <CreatableSelect
+            <CreatableEntitySelect
               testId="expense-category"
               label={t('expenses.category')}
               required
@@ -240,13 +242,14 @@ export function ExpenseModal({
       </form>
     </Modal>
 
-      {quickCategory ? (
-        <QuickCreateCategory
+      {quickCategory && open ? (
+        <CategoryModal
           onClose={() => setQuickCategory(false)}
           onCreated={async (category) => {
             setQuickCategory(false);
-            await loadCategories();
+            setCategories(current => current.includes(category) ? current : [...current, category]);
             set('category', category);
+            void loadCategories().catch(() => {});
           }}
         />
       ) : null}

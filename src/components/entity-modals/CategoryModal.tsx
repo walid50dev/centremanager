@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import Input from '../ui/Input';
 import { toast } from '../ui/Toast';
 import { expensesApi } from '../../services/expenses';
-import QuickCreateShell from './QuickCreateShell';
+import EntityModalShell from './EntityModalShell';
 
-export interface QuickCreateCategoryProps {
+export interface CategoryModalProps {
   open?: boolean;
   zIndex?: number;
   /** Receives the trimmed label of the category that is now in the settings. */
@@ -20,12 +20,12 @@ export interface QuickCreateCategoryProps {
  * is a read-append-write of that list. Existing names are matched
  * case-insensitively: `Loyer` and `loyer` would be two badges with one colour.
  */
-export function QuickCreateCategory({
+export function CategoryModal({
   open = true,
   zIndex = 60,
   onCreated,
   onClose,
-}: QuickCreateCategoryProps) {
+}: CategoryModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | undefined>();
@@ -67,10 +67,10 @@ export function QuickCreateCategory({
   );
 
   return (
-    <QuickCreateShell
+    <EntityModalShell
       open={open}
       zIndex={zIndex}
-      testId="quick-create-category"
+      testId="category-modal"
       title={t('quickCreate.category.title')}
       description={t('quickCreate.category.description')}
       formId="quick-category-form"
@@ -92,8 +92,8 @@ export function QuickCreateCategory({
           data-testid="quick-category-name"
         />
       </form>
-    </QuickCreateShell>
+    </EntityModalShell>
   );
 }
 
-export default QuickCreateCategory;
+export default CategoryModal;

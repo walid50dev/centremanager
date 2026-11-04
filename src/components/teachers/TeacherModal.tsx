@@ -8,7 +8,7 @@ import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import Textarea from '../ui/Textarea';
 import { toast } from '../ui/Toast';
-import QuickCreateSubject from '../quick-create/QuickCreateSubject';
+import SubjectModal from '../entity-modals/SubjectModal';
 import { subjectsApi } from '../../services/settings';
 import { isValidTeacherPhone, teachersApi } from '../../services/teachers';
 import { cn } from '../../utils/format';
@@ -20,6 +20,8 @@ export interface TeacherModalProps {
   teacher?: Teacher | TeacherDetail | null;
   onClose: () => void;
   onSaved: () => void;
+  onCreated?: (teacher: { id: number; full_name: string }) => void;
+  zIndex?: number;
 }
 
 interface FormState {
@@ -60,7 +62,7 @@ function toForm(teacher?: Teacher | TeacherDetail | null): FormState {
 }
 
 /** Create / edit dialog for a teacher. */
-export function TeacherModal({ open, teacher = null, onClose, onSaved }: TeacherModalProps) {
+export function TeacherModal({ open, teacher = null, onClose, onSaved, onCreated, zIndex = 50 }: TeacherModalProps) {
   const { t } = useTranslation();
   const isEdit = Boolean(teacher);
   const teacherId = teacher ? ('teacher' in teacher ? teacher.teacher.id : teacher.id) : null;
@@ -71,6 +73,8 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [quickSubject, setQuickSubject] = useState(false);
   const [loadedDetail, setLoadedDetail] = useState<number[] | null>(null);
+
+  useEffect(() => { if (!open) setQuickSubject(false); }, [open]);
 
   // Re-seed the form whenever the modal opens for a different teacher.
   useEffect(() => {
@@ -194,7 +198,8 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
         await teachersApi.update(id, buildPayload());
         toast.success(t('teachers.toast.updated'));
       } else {
-        await teachersApi.create(buildPayload());
+        const createdId = await teachersApi.create(buildPayload());
+        onCreated?.({ id: createdId, full_name: form.fullName.trim() });
         toast.success(t('teachers.toast.created'));
       }
       onSaved();
@@ -213,6 +218,7 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
       open={open}
       onClose={onClose}
       size="lg"
+      zIndex={zIndex}
       title={
         <span className="flex items-center gap-2">
           <GraduationCap className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -308,6 +314,7 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
             <button
               type="button"
               onClick={() => setQuickSubject(true)}
+              disabled={zIndex >= 70}
               data-testid="teacher-subject-create"
               className="flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/5"
             >
@@ -331,11 +338,13 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved }: Teacher
       </Modal>
 
       {quickSubject ? (
-        <QuickCreateSubject
+        <SubjectModal
+          zIndex={zIndex + 10}
           onClose={() => setQuickSubject(false)}
           onCreated={async (subject) => {
             setQuickSubject(false);
-            await loadSubjects();
+            setSubjects(current => [...current.filter(row => row.id !== subject.id), subject]);
+            void loadSubjects().catch(() => {});
             // The new subject is ticked straight away: that is why it was created.
             setForm((previous) =>
               previous.subjectIds.includes(subject.id)

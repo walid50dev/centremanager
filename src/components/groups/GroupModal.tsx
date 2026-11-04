@@ -3,16 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { BookOpen } from 'lucide-react';
 import Button from '../ui/Button';
 import ScheduleConflictWarnings from './ScheduleConflictWarnings';
-import CreatableSelect from '../ui/CreatableSelect';
+import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import Input from '../ui/Input';
 import MoneyInput from '../ui/MoneyInput';
 import NumberInput from '../ui/NumberInput';
 import Modal from '../ui/Modal';
 import Select from '../ui/Select';
 import { toast } from '../ui/Toast';
-import QuickCreateLevel from '../quick-create/QuickCreateLevel';
-import QuickCreateSubject from '../quick-create/QuickCreateSubject';
-import QuickCreateTeacher from '../quick-create/QuickCreateTeacher';
+import LevelModal from '../entity-modals/LevelModal';
+import BranchModal from '../entity-modals/BranchModal';
+import SubjectModal from '../entity-modals/SubjectModal';
+import TeacherModal from '../teachers/TeacherModal';
 import { groupsApi } from '../../services/groups';
 import { WEEK_DAYS, formatSchedules, scheduleSlots, shortDayLabel } from '../../utils/schedule';
 import { cn } from '../../utils/format';
@@ -35,6 +36,8 @@ export interface GroupModalProps {
   group?: Group | null;
   onClose: () => void;
   onSaved: () => void;
+  onCreated?: (id: number) => void;
+  zIndex?: number;
 }
 
 /** One weekday of the week editor (Phase 13). */
@@ -104,7 +107,7 @@ function weekPayload(week: Week): GroupSchedule[] {
 }
 
 /** Create / edit a group. Levels drive the branch list, like the student form. */
-export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalProps) {
+export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zIndex = 50 }: GroupModalProps) {
   const { t } = useTranslation();
   const isEdit = Boolean(group);
 
@@ -119,7 +122,7 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
   const [schoolYears, setSchoolYears] = useState<SchoolYear[]>([]);
 
   // Quick-create dialogs stacked above this form (one level, `z-60`).
-  const [quickCreate, setQuickCreate] = useState<'teacher' | 'subject' | 'level' | null>(null);
+  const [quickCreate, setQuickCreate] = useState<'teacher' | 'subject' | 'level' | 'branch' | null>(null);
 
   // Reference data is fetched once per opening; the three loaders are reused
   // after a quick-create so the new row appears in its dropdown.
@@ -305,7 +308,8 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           await groupsApi.update(group.id, payload);
           toast.success(t('groups.toast.updated'));
         } else {
-          await groupsApi.create(payload);
+          const id = await groupsApi.create(payload);
+          onCreated?.(id);
           toast.success(t('groups.toast.created'));
         }
         onSaved();
@@ -316,7 +320,7 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
         setSaving(false);
       }
     },
-    [form, group, isEdit, onClose, onSaved, t, validate],
+    [form, group, isEdit, onClose, onSaved, onCreated, t, validate],
   );
 
   const conflictSchedules = useMemo(() => weekPayload(form.week).map(slot => ({
@@ -343,6 +347,7 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
       open={open}
       onClose={onClose}
       size="lg"
+      zIndex={zIndex}
       title={
         <span className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -368,7 +373,7 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
         className="grid grid-cols-1 gap-4 sm:grid-cols-2"
       >
         <ScheduleConflictWarnings open={open} groupId={group?.id ?? null} teacherId={form.teacherId ? Number(form.teacherId) : null} room={form.room} schoolYearId={form.schoolYearId ? Number(form.schoolYearId) : null} schedules={conflictSchedules} />
-        <CreatableSelect
+        <CreatableEntitySelect
           testId="group-subject"
           label={t('groups.subject')}
           required
@@ -379,10 +384,12 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           getOptionLabel={(subject) => subject.name}
           getOptionValue={(subject) => subject.id}
           onCreate={() => setQuickCreate('subject')}
+          disableCreate={zIndex >= 70}
+          searchable
           error={errors.subjectId}
         />
 
-        <CreatableSelect
+        <CreatableEntitySelect
           testId="group-level"
           label={t('groups.level')}
           required
@@ -396,21 +403,27 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           getOptionLabel={(level) => level.name}
           getOptionValue={(level) => level.id}
           onCreate={() => setQuickCreate('level')}
+          disableCreate={zIndex >= 70}
+          searchable
           error={errors.levelId}
         />
 
-        <Select
+        <CreatableEntitySelect
+          testId="group-branch"
           label={t('groups.branch')}
           placeholder={levels.find((level) => String(level.id) === form.levelId)?.category === 'lycee'
-            ? t('groups.selectBranch')
-            : t('groups.noBranch')}
-          value={form.branchId}
-          onChange={(event) => set('branchId', event.target.value)}
-          disabled={levelBranches.length === 0}
-          options={levelBranches.map((branch) => ({ value: branch.id, label: branch.name }))}
+            ? t('groups.selectBranch') : t('groups.noBranch')}
+          options={levelBranches}
+          value={levelBranches.find(branch => String(branch.id) === form.branchId) ?? null}
+          onChange={branch => set('branchId', branch ? String(branch.id) : '')}
+          getOptionLabel={branch => branch.name}
+          getOptionValue={branch => branch.id}
+          clearable
+          onCreate={() => setQuickCreate('branch')}
+          disableCreate={zIndex >= 70}
         />
 
-        <CreatableSelect
+        <CreatableEntitySelect
           testId="group-teacher"
           label={t('groups.teacher')}
           placeholder={teachers.length === 0 ? t('groups.noTeacherAvailable') : t('groups.noTeacher')}
@@ -420,6 +433,7 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
           getOptionLabel={(teacher) => teacher.full_name}
           getOptionValue={(teacher) => teacher.id}
           onCreate={() => setQuickCreate('teacher')}
+          disableCreate={zIndex >= 70}
           searchable
           clearable
         />
@@ -544,35 +558,53 @@ export function GroupModal({ open, group = null, onClose, onSaved }: GroupModalP
 
       {/* ----------------------------------------------- quick-create dialogs */}
       {quickCreate === 'subject' ? (
-        <QuickCreateSubject
+        <SubjectModal
+          zIndex={zIndex + 10}
           onClose={() => setQuickCreate(null)}
           onCreated={async (subject) => {
             setQuickCreate(null);
-            await loadSubjects();
+            setSubjects(current => [...current.filter(row => row.id !== subject.id), subject]);
             set('subjectId', String(subject.id));
+            void loadSubjects().catch(() => {});
           }}
         />
       ) : null}
 
       {quickCreate === 'level' ? (
-        <QuickCreateLevel
+        <LevelModal
+          zIndex={zIndex + 10}
           onClose={() => setQuickCreate(null)}
           onCreated={async (level) => {
             setQuickCreate(null);
-            await loadLevels();
+            setLevels(current => [...current.filter(row => row.id !== level.id), level]);
             set('levelId', String(level.id));
+            void loadLevels().catch(() => {});
             set('branchId', '');
           }}
         />
       ) : null}
 
+      {quickCreate === 'branch' ? (
+        <BranchModal levels={levels} zIndex={zIndex + 10} onClose={() => setQuickCreate(null)}
+          onCreated={branch => {
+            setQuickCreate(null);
+            setBranches(current => [...current.filter(row => row.id !== branch.id), branch]);
+            setForm(current => ({ ...current, levelId: String(branch.level_id), branchId: String(branch.id) }));
+            void levelsApi.branches().then(setBranches).catch(() => {});
+          }} />
+      ) : null}
+
       {quickCreate === 'teacher' ? (
-        <QuickCreateTeacher
+        <TeacherModal
+          open
+          zIndex={zIndex + 10}
+          onSaved={() => {}}
           onClose={() => setQuickCreate(null)}
           onCreated={async (teacher) => {
             setQuickCreate(null);
-            await loadTeachers();
+            setTeachers(current => [...current.filter(row => row.id !== teacher.id), teacher]);
             set('teacherId', String(teacher.id));
+            void loadTeachers().catch(() => {});
           }}
         />
       ) : null}

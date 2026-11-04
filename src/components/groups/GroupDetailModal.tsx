@@ -276,6 +276,7 @@ export function GroupDetailModal({ open, groupId, onClose, onRefresh }: GroupDet
       </Modal>
 
       <GroupModal
+        zIndex={60}
         open={editOpen}
         group={group ?? null}
         onClose={() => setEditOpen(false)}
@@ -286,6 +287,7 @@ export function GroupDetailModal({ open, groupId, onClose, onRefresh }: GroupDet
       />
 
       <EnrollmentModal
+        zIndex={60}
         open={enrollOpen}
         mode="from_group"
         groupId={groupId}

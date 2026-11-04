@@ -5,12 +5,13 @@ import Button from '../ui/Button';
 import DuplicateWarnings from '../duplicates/DuplicateWarnings';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
-import CreatableSelect from '../ui/CreatableSelect';
+import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import Select from '../ui/Select';
 import Textarea from '../ui/Textarea';
 import { toast } from '../ui/Toast';
 import { levelsApi } from '../../services/settings';
-import QuickCreateLevel from '../quick-create/QuickCreateLevel';
+import LevelModal from '../entity-modals/LevelModal';
+import BranchModal from '../entity-modals/BranchModal';
 import { isValidPhone, studentsApi } from '../../services/students';
 import { formatPhone, stripPhone } from '../../utils/format';
 import type { Branch, Level, Student, StudentInput } from '../../types';
@@ -20,6 +21,8 @@ export interface StudentModalProps {
   student?: Student | null;
   onClose: () => void;
   onSaved: () => void;
+  onCreated?: (student: { id: number; full_name: string }) => void;
+  zIndex?: number;
 }
 
 type Form = { first: string; last: string; level: string; branch: string; school: string; birth: string;
@@ -39,14 +42,15 @@ function toForm(student?: Student | null): Form {
   };
 }
 
-export function StudentModal({ open, student = null, onClose, onSaved }: StudentModalProps) {
+export function StudentModal({ open, student = null, onClose, onSaved, onCreated, zIndex = 50 }: StudentModalProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<Form>(() => toForm(student));
   const [levels, setLevels] = useState<Level[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [quickLevel, setQuickLevel] = useState(false);
+  const [quickBranch, setQuickBranch] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  useEffect(() => { if (open) { setForm(toForm(student)); setSubmitting(false); } }, [open, student]);
+  useEffect(() => { if (open) { setForm(toForm(student)); setSubmitting(false); } else { setQuickLevel(false); setQuickBranch(false); } }, [open, student]);
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -76,22 +80,28 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
     };
     setSubmitting(true);
     try {
-      if (student) await studentsApi.update(student.id, data); else await studentsApi.create(data);
+      if (student) await studentsApi.update(student.id, data); else {
+        const id = await studentsApi.create(data);
+        onCreated?.({ id, full_name: data.full_name });
+      }
       toast.success(t(student ? 'students.toast.updated' : 'students.toast.created'));
       onSaved(); onClose();
     } catch (error) { toast.error(`${t('students.toast.error')} ${error instanceof Error ? error.message : String(error)}`); }
     finally { setSubmitting(false); }
   };
   return <>
-    <Modal open={open} onClose={onClose} size="lg" title={<span className="flex items-center gap-2"><UserRound className="h-4 w-4 text-primary" />{t(student ? 'students.editTitle' : 'students.new')}</span>}
+    <Modal open={open} onClose={onClose} size="lg" zIndex={zIndex} title={<span className="flex items-center gap-2"><UserRound className="h-4 w-4 text-primary" />{t(student ? 'students.editTitle' : 'students.new')}</span>}
       footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button><Button data-testid="student-save" onClick={() => void save()} loading={submitting} disabled={!valid}>{t('students.save')}</Button></>}>
       <form className="space-y-6" onSubmit={event => { event.preventDefault(); void save(); }}>
         <DuplicateWarnings open={open} type="student" id={student?.id} first={form.first} last={form.last} phone={form.phone} />
         <fieldset data-testid="student-section-identity" className="grid gap-4 sm:grid-cols-2"><legend className="mb-3 text-base font-semibold">{t('students.section_identity')}</legend>
           <Input label={t('students.last_name')} data-testid="student-last-name" required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
           <Input label={t('students.first_name')} data-testid="student-first-name" required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />
-          <CreatableSelect testId="student-level" required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} />
-          <Select label={t('students.branch')} placeholder={t('students.selectBranch')} options={branches.map(b => ({ value: b.id, label: b.name }))} value={form.branch} disabled={!form.level || !branches.length} onChange={e => update('branch', e.target.value)} />
+          <CreatableEntitySelect testId="student-level" required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} disableCreate={zIndex >= 70} searchable />
+          <CreatableEntitySelect testId="student-branch" label={t('students.branch')} placeholder={t('students.selectBranch')}
+            options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
+            onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}
+            getOptionValue={branch => branch.id} clearable onCreate={() => setQuickBranch(true)} disableCreate={zIndex >= 70} />
           <Input label={t('students.school_name')} data-testid="student-school-name" placeholder="Lycée Moulay Youssef" value={form.school} onChange={e => update('school', e.target.value)} />
           <Input type="date" label={t('students.birth_date')} data-testid="student-birth-date" value={form.birth} onChange={e => update('birth', e.target.value)} />
           <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
@@ -110,7 +120,12 @@ export function StudentModal({ open, student = null, onClose, onSaved }: Student
         </fieldset>
       </form>
     </Modal>
-    {quickLevel && <QuickCreateLevel onClose={() => setQuickLevel(false)} onCreated={async level => { setQuickLevel(false); setLevels(await levelsApi.list()); update('level', String(level.id)); }} />}
+    {quickBranch && <BranchModal levels={levels} zIndex={zIndex + 10} onClose={() => setQuickBranch(false)} onCreated={branch => {
+      setQuickBranch(false); setBranches(previous => [...previous.filter(row => row.id !== branch.id), branch]);
+      update('level', String(branch.level_id)); update('branch', String(branch.id));
+      void levelsApi.branches(branch.level_id).then(setBranches).catch(() => {});
+    }} />}
+    {quickLevel && <LevelModal zIndex={zIndex + 10} onClose={() => setQuickLevel(false)} onCreated={async level => { setQuickLevel(false); setLevels(previous => [...previous.filter(row => row.id !== level.id), level]); update('level', String(level.id)); void levelsApi.list().then(setLevels).catch(() => {}); }} />}
   </>;
 }
 export default StudentModal;
