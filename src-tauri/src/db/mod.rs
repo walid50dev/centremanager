@@ -143,6 +143,11 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
             conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN deleted_at TEXT;"))?;
         }
     }
+    for (table, column, kind) in [("payments", "batch_id", "INTEGER"), ("receipts", "student_level", "TEXT"), ("receipts", "items_json", "TEXT")] {
+        if !column_exists(conn, table, column)? {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind};"))?;
+        }
+    }
     migrate_group_schedules(conn)?;
     seed_reference_data(conn)
 }

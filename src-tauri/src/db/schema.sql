@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS payments (
     invoice_id     INTEGER REFERENCES invoices(id) ON DELETE SET NULL,
     amount_cents   INTEGER NOT NULL,
     payment_method TEXT,
+    batch_id       INTEGER,
     notes          TEXT,
     created_at     TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -159,6 +160,8 @@ CREATE TABLE IF NOT EXISTS receipts (
     payment_date   TEXT,
     groups_text    TEXT,
     center_name    TEXT,
+    student_level  TEXT,
+    items_json     TEXT,
     created_at     TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

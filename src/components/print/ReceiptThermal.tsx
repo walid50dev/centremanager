@@ -74,8 +74,10 @@ export function wrapValue(value: string, maxChars: number): string[] {
       continue;
     }
     if (current) chunks.push(current);
-    // A single word longer than the line is cut, the receipt must stay usable.
-    current = word.length > maxChars ? word.slice(0, maxChars) : word;
+    // Split long unbroken words without losing any characters.
+    let rest = word;
+    while (rest.length > maxChars) { chunks.push(rest.slice(0, maxChars)); rest = rest.slice(maxChars); }
+    current = rest;
   }
   if (current) chunks.push(current);
   return chunks.length > 0 ? chunks : [''];
@@ -131,10 +133,14 @@ export function ReceiptThermalDocument({ data, labels }: ReceiptThermalProps) {
         <View style={styles.rule} />
 
         <Field label={labels.student} value={data.studentName} maxChars={VALUE_WIDE_CHARS} wide />
-        <Field label={labels.groups} value={data.groupsText} maxChars={VALUE_CHARS} />
-        {data.periodText ? (
-          <Field label={labels.period} value={data.periodText} maxChars={VALUE_CHARS} />
-        ) : null}
+        <Field label={labels.level} value={data.studentLevel} maxChars={VALUE_CHARS} />
+        <View style={styles.rule} />
+        <Text style={styles.shortHeading}>{labels.paymentDetails}</Text>
+        {data.items.map((item, index) => <View key={index} style={{ marginBottom: 3 }}>
+          {wrapValue(`${item.subject} | ${item.group} | ${item.month} | ${item.amount}`, 48).map((line, lineIndex) => (
+            <Text key={lineIndex}>{line}</Text>
+          ))}
+        </View>)}
 
         <View style={styles.rule} />
 

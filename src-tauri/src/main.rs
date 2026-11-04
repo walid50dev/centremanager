@@ -46,6 +46,8 @@ fn main() {
             commands::auth::cmd_get_lock_timeout,
             commands::auth::cmd_set_lock_timeout,
             // Settings (key/value)
+            commands::settings::cmd_get_centre_info,
+            commands::settings::cmd_set_centre_info,
             commands::settings::cmd_get_all_settings,
             commands::settings::cmd_get_setting,
             // Weekly timetable (Phase 13)

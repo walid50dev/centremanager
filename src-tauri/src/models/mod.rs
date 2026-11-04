@@ -526,12 +526,18 @@ pub struct PaginatedPayments {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiptData {
     pub receipt_number: String,
+    pub centre_name: String,
+    pub centre_logo: Option<String>,
+    pub date: String,
+    pub total: i64,
     pub center_name: String,
     pub center_address: Option<String>,
     pub center_phone: Option<String>,
     /// Base64 data URL, when a logo is configured in the settings.
     pub center_logo: Option<String>,
     pub student_name: String,
+    pub student_level: String,
+    pub items: Vec<ReceiptItem>,
     pub amount_cents: i64,
     pub payment_date: String,
     pub payment_method: String,
@@ -540,6 +546,15 @@ pub struct ReceiptData {
     pub period_text: String,
     /// The same periods as `(month, year)` so the UI can localise them.
     pub periods: Vec<ReceiptPeriod>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReceiptItem {
+    pub subject: String,
+    pub group_name: String,
+    pub month: String,
+    pub amount: i64,
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

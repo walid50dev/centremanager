@@ -1,6 +1,6 @@
 import { api, isTauri } from './api';
 import { devInvoke } from './settingsDevBackend';
-import type { Branch, DbInfo, Level, SchoolYear, Subject } from '../types';
+import type { Branch, CentreInfo, DbInfo, Level, SchoolYear, Subject } from '../types';
 
 /**
  * Typed wrappers for the settings / reference-data commands
@@ -18,6 +18,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 export const settingsApi = {
+  getCentreInfo: () => call<CentreInfo>('cmd_get_centre_info'),
+  setCentreInfo: (name: string, logo: string | null) => call<void>('cmd_set_centre_info', { name, logo }),
   /** All settings except the password hash. */
   getAll: () => call<Record<string, string>>('cmd_get_all_settings'),
   get: (key: string) => call<string | null>('cmd_get_setting', { key }),

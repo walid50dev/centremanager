@@ -230,13 +230,13 @@
       "address": "العنوان",
       "phone": "الهاتف",
       "logo": "الشعار",
-      "logoHint": "PNG أو JPG، بحجم أقصى 2 ميغابايت",
+      "logoHint": "PNG أو JPG أو SVG، بحد أقصى 500 كيلوبايت",
       "chooseLogo": "اختيار شعار",
       "removeLogo": "إزالة",
       "logoUpdated": "تم تحديث الشعار ✓",
       "logoRemoved": "تمت إزالة الشعار",
-      "logoTooLarge": "حجم الصورة يتجاوز 2 ميغابايت",
-      "logoInvalid": "ملف الصورة غير صالح",
+      "logoTooLarge": "حجم الصورة يتجاوز 500 كيلوبايت",
+      "logoInvalid": "يرجى اختيار ملف PNG أو JPG أو SVG صالح",
       "nameRequired": "اسم المركز مطلوب",
       "success": "تم تحديث معلومات المركز ✓"
     },
@@ -366,7 +366,13 @@
     "categoryPlaceholder": "مثال: الأمن، الضرائب…",
     "expenseCategoriesSaved": "تم حفظ فئات المصاريف ✓",
     "expenseCategoriesHint": "تغذّي هذه الفئات نموذج المصاريف. حذف فئة لا يؤثر على المصاريف المسجّلة سابقًا: تبقى محتفظة باسمها ولونها.",
-    "categoryExists": "الفئة «{{name}}» موجودة بالفعل"
+    "categoryExists": "الفئة «{{name}}» موجودة بالفعل",
+    "centre_identity": "هوية المركز",
+    "centre_name": "اسم المركز",
+    "centre_logo": "شعار المركز",
+    "upload_logo": "اختيار الشعار",
+    "remove_logo": "حذف الشعار",
+    "logo_preview": "معاينة الشعار"
   },
   "students": {
     "new": "+ تلميذ جديد",
@@ -907,11 +913,19 @@
     "pdfError": "تعذر إنشاء ملف PDF",
     "templateA4": "A4",
     "templateThermal": "حراري 80 مم",
-    "arabicLimitation": "طباعة PDF بالعربية محدودة في هذا الإصدار: قد تغيب الحروف العربية. استعمل الطابعة الحرارية لإيصال سريع، أو القالب A4 بالفرنسية.",
+    "arabicLimitation": "يتم إنشاء الإيصال بالفرنسية. قد لا يعرض محرك PDF الأحرف العربية في البيانات بشكل صحيح.",
     "amountPaid": "المبلغ المؤدى",
     "total": "المجموع",
     "shortHeading": "إيصال",
-    "thankYouShort": "شكرا!"
+    "thankYouShort": "شكرا!",
+    "level": "المستوى",
+    "subject": "المادة",
+    "group": "المجموعة",
+    "month": "الشهر",
+    "studentInfo": "معلومات التلميذ",
+    "paymentDetails": "تفاصيل الدفع",
+    "signature": "التوقيع / الختم",
+    "unavailable": "التفاصيل التاريخية غير متاحة"
   },
   "teachers": {
     "title": "الأساتذة",
