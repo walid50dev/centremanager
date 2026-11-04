@@ -716,7 +716,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let tables = table_names(&conn).unwrap();
-        assert_eq!(tables.len(), 23, "expected 23 tables, got {tables:?}");
+        assert_eq!(tables.len(), 24, "expected 24 tables, got {tables:?}");
         for expected in [
             "settings",
             "school_years",
@@ -730,6 +730,7 @@ mod tests {
             "enrollments",
             "invoices",
             "enrollment_fees",
+            "enrollment_fee_attempts",
             "payments",
             "receipts",
             "teacher_activities",
