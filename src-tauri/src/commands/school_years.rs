@@ -189,7 +189,7 @@ mod tests {
         conn.execute_batch("INSERT INTO group_schedules(group_id,day_of_week,start_time,end_time) VALUES(1,'Lundi','09:00','10:00'); INSERT INTO enrollments(student_id,group_id,start_date) VALUES(1,1,'2023-09-01'); INSERT INTO invoices(enrollment_id,amount_cents) VALUES(1,100); INSERT INTO payments(student_id,invoice_id,amount_cents) VALUES(1,1,100); INSERT INTO receipts(payment_id) VALUES(1);").unwrap();
         conn.execute("INSERT INTO payments(student_id,amount_cents,school_year_id) VALUES(1,50,?1)",params![old]).unwrap();
         conn.execute("INSERT INTO monthly_expenses(label,amount_cents,category,month,year,school_year_id) VALUES('E',100,'x',1,2024,?1)",params![old]).unwrap();
-        conn.execute("INSERT INTO student_school_years(student_id,school_year_id) VALUES(1,?1)",params![old]).unwrap();
+        conn.execute("INSERT OR IGNORE INTO student_school_years(student_id,school_year_id) VALUES(1,?1)",params![old]).unwrap();
         conn.execute("INSERT INTO teacher_school_years(teacher_id,school_year_id) VALUES(1,?1)",params![old]).unwrap();
         delete_year(&conn,old).unwrap();
         for table in ["groups","group_schedules","enrollments","invoices","payments","receipts","monthly_expenses"] {
