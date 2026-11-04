@@ -386,14 +386,14 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                             className="h-4 w-4 accent-primary"
                             checked={checked}
                             onChange={() => toggleInvoice(invoice)}
-                            aria-label={`${periodLabel(t, invoice.period_month, invoice.period_year)} — ${invoice.group_subject}`}
+                            aria-label={invoice.kind === 'enrollment_fee' ? `${t('students.enrollment_fee')} — ${invoice.school_year_label ?? ''}` : `${periodLabel(t, invoice.period_month, invoice.period_year)} — ${invoice.group_subject}`}
                           />
                           <span className="min-w-0 flex-1">
                             <span className="block font-medium text-foreground">
-                              {periodLabel(t, invoice.period_month, invoice.period_year)}
+                              {invoice.kind === 'enrollment_fee' ? invoice.school_year_label : periodLabel(t, invoice.period_month, invoice.period_year)}
                             </span>
                             <span className="mt-0.5 block text-[12px] text-muted">
-                              {invoice.group_subject} — {invoice.group_level}
+                              {invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : `${invoice.group_subject} — ${invoice.group_level}`}
                             </span>
                           </span>
                           <span className="shrink-0 text-end text-[12px] text-muted">
@@ -507,7 +507,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                 {selectedInvoices.map((invoice) => (
                   <li key={invoice.id} className="flex items-center justify-between gap-3">
                     <span>
-                      {periodLabel(t, invoice.period_month, invoice.period_year)} — {invoice.group_subject}
+                      {invoice.kind === 'enrollment_fee' ? `${t('students.enrollment_fee')} — ${invoice.school_year_label ?? ''}` : `${periodLabel(t, invoice.period_month, invoice.period_year)} — ${invoice.group_subject}`}
                     </span>
                     <span className="text-muted">{formatCurrency(invoice.remaining_cents)}</span>
                   </li>

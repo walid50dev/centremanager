@@ -18,6 +18,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 export const settingsApi = {
+  getEnrollmentFee: () => call<number>('cmd_get_enrollment_fee'),
+  setEnrollmentFee: (amount: number, yearId: number) => call<void>('cmd_set_enrollment_fee', { amount, yearId }),
   getCentreInfo: () => call<CentreInfo>('cmd_get_centre_info'),
   setCentreInfo: (name: string, logo: string | null) => call<void>('cmd_set_centre_info', { name, logo }),
   /** All settings except the password hash. */
@@ -60,17 +62,6 @@ export const subjectsApi = {
 export const backupApi = {
   backup: (destPath: string) => call<void>('cmd_backup_db', { destPath }),
   info: () => call<DbInfo>('cmd_get_db_info'),
-};
-
-/**
- * Demo catalogue (Phase 9) — development builds only.
- *
- * `cmd_seed_demo_data` refuses in a release build and on a database that
- * already has students; the browser stub replaces its throwaway store.
- */
-export const demoApi = {
-  available: import.meta.env.DEV,
-  seed: () => call<string>('cmd_seed_demo_data'),
 };
 
 /** True when the browser development store is serving these calls. */

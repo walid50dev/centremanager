@@ -1182,55 +1182,28 @@ Test ids added for automated checks: `payment-collect` (Encaisser),
 
 ---
 
+## Frais d'inscription annuels
+
+Dans Paramètres → Année scolaire, le montant est enregistré en centimes pour
+l'année active (une nouvelle année commence à 0). Un montant de 0 désactive la
+génération ; modifier le tarif ne modifie pas les factures déjà créées. À la
+première inscription dans un groupe, une facture indépendante du groupe est
+créée une seule fois pour l'élève et l'année. Elle peut être réglée en totalité
+ou partiellement avec les autres factures ; elle apparaît séparément sur la
+fiche élève, le reçu et l'export des paiements (`invoice_kind`). Les encaissements
+alimentent le tableau de bord comme les autres paiements. La création en lot est
+transactionnelle et la suppression d'un groupe ne supprime pas les frais.
+
 ## Demo data, edge cases and packaging (Phase 9)
 
 V1.1 is about trust: a centre owner must be able to **try** the app before entering a
 single real student, every awkward real-life case must behave, and the installer must be
 the exact one the specification asks for.
 
-### The one-click demo centre
+### Demo fixtures (tests only)
 
-*Paramètres → Sauvegarde → **Charger données de démonstration***. The button only exists
-on a **development build** (`import.meta.env.DEV` in the browser, `cfg!(debug_assertions)`
-in Rust: `cmd_seed_demo_data` answers *« Disponible uniquement dans une version de
-développement »* otherwise), so a user can never mix demo rows into real books.
-
-| Clicking it asks first | « Cela ajoutera des données de démonstration (15 élèves, 5 enseignants, 8 groupes, factures, paiements, activités). Continuer ? » |
-| --- | --- |
-| Then it seeds | with the **real** Phase 2–6 commands, not raw `INSERT`s: `create_teacher` → `set_compensation` → `create_group` → `create_student` → `enroll_student` → `generate_monthly_invoices` → `record_payment` → `record_activity` → `record_settlement`. Every guard, every due date, every allocation rule therefore applies to the demo data too. |
-| Guard | an existing centre is never touched: if any student exists the command refuses with *« La base contient déjà des élèves : la démonstration ne s'installe que sur une base vide »* (test `demo_seed_refuses_a_database_that_already_has_students`) |
-| Feedback | a success toast carrying the specified summary (`Demo data: 15 students, 5 teachers, 8 groups, 50 invoices, 22 payments`), then the UI refreshes in place (no reload — the session and the current page survive) |
-| Result | 507 kB → 4.1 MB in one second; the dashboard, Élèves, Groupes, Enseignants, Paiements and payroll screens are all populated |
-
-| Seeded dashboard (browser backend) |
-| --- |
-| ![Seeded dashboard](docs/screenshots/demo-03-dashboard.png) |
-
-What the seeder creates — exactly the shapes the specification asks for:
-
-| Content | Details |
-| --- | --- |
-| **15 students** | Moroccan names spread over **all twelve levels** of the reference data — Primaire (`1ère` → `6ème année`), Collège (`1ère` → `3ème année`), Lycée (Tronc Commun, `1ère Bac`, `2ème Bac`) — with birth dates, phones in `06…` **and** `07…`, a parent phone and one address |
-| **5 teachers** | Mohamed Alaoui, Khadija Fassi, Hassan Berrada, Nadia Cherkaoui, Omar Skalli — with phones, e-mails and their subjects (`Mathematiques`, `Physique-Chimie`, `SVT`, `Français`, `Anglais`) |
-| **4 compensation modes** | `percentage` 4 000 = 40 % + 5 % bonus, `hourly` 150 DH/h, `per_session` 200 DH, `fixed_monthly` 3 000 DH, and a second `percentage` (3 500 = 35 %) |
-| **8 groups** | one per subject/level, fees **200 → 500 DH**, capacity **10 → 20** seats, spread over the week (Lundi → Dimanche, 09:00 → 18:00) |
-| **25 enrollments** | 1 to 3 groups per student, start dates spread over the last two months |
-| **2 months of invoices** | previous month + current month, one per active enrollment (`50` invoices on the sample centre), oldest-first due dates |
-| **~60 % collected this month** | per current-month invoice, `index % 10`: **0–3 paid in full**, **4–5 paid as two instalments totalling half the fee** (invoice stays *partiel*, which gives genuine multi-payment rows), **6–9 unpaid**. Measured on the seeded centre: **58.5 %** — with the previous month deliberately **left unpaid**, so the dashboard, the badge and the payment screen have something to show |
-| **36 activities** | `cours`, `rattrapage`, `examen` and `autre` rows, 6–9 per teacher, hours or sessions depending on the compensation mode |
-| **2 settlements** | teacher 1 settled in full for the previous month, teacher 2 settled half — the payroll screen shows a `Terminé` and a `Partiel` |
-
-The browser development backend (`settingsDevBackend.ts`) mirrors the seeder **exactly**
-(same students, same fees, same patterns, same summary) so the demo can be reviewed without
-compiling Rust; both are covered by the same browser assertions.
-
-> **The summary string is the specification's, verbatim.** `cmd_seed_demo_data()` returns
-> `Demo data: 15 students, 5 teachers, 8 groups, 50 invoices, 22 payments` — the exact English
-> template, in the exact order, with counts read back from the database (not hard-coded), and
-> no extra figure appended. The toast wraps it in a **localised prefix**
-> (`Données de démonstration chargées — Demo data: …` / `تم تحميل البيانات التجريبية — …`), so
-> the UI stays French/Arabic while the sentence stays identical for logs, tests and the
-> specification.
+The Settings demo button and its command have been removed. The Rust demo
+fixture remains available only to unit tests; reference-data seeding is unchanged.
 
 ### The twenty edge cases
 

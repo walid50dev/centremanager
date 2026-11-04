@@ -49,6 +49,8 @@ fn main() {
             commands::settings::cmd_get_centre_info,
             commands::settings::cmd_set_centre_info,
             commands::settings::cmd_get_all_settings,
+            commands::settings::cmd_get_enrollment_fee,
+            commands::settings::cmd_set_enrollment_fee,
             commands::settings::cmd_get_setting,
             // Weekly timetable (Phase 13)
             commands::schedule_conflicts::cmd_check_schedule_conflicts,
@@ -110,7 +112,6 @@ fn main() {
             // Invoicing (Phase 5)
             commands::invoices::cmd_generate_monthly_invoices,
             commands::invoices::cmd_get_student_invoices,
-            commands::demo::cmd_seed_demo_data,
             commands::invoices::cmd_get_late_payment_count,
             commands::invoices::cmd_get_payment_alerts,
             // Payments & receipts (Phase 5)

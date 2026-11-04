@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { DatabaseBackup, Download, HardDriveDownload, RotateCcw, Sparkles } from 'lucide-react';
+import { DatabaseBackup, Download, HardDriveDownload, RotateCcw } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import SettingsSection from './SettingsSection';
 import { toast } from '../ui/Toast';
-import { backupApi, demoApi, settingsApi } from '../../services/settings';
+import { backupApi, settingsApi } from '../../services/settings';
 import { isTauri } from '../../services/api';
 import { formatBytes, formatDateTime, formatFileStamp } from '../../utils/format';
 import type { DbInfo } from '../../types';
@@ -23,8 +23,6 @@ export function BackupSection() {
   const [backingUp, setBackingUp] = useState(false);
   const [restoreStage, setRestoreStage] = useState<RestoreStage>('idle');
   const [restoreFile, setRestoreFile] = useState<string>('');
-  const [demoStage, setDemoStage] = useState<'idle' | 'confirm'>('idle');
-  const [seeding, setSeeding] = useState(false);
 
   const loadInfo = useCallback(async () => {
     try {
@@ -97,27 +95,6 @@ export function BackupSection() {
     }
   };
 
-  const handleDemo = async () => {
-    setSeeding(true);
-    try {
-      const summary = await demoApi.seed();
-      toast.success(`${t('settings.demo.success')} — ${summary}`);
-      await loadInfo();
-      setDemoStage('idle');
-      // Every page loads its own data on mount, so leaving Settings is enough
-      // for the whole app to show the new centre. The sidebar badge listens for
-      // this event instead of re-mounting, so nudge it as well.
-      window.dispatchEvent(new Event('late-payments:refresh'));
-    } catch (error) {
-      toast.error(
-        `${t('settings.demo.failed')} ${error instanceof Error ? error.message : ''}`.trim(),
-      );
-      setDemoStage('idle');
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   return (
     <SettingsSection
       icon={<DatabaseBackup className="h-[18px] w-[18px]" aria-hidden="true" />}
@@ -164,33 +141,9 @@ export function BackupSection() {
             >
               {t('settings.backup.restore')}
             </Button>
-            {demoApi.available ? (
-              <Button
-                variant="outline"
-                data-testid="seed-demo-data"
-                onClick={() => setDemoStage('confirm')}
-                leftIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
-              >
-                {t('settings.demo.button')}
-              </Button>
-            ) : null}
           </div>
-          {demoApi.available ? (
-            <p className="mt-2 text-[12px] text-muted">{t('settings.demo.hint')}</p>
-          ) : null}
         </>
       )}
-
-      <ConfirmDialog
-        open={demoStage === 'confirm'}
-        title={t('settings.demo.title')}
-        message={t('settings.demo.message')}
-        confirmLabel={t('settings.demo.confirm')}
-        cancelLabel={t('common.cancel')}
-        loading={seeding}
-        onConfirm={() => void handleDemo()}
-        onClose={() => setDemoStage('idle')}
-      />
 
       <ConfirmDialog
         open={restoreStage === 'confirm'}

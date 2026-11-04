@@ -10,12 +10,10 @@
 //!
 //! The generator is deterministic: the same database always gets the same demo
 //! data, which keeps screenshots, tests and support calls reproducible. It is
-//! available in **development builds only** (`cmd_seed_demo_data` refuses in a
-//! release build) and it never touches a database that already has students.
+//! compiled only for unit tests and never touches a database that already has students.
 
 use chrono::{Datelike, Local, NaiveDate};
 use rusqlite::{params, Connection};
-use tauri::State;
 
 use super::activities::record_activity;
 use super::compensation::{calculate_compensation, record_settlement, set_compensation};
@@ -26,7 +24,6 @@ use super::invoices::generate_monthly_invoices;
 use super::payments::record_payment;
 use super::students::{create_student, CreateStudentInput};
 use super::teachers::{create_teacher, CreateTeacherInput};
-use crate::db::Db;
 
 /// Demo students: (full name, level id, phone).
 ///
@@ -424,9 +421,7 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
     }
 
     let invoices_total = count(conn, "invoices")?;
-    // The summary is the exact template the specification asks for (English),
-    // because the owner and any log line read it verbatim. The toast *prefix*
-    // is localised by the UI (`settings.demo.success`).
+    // Keep the original summary template for the unit tests.
     let _ = activities;
     Ok(format!(
         "Demo data: {} students, {} teachers, {} groups, {} invoices, {} payments",
@@ -436,20 +431,6 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
         invoices_total,
         payments
     ))
-}
-
-/// Development-only entry point used by the Settings page.
-#[tauri::command]
-pub fn cmd_seed_demo_data(db: State<'_, Db>) -> Result<String, String> {
-    if !cfg!(debug_assertions) {
-        return Err(
-            "Les données de démonstration ne sont disponibles que dans la version de \
-             développement"
-                .to_string(),
-        );
-    }
-    let conn = db.conn();
-    seed_demo_data(&conn)
 }
 
 #[cfg(test)]

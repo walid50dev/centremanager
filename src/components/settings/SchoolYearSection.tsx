@@ -6,10 +6,11 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import { useAppStore } from '../../stores/appStore';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import MoneyInput from '../ui/MoneyInput';
 import Select from '../ui/Select';
 import SettingsSection from './SettingsSection';
 import { toast } from '../ui/Toast';
-import { schoolYearsApi } from '../../services/settings';
+import { schoolYearsApi, settingsApi } from '../../services/settings';
 import { downloadExcel, type ExportSection } from '../../services/yearExport';
 import { downloadYearPdf } from '../year-export/yearPdf';
 import { formatDate } from '../../utils/format';
@@ -20,6 +21,9 @@ export function SchoolYearSection() {
   const { t, i18n } = useTranslation();
 
   const [years, setYears] = useState<SchoolYear[]>([]);
+  const [fee, setFee] = useState(0);
+  const [savingFee, setSavingFee] = useState(false);
+  const [feeReady, setFeeReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [label, setLabel] = useState('');
@@ -50,6 +54,23 @@ export function SchoolYearSection() {
   }, [load]);
 
   const activeYear = years.find((year) => year.is_active) ?? null;
+
+  useEffect(() => {
+    setFeeReady(false);
+    if (!activeYear) return;
+    let live = true;
+    settingsApi.getEnrollmentFee().then(value => { if (live) { setFee(value); setFeeReady(true); } })
+      .catch(error => { if (live) toast.error(error instanceof Error ? error.message : String(error)); });
+    return () => { live = false; };
+  }, [activeYear?.id]);
+
+  const saveFee = async () => {
+    if (!activeYear || !feeReady) return;
+    setSavingFee(true);
+    try { await settingsApi.setEnrollmentFee(fee, activeYear.id); toast.success(t('settings.enrollment_fee_saved')); }
+    catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setSavingFee(false); }
+  };
 
   const handleActivate = async (id: number) => {
     setActivatingId(id);
@@ -149,6 +170,12 @@ export function SchoolYearSection() {
               if (Number.isFinite(id) && id > 0 && id !== activeYear?.id) setPendingId(id);
             }}
           />
+
+          {activeYear && <div className="mt-4 flex flex-wrap items-end gap-3">
+            <MoneyInput label={t('settings.enrollment_fee_label')} hint={t('settings.enrollment_fee_hint')}
+              valueCents={fee} onChange={setFee} disabled={!feeReady || savingFee} data-testid="enrollment-fee-input" />
+            <Button onClick={() => void saveFee()} disabled={!feeReady} loading={savingFee} data-testid="enrollment-fee-save">{t('common.save')}</Button>
+          </div>}
 
           <ul className="mt-4 divide-y divide-border rounded-md border border-border">
             {years.length === 0 && (

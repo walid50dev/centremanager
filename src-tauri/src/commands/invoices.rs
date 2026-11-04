@@ -169,14 +169,19 @@ pub fn student_invoices(conn: &Connection, student_id: i64) -> Result<Vec<Studen
                     i.amount_cents,
                     COALESCE(i.paid_amount_cents, 0),
                     COALESCE(i.status, 'impayé'),
-                    COALESCE(i.due_date, '')
+                    COALESCE(i.due_date, ''),
+                    CASE WHEN f.id IS NOT NULL THEN 'enrollment_fee' ELSE 'invoice' END,
+                    y.label
              FROM invoices i
-             JOIN enrollments e ON e.id = i.enrollment_id
-             JOIN groups g      ON g.id = e.group_id
+             LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+             LEFT JOIN school_years y ON y.id=f.school_year_id
+             LEFT JOIN enrollments e ON e.id = i.enrollment_id
+             LEFT JOIN groups g      ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
              LEFT JOIN branches b  ON b.id = g.branch_id
-             WHERE e.student_id = ?1 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
+             WHERE (e.student_id = ?1 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1))
+                OR (f.student_id=?1 AND f.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1))
              ORDER BY i.period_year DESC, i.period_month DESC, i.id DESC",
         )
         .map_err(|err| db_err("Lecture des factures", err))?;
@@ -188,6 +193,8 @@ pub fn student_invoices(conn: &Connection, student_id: i64) -> Result<Vec<Studen
             Ok(StudentInvoice {
                 id: row.get(0)?,
                 enrollment_id: row.get(1)?,
+                kind: row.get(11)?,
+                school_year_label: row.get(12)?,
                 group_subject: row.get(2)?,
                 group_level: row.get(3)?,
                 group_branch: row.get(4)?,
@@ -247,12 +254,13 @@ pub fn payment_alerts_on(
                     COALESCE(i.status, 'impayé'),
                     COALESCE(i.due_date, '')
              FROM invoices i
-             JOIN enrollments e ON e.id = i.enrollment_id
-             JOIN students s    ON s.id = e.student_id
-             JOIN groups g      ON g.id = e.group_id
+             LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+             LEFT JOIN enrollments e ON e.id = i.enrollment_id
+             JOIN students s ON s.id = COALESCE(e.student_id, f.student_id)
+             LEFT JOIN groups g ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
-             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND i.period_month = ?1 AND i.period_year = ?2
+             WHERE s.deleted_at IS NULL AND ((g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR f.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) AND i.period_month = ?1 AND i.period_year = ?2
              ORDER BY s.id, i.due_date, i.id",
         )
         .map_err(|err| db_err("Lecture des factures", err))?;
@@ -405,8 +413,7 @@ fn last_payment_of_month(
         "SELECT p.created_at, COALESCE(p.payment_method, '')
          FROM payments p
          JOIN invoices i ON i.id = p.invoice_id
-         JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id
-         WHERE g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND p.student_id = ?1 AND i.period_month = ?2 AND i.period_year = ?3
+         WHERE p.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND p.student_id = ?1 AND i.period_month = ?2 AND i.period_year = ?3
          ORDER BY p.created_at DESC, p.id DESC
          LIMIT 1",
         params![student_id, month, year],
@@ -433,10 +440,11 @@ pub fn late_payment_count_on(conn: &Connection, reference_day: NaiveDate) -> Res
     conn.query_row(
         "SELECT COUNT(*)
          FROM invoices i
-         JOIN enrollments e ON e.id = i.enrollment_id
-         JOIN students s ON s.id = e.student_id
-         JOIN groups g ON g.id = e.group_id
-         WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
+         LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+         LEFT JOIN enrollments e ON e.id = i.enrollment_id
+         JOIN students s ON s.id = COALESCE(e.student_id, f.student_id)
+         LEFT JOIN groups g ON g.id = e.group_id
+         WHERE s.deleted_at IS NULL AND ((g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR f.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1))
            AND COALESCE(i.status, 'impayé') <> 'payé'
            AND COALESCE(i.paid_amount_cents, 0) < i.amount_cents
            AND COALESCE(i.due_date, '') <> ''
@@ -672,7 +680,7 @@ mod tests {
         assert_eq!(invoices[1].period_month, 1);
         assert_eq!(invoices[0].group_subject, "Mathématiques");
         assert_eq!(invoices[0].group_level, "Tronc Commun");
-        assert_eq!(invoices[0].enrollment_id, enrollment);
+        assert_eq!(invoices[0].enrollment_id, Some(enrollment));
         assert_eq!(invoices[0].remaining_cents, 30_000);
         assert_eq!(invoices[0].status, "impayé");
         assert_eq!(invoices[0].due_date, "2026-03-10");

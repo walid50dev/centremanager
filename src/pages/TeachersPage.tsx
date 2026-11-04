@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { GraduationCap, Plus, Users } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import TrashButton from '../components/ui/TrashButton';
+import ViewButton from '../components/ui/ViewButton';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
@@ -117,8 +118,11 @@ export function TeachersPage() {
                   <p dir="auto" className="text-body font-semibold text-foreground">
                     {teacher.full_name}
                   </p>
-                  <TrashButton type="teacher" id={teacher.id} onDeleted={() => void load()} />
-                  {inactive ? <Badge variant="destructive">{t('teachers.inactive')}</Badge> : null}
+                  <div className="flex items-center gap-1">
+                    {inactive ? <Badge variant="destructive">{t('teachers.inactive')}</Badge> : null}
+                    <ViewButton name={teacher.full_name} testId={`view-teacher-${teacher.id}`} onView={() => navigate(`/teachers/${teacher.id}`)} />
+                    <TrashButton type="teacher" id={teacher.id} onDeleted={() => void load()} />
+                  </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">

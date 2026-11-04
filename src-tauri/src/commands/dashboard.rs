@@ -117,8 +117,8 @@ pub fn revenue_of(conn: &Connection, month: i32, year: i32) -> Result<i64, Strin
 fn theoretical_of(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
     scalar(
         conn,
-        "SELECT COALESCE(SUM(i.amount_cents), 0) FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id
-          WHERE g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND i.period_month = ?1 AND i.period_year = ?2",
+        "SELECT COALESCE(SUM(i.amount_cents), 0) FROM invoices i LEFT JOIN enrollments e ON e.id=i.enrollment_id LEFT JOIN groups g ON g.id=e.group_id LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+          WHERE (g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) OR f.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) AND i.period_month = ?1 AND i.period_year = ?2",
         params![month, year],
     )
 }
@@ -256,12 +256,13 @@ pub fn dashboard_alerts_on(
                     COALESCE(i.paid_amount_cents, 0),
                     COALESCE(i.due_date, '')
              FROM invoices i
-             JOIN enrollments e ON e.id = i.enrollment_id
-             JOIN students s    ON s.id = e.student_id
-             LEFT JOIN groups g   ON g.id = e.group_id
+             LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+             LEFT JOIN enrollments e ON e.id = i.enrollment_id
+             JOIN students s ON s.id = COALESCE(e.student_id, f.student_id)
+             LEFT JOIN groups g ON g.id = e.group_id
              LEFT JOIN subjects su ON su.id = g.subject_id
              LEFT JOIN levels l    ON l.id = g.level_id
-             WHERE s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND COALESCE(i.status, 'impayé') <> 'payé'
+             WHERE s.deleted_at IS NULL AND ((g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR f.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) AND COALESCE(i.status, 'impayé') <> 'payé'
                AND COALESCE(i.paid_amount_cents, 0) < i.amount_cents
                AND i.due_date IS NOT NULL
                AND date(i.due_date) BETWEEN date(?1) AND date(?2)

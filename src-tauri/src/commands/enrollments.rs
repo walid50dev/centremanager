@@ -11,7 +11,7 @@
 
 use chrono::{Datelike, Local, NaiveDate};
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::State;
 
@@ -28,6 +28,13 @@ pub struct BatchEnrollmentInput {
     pub student_id: i64,
     pub group_id: i64,
     pub start_date: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EnrollmentResult {
+    pub id: i64,
+    pub enrollment_fee_invoice_id: Option<i64>,
+    pub enrollment_fee_amount_cents: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +192,7 @@ fn enroll_on(
     student_id: i64,
     group_id: i64,
     start_date: &str,
-) -> Result<i64, String> {
+) -> Result<EnrollmentResult, String> {
     let date = parse_date(start_date)?;
     ensure_student_active(conn, student_id)?;
     let group = ensure_group_active(conn, group_id)?;
@@ -236,6 +243,25 @@ fn enroll_on(
 
     let (invoice_id, created) = ensure_invoice(conn, enrollment_id, date, group.monthly_fee_cents)?;
 
+    // A fee invoice has no enrollment_id: it must survive deletion of a group.
+    // The unique student/year constraint prevents duplicates across a batch.
+    let year_id: i64 = conn.query_row(
+        "SELECT school_year_id FROM groups WHERE id=?1 AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)",
+        params![group_id], |r| r.get(0))
+        .map_err(|_| "Groupe hors de l'année scolaire active".to_string())?;
+    let fee = super::settings::enrollment_fee(conn)?;
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM enrollment_fees WHERE student_id=?1 AND school_year_id=?2)",
+        params![student_id, year_id], |r| r.get(0)).map_err(|e| db_err("Lecture des frais d'inscription", e))?;
+    let fee_invoice_id = if fee > 0 && !exists {
+        conn.execute("INSERT INTO invoices(enrollment_id, period_month, period_year, amount_cents, paid_amount_cents, status, due_date) VALUES(NULL, ?1, ?2, ?3, 0, 'impayé', ?4)",
+            params![date.month() as i32, date.year(), fee, start]).map_err(|e| db_err("Création des frais d'inscription", e))?;
+        let id = conn.last_insert_rowid();
+        conn.execute("INSERT INTO enrollment_fees(student_id, school_year_id, amount, invoice_id) VALUES(?1, ?2, ?3, ?4)",
+            params![student_id, year_id, fee, id]).map_err(|e| db_err("Création des frais d'inscription", e))?;
+        Some(id)
+    } else { None };
+
     log_audit(
         conn,
         "ENROLL",
@@ -248,12 +274,14 @@ fn enroll_on(
                 "monthly_fee_cents": group.monthly_fee_cents,
                 "invoice_id": invoice_id,
                 "invoice_created": created,
+                "enrollment_fee_invoice_id": fee_invoice_id,
             })
             .to_string(),
         ),
     )?;
 
-    Ok(enrollment_id)
+    Ok(EnrollmentResult { id: enrollment_id, enrollment_fee_invoice_id: fee_invoice_id,
+        enrollment_fee_amount_cents: fee_invoice_id.map(|_| fee) })
 }
 
 /// Enroll a student in one group (single transaction).
@@ -269,7 +297,7 @@ pub fn enroll_student(
     let id = enroll_on(&tx, student_id, group_id, start_date)?;
     tx.commit()
         .map_err(|err| db_err("Validation de l'inscription", err))?;
-    Ok(id)
+    Ok(id.id)
 }
 
 /// Enroll in several groups **atomically**: one failure rolls everything back.
@@ -277,6 +305,10 @@ pub fn enroll_student_batch(
     conn: &Connection,
     items: &[BatchEnrollmentInput],
 ) -> Result<Vec<i64>, String> {
+    Ok(enroll_student_batch_details(conn, items)?.into_iter().map(|result| result.id).collect())
+}
+
+pub fn enroll_student_batch_details(conn: &Connection, items: &[BatchEnrollmentInput]) -> Result<Vec<EnrollmentResult>, String> {
     if items.is_empty() {
         return Err("Aucune inscription sélectionnée".to_string());
     }
@@ -417,18 +449,19 @@ pub fn cmd_enroll_student(
     student_id: i64,
     group_id: i64,
     start_date: String,
-) -> Result<i64, String> {
+) -> Result<EnrollmentResult, String> {
     let conn = db.conn();
-    enroll_student(&conn, student_id, group_id, &start_date)
+    let item = BatchEnrollmentInput { student_id, group_id, start_date };
+    enroll_student_batch_details(&conn, &[item]).map(|mut rows| rows.remove(0))
 }
 
 #[tauri::command]
 pub fn cmd_enroll_student_batch(
     db: State<'_, Db>,
     enrollments: Vec<BatchEnrollmentInput>,
-) -> Result<Vec<i64>, String> {
+) -> Result<Vec<EnrollmentResult>, String> {
     let conn = db.conn();
-    enroll_student_batch(&conn, &enrollments)
+    enroll_student_batch_details(&conn, &enrollments)
 }
 
 #[tauri::command]
@@ -514,6 +547,74 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    #[test]
+    fn enrollment_fee_is_created_on_first_enrollment_and_can_be_paid() {
+        let conn = test_conn();
+        super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
+        let g = group(&conn, 30_000, 10, "Lundi");
+        let s = student(&conn, "Test Fee", "0612345678");
+        let rows = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:s, group_id:g, start_date:"2026-09-01".into() }]).unwrap();
+        let fee = rows[0].enrollment_fee_invoice_id.unwrap();
+        assert_eq!(rows[0].enrollment_fee_amount_cents, Some(20_000));
+        let invoices = super::super::invoices::student_invoices(&conn, s).unwrap();
+        let charge = invoices.iter().find(|i| i.id == fee).unwrap();
+        assert_eq!(charge.kind, "enrollment_fee");
+        assert_eq!(charge.amount_cents, 20_000);
+        let payment = super::super::payments::record_payment(&conn, s, &[fee], 5_000, "espèces", None).unwrap();
+        let partial = super::super::invoices::student_invoices(&conn, s).unwrap();
+        assert_eq!(partial.iter().find(|i| i.id == fee).unwrap().status, "partiel");
+        let receipt = super::super::payments::create_receipt(&conn, payment).unwrap();
+        let data = super::super::payments::receipt_data(&conn, receipt).unwrap();
+        assert_eq!(data.items[0].kind, "enrollment_fee");
+        assert_eq!(data.items[0].amount, 5_000);
+        assert_eq!(super::super::dashboard::revenue_of(&conn, Local::now().month() as i32, Local::now().year()).unwrap(), 5_000);
+        let export = super::super::year_export::data(&conn, 1, "payments").unwrap();
+        assert_eq!(export[0].get("invoice_kind").unwrap(), "enrollment_fee");
+        super::super::payments::record_payment(&conn, s, &[fee], 15_000, "espèces", None).unwrap();
+        assert_eq!(super::super::invoices::student_invoices(&conn, s).unwrap().iter().find(|i| i.id == fee).unwrap().status, "payé");
+    }
+
+    #[test]
+    fn enrollment_fee_is_unique_in_same_year_and_zero_skips_it() {
+        let conn = test_conn();
+        super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
+        let s = student(&conn, "Test Once", "0612345678");
+        let a = group(&conn, 10_000, 10, "Lundi");
+        let b = group(&conn, 10_000, 10, "Mardi");
+        let inputs = [BatchEnrollmentInput { student_id:s, group_id:a, start_date:"2026-09-01".into() }, BatchEnrollmentInput { student_id:s, group_id:b, start_date:"2026-09-01".into() }];
+        let rows = enroll_student_batch_details(&conn, &inputs).unwrap();
+        assert!(rows[0].enrollment_fee_invoice_id.is_some());
+        assert!(rows[1].enrollment_fee_invoice_id.is_none());
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![s], |r| r.get::<_, i64>(0)).unwrap(), 1);
+        super::super::settings::set_enrollment_fee(&conn, 0).unwrap();
+        let other = student(&conn, "No Fee", "0612345679");
+        enroll_student(&conn, other, a, "2026-09-01").unwrap();
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![other], |r| r.get::<_, i64>(0)).unwrap(), 0);
+    }
+
+    #[test]
+    fn enrollment_fee_is_new_and_independently_configured_next_year() {
+        let conn = test_conn();
+        super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
+        let s = student(&conn, "Test Year", "0612345678");
+        let a = group(&conn, 10_000, 10, "Lundi");
+        enroll_student(&conn, s, a, "2026-09-01").unwrap();
+        conn.execute("INSERT INTO school_years (label,start_date,end_date,is_active) VALUES ('2030-2031','2030-09-01','2031-06-30',0)", []).unwrap();
+        let next = conn.last_insert_rowid();
+        conn.execute("UPDATE school_years SET is_active=(id=?1)", params![next]).unwrap();
+        assert_eq!(super::super::settings::enrollment_fee(&conn).unwrap(), 0);
+        super::super::settings::set_enrollment_fee(&conn, 30_000).unwrap();
+        conn.execute("INSERT INTO groups(subject_id,level_id,school_year_id,monthly_fee_cents,capacity,status) VALUES (1,10,?1,10000,10,'actif')", params![next]).unwrap();
+        let b = conn.last_insert_rowid();
+        enroll_student(&conn, s, b, "2030-09-01").unwrap();
+        let fees = super::super::invoices::student_invoices(&conn, s).unwrap();
+        assert_eq!(fees.iter().filter(|i| i.kind == "enrollment_fee").count(), 1);
+        assert_eq!(fees.iter().find(|i| i.kind == "enrollment_fee").unwrap().amount_cents, 30_000);
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![s], |r| r.get::<_, i64>(0)).unwrap(), 2);
+        conn.execute("UPDATE school_years SET is_active=(id=1)", []).unwrap();
+        assert_eq!(super::super::settings::enrollment_fee(&conn).unwrap(), 20_000);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import MonthPicker from '../components/ui/MonthPicker';
 import Card, { CardHeader } from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
 import KpiCard from '../components/dashboard/KpiCard';
@@ -119,11 +120,6 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  const years = useMemo(() => {
-    const current = new Date().getFullYear();
-    return [current - 1, current, current + 1];
-  }, []);
-
   const configuredTeachers = teachers.filter((row) => row.status !== 'not_configured').length;
 
   return (
@@ -140,36 +136,7 @@ export function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <select
-            aria-label={t('dashboard.period')}
-            value={period.month}
-            onChange={(event) =>
-              setPeriod((current) => ({ ...current, month: Number(event.target.value) }))
-            }
-            className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            data-testid="dashboard-month"
-          >
-            {Array.from({ length: 12 }).map((_, index) => (
-              <option key={index + 1} value={index + 1}>
-                {monthLabel(t, index + 1)}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t('payments.year')}
-            value={period.year}
-            onChange={(event) =>
-              setPeriod((current) => ({ ...current, year: Number(event.target.value) }))
-            }
-            className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            data-testid="dashboard-year"
-          >
-            {years.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+          <MonthPicker value={period} onChange={setPeriod} label={t('dashboard.period')} testId="dashboard-period" />
         </div>
       </div>
 

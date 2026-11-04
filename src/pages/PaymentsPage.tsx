@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import MonthPicker from '../components/ui/MonthPicker';
 import EmptyState from '../components/ui/EmptyState';
 import PaymentModal from '../components/payments/PaymentModal';
 import TeacherSettlementsTab from '../components/payments/TeacherSettlementsTab';
@@ -43,9 +44,8 @@ export function PaymentsPage() {
   const { t } = useTranslation();
 
   const [tab, setTab] = useState<TabKey>('collections');
-  const initial = currentPeriod();
-  const [month, setMonth] = useState(initial.month);
-  const [year, setYear] = useState(initial.year);
+  const [period, setPeriod] = useState(currentPeriod);
+  const { month, year } = period;
   const [alerts, setAlerts] = useState<PaymentAlerts>(EMPTY_ALERTS);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -71,11 +71,6 @@ export function PaymentsPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const years = useMemo(() => {
-    const current = initial.year;
-    return [current - 1, current, current + 1];
-  }, [initial.year]);
 
   const generate = async () => {
     setGenerating(true);
@@ -142,32 +137,7 @@ export function PaymentsPage() {
         </h1>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label={t('payments.month')}
-            value={month}
-            onChange={(event) => setMonth(Number(event.target.value))}
-            className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            data-testid="payments-month"
-          >
-            {Array.from({ length: 12 }).map((_, index) => (
-              <option key={index + 1} value={index + 1}>
-                {monthLabel(t, index + 1)}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t('payments.year')}
-            value={year}
-            onChange={(event) => setYear(Number(event.target.value))}
-            className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            data-testid="payments-year"
-          >
-            {years.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+          <MonthPicker value={period} onChange={setPeriod} label={t('dashboard.period')} testId="payments-period" />
           <Button
             variant="secondary"
             size="icon"

@@ -28,6 +28,7 @@ export interface ReceiptLabels {
   method: string;
   thanks: string;
   advance: string;
+  enrollmentFee: string;
   /** `Thermique` header, kept short on purpose. */
   shortHeading: string;
   thankYouShort: string;
@@ -76,6 +77,7 @@ export function buildReceiptLabels(t: TFunction): ReceiptLabels {
     method: t('receipt.method'),
     thanks: t('receipt.thanks'),
     advance: t('receipt.advance'),
+    enrollmentFee: t('receipt.enrollment_fee'),
     shortHeading: t('receipt.shortHeading'),
     thankYouShort: t('receipt.thankYouShort'),
     total: t('receipt.total'),
@@ -107,8 +109,8 @@ export function buildReceiptDocument(
     logo: data.center_logo ? data.center_logo : null,
     studentName: clean(data.student_name),
     studentLevel: clean(data.student_level) || '—',
-    items: data.items.map(item => ({ subject: item.kind === 'advance' ? labels.advance : item.kind === 'unavailable' ? labels.unavailable : clean(item.subject) || '—', group: clean(item.group_name) || '—', month: clean(item.month) || '—', amount: receiptAmount(item.amount) })),
-    groupsText: clean(data.groups_text) || labels.advance,
+    items: data.items.map(item => ({ subject: item.kind === 'enrollment_fee' ? labels.enrollmentFee : item.kind === 'advance' ? labels.advance : item.kind === 'unavailable' ? labels.unavailable : clean(item.subject) || '—', group: clean(item.group_name) || '—', month: clean(item.month) || '—', amount: receiptAmount(item.amount) })),
+    groupsText: clean(data.groups_text) || (data.items.some(item => item.kind === 'enrollment_fee') ? '—' : labels.advance),
     periodText: clean(periodText),
     amountText: receiptAmount(data.amount_cents),
     methodText: clean(methodText),

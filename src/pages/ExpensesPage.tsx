@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, Receipt, Trash2, Wallet } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import MonthPicker from '../components/ui/MonthPicker';
+import ViewButton from '../components/ui/ViewButton';
+import Modal from '../components/ui/Modal';
 import Card from '../components/ui/Card';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
@@ -27,15 +30,14 @@ const EMPTY_SUMMARY: ExpensesSummary = { total_cents: 0, by_category: [], count:
  *
  * The charges of one month — rent, WiFi, electricity, water, the assistant's
  * salary, supplies — so the director can read the real profit next to the
- * revenue. Everything is scoped to the month/year selector; a category filter
+ * revenue. Everything is scoped to the calendar period; a category filter
  * narrows the table but not the summary cards.
  */
 export function ExpensesPage() {
   const { t } = useTranslation();
 
-  const initial = currentPeriod();
-  const [month, setMonth] = useState(initial.month);
-  const [year, setYear] = useState(initial.year);
+  const [period, setPeriod] = useState(currentPeriod);
+  const { month, year } = period;
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [summary, setSummary] = useState<ExpensesSummary>(EMPTY_SUMMARY);
   const [categories, setCategories] = useState<string[]>([]);
@@ -44,6 +46,7 @@ export function ExpensesPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [viewing, setViewing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [removing, setRemoving] = useState(false);
 
@@ -70,11 +73,6 @@ export function ExpensesPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const years = useMemo(() => {
-    const current = new Date().getFullYear();
-    return [current - 1, current, current + 1];
-  }, []);
 
   const visible = useMemo(
     () => (filter ? expenses.filter((expense) => expense.category === filter) : expenses),
@@ -137,38 +135,12 @@ export function ExpensesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label={t('expenses.period')}
-            value={month}
-            onChange={(event) => {
-              setMonth(Number(event.target.value));
-              setFilter('');
-            }}
-            className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            data-testid="expenses-month"
-          >
-            {Array.from({ length: 12 }).map((_, index) => (
-              <option key={index + 1} value={index + 1}>
-                {monthLabel(t, index + 1)}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t('payments.year')}
-            value={year}
-            onChange={(event) => {
-              setYear(Number(event.target.value));
-              setFilter('');
-            }}
-            className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            data-testid="expenses-year"
-          >
-            {years.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
+          <MonthPicker
+            value={period}
+            onChange={(value) => { setPeriod(value); setFilter(''); }}
+            label={t('expenses.period')}
+            testId="expenses-period"
+          />
           <Button leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={openCreate} data-testid="expense-new">
             {t('expenses.new')}
           </Button>
@@ -321,6 +293,7 @@ export function ExpensesPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
+                        <ViewButton name={expense.label} testId={`view-expense-${expense.id}`} onView={() => setViewing(expense)} />
                         <button
                           type="button"
                           onClick={() => openEdit(expense)}
@@ -370,6 +343,18 @@ export function ExpensesPage() {
           </div>
         )}
       </Card>
+
+      <Modal open={viewing !== null} onClose={() => setViewing(null)} title={t('actions.view')}
+        testId="expense-detail" footer={<Button variant="secondary" onClick={() => setViewing(null)}>{t('common.close')}</Button>}>
+        {viewing && <dl className="space-y-4 text-[13px]">
+          <div><dt className="text-muted">{t('expenses.category')}</dt><dd><ExpenseCategoryBadge category={viewing.category} /></dd></div>
+          <div><dt className="text-muted">{t('expenses.label')}</dt><dd dir="auto">{viewing.label}</dd></div>
+          <div><dt className="text-muted">{t('expenses.amount')}</dt><dd>{formatCurrency(viewing.amount_cents)}</dd></div>
+          <div><dt className="text-muted">{t('expenses.notes')}</dt><dd dir="auto" className="whitespace-pre-wrap break-words">{viewing.notes || '—'}</dd></div>
+          <div><dt className="text-muted">{t('expenses.period')}</dt><dd>{monthLabel(t, viewing.month)} {viewing.year}</dd></div>
+          <div><dt className="text-muted">{t('expenses.createdAt')}</dt><dd>{formatDateTime(viewing.created_at)}</dd></div>
+        </dl>}
+      </Modal>
 
       <ExpenseModal
         open={modalOpen}

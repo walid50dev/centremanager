@@ -457,7 +457,9 @@ pub struct TeacherOption {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StudentInvoice {
     pub id: i64,
-    pub enrollment_id: i64,
+    pub enrollment_id: Option<i64>,
+    pub kind: String,
+    pub school_year_label: Option<String>,
     pub group_subject: String,
     pub group_level: String,
     pub group_branch: Option<String>,

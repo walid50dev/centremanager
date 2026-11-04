@@ -77,9 +77,10 @@ pub fn record_payment(
             .query_row(
                 "SELECT EXISTS(
                     SELECT 1 FROM invoices i
-                    JOIN enrollments e ON e.id = i.enrollment_id
-                    JOIN groups g ON g.id=e.group_id
-                    WHERE i.id = ?1 AND e.student_id = ?2 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
+                    LEFT JOIN enrollments e ON e.id = i.enrollment_id
+                    LEFT JOIN groups g ON g.id=e.group_id
+                    LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+                    WHERE i.id = ?1 AND ((e.student_id = ?2 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) OR (f.student_id=?2 AND f.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)))
                  )",
                 params![invoice_id, student_id],
                 |row| row.get(0),
@@ -117,8 +118,9 @@ pub fn record_payment(
                 "SELECT i.id, i.amount_cents, COALESCE(i.paid_amount_cents, 0),
                         COALESCE(i.due_date, '')
                  FROM invoices i
-                 JOIN enrollments e ON e.id = i.enrollment_id
-                 WHERE i.id = ?1 AND e.student_id = ?2",
+                 LEFT JOIN enrollments e ON e.id = i.enrollment_id
+                 LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+                 WHERE i.id = ?1 AND (e.student_id = ?2 OR f.student_id = ?2)",
                 params![invoice_id, student_id],
                 |row| {
                     Ok((
@@ -348,18 +350,19 @@ fn receipt_session(conn: &Connection, payment_id: i64) -> Result<Vec<i64>, Strin
 fn receipt_items(conn: &Connection, ids: &[i64]) -> Result<Vec<ReceiptItem>, String> {
     let mut items = Vec::new();
     for id in ids {
-        let row: (i64, Option<i64>, String, String, String, Option<i32>, Option<i32>) = conn.query_row(
-            "SELECT p.amount_cents, p.invoice_id, COALESCE(s.name,''), COALESCE(l.name,''), COALESCE(b.name,''), i.period_month, i.period_year
+        let row: (i64, Option<i64>, String, String, String, Option<i32>, Option<i32>, Option<String>) = conn.query_row(
+            "SELECT p.amount_cents, p.invoice_id, COALESCE(s.name,''), COALESCE(l.name,''), COALESCE(b.name,''), i.period_month, i.period_year, CASE WHEN f.id IS NOT NULL THEN COALESCE(y.label,'') ELSE NULL END
              FROM payments p LEFT JOIN invoices i ON i.id=p.invoice_id
+             LEFT JOIN enrollment_fees f ON f.invoice_id=i.id LEFT JOIN school_years y ON y.id=f.school_year_id
              LEFT JOIN enrollments e ON e.id=i.enrollment_id LEFT JOIN groups g ON g.id=e.group_id
              LEFT JOIN subjects s ON s.id=g.subject_id LEFT JOIN levels l ON l.id=g.level_id
              LEFT JOIN branches b ON b.id=g.branch_id WHERE p.id=?1", params![id],
-            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?)))
+            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?)))
             .map_err(|e| db_err("Lecture des détails du reçu", e))?;
-        let (amount, invoice, subject, level, branch, month, year) = row;
+        let (amount, invoice, subject, level, branch, month, year, school_year) = row;
         let group_name = [level.as_str(), branch.as_str()].into_iter().filter(|v| !v.trim().is_empty()).collect::<Vec<_>>().join(" · ");
-        items.push(ReceiptItem { subject, group_name, month: match (month, year) { (Some(m), Some(y)) => format!("{} {}", french_month_name(m), y), _ => String::new() }, amount,
-            kind: if invoice.is_none() { "advance" } else { "invoice" }.to_string() });
+        items.push(ReceiptItem { subject, group_name, month: school_year.clone().unwrap_or_else(|| match (month, year) { (Some(m), Some(y)) => format!("{} {}", french_month_name(m), y), _ => String::new() }), amount,
+            kind: if school_year.is_some() { "enrollment_fee" } else if invoice.is_none() { "advance" } else { "invoice" }.to_string() });
     }
     Ok(items)
 }
