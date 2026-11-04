@@ -2523,6 +2523,9 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     // -- School years -----------------------------------------------------
+    case 'cmd_get_active_school_year':
+      return clone(store.schoolYears.find(year => year.is_active) ?? null);
+
     case 'cmd_get_school_years':
       return clone(
         [...store.schoolYears].sort((a, b) =>
@@ -2551,8 +2554,9 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return year.id;
     }
 
-    case 'cmd_set_active_year': {
-      const id = asNumber(args, 'id');
+    case 'cmd_set_active_year':
+    case 'cmd_switch_school_year': {
+      const id = cmd === 'cmd_switch_school_year' ? asNumber(args, 'yearId') : asNumber(args, 'id');
       if (!store.schoolYears.some((year) => year.id === id)) {
         throw new Error('Année scolaire introuvable');
       }

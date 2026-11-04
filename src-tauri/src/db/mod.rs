@@ -149,7 +149,78 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         }
     }
     migrate_group_schedules(conn)?;
-    seed_reference_data(conn)
+    seed_reference_data(conn)?;
+    migrate_school_year_membership(conn)
+}
+
+/// Record year membership independently from enrollment. Imported (or newly
+/// created) students and teachers must be visible before they join a group.
+fn migrate_school_year_membership(conn: &Connection) -> rusqlite::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    if !column_exists(&tx, "monthly_expenses", "school_year_id")? {
+        tx.execute_batch("ALTER TABLE monthly_expenses ADD COLUMN school_year_id INTEGER REFERENCES school_years(id);")?;
+    }
+    tx.execute_batch(r#"
+        CREATE TABLE IF NOT EXISTS student_school_years (
+            student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            school_year_id INTEGER NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+            PRIMARY KEY (student_id, school_year_id)
+        );
+        CREATE TABLE IF NOT EXISTS teacher_school_years (
+            teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+            school_year_id INTEGER NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+            PRIMARY KEY (teacher_id, school_year_id)
+        );
+        CREATE TABLE IF NOT EXISTS group_year_imports (
+            source_group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            target_school_year_id INTEGER NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+            imported_group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            PRIMARY KEY (source_group_id, target_school_year_id)
+        );
+    "#)?;
+    let migrated: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM settings WHERE key = 'school_year_membership_migrated')", [], |r| r.get(0)
+    )?;
+    // Defer the legacy backfill until an active year exists. Marking it done
+    // earlier would strand unassigned legacy rows permanently.
+    let has_active_year: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM school_years WHERE is_active=1)", [], |r| r.get(0))?;
+    if !migrated && has_active_year {
+        tx.execute_batch(r#"
+            INSERT OR IGNORE INTO student_school_years
+              SELECT e.student_id, g.school_year_id FROM enrollments e JOIN groups g ON g.id=e.group_id
+              WHERE e.student_id IS NOT NULL AND g.school_year_id IS NOT NULL;
+            INSERT OR IGNORE INTO teacher_school_years
+              SELECT teacher_id, school_year_id FROM groups
+              WHERE teacher_id IS NOT NULL AND school_year_id IS NOT NULL;
+            INSERT OR IGNORE INTO student_school_years
+              SELECT s.id, y.id FROM students s JOIN school_years y ON y.is_active=1
+              WHERE NOT EXISTS (SELECT 1 FROM student_school_years sy WHERE sy.student_id=s.id);
+            INSERT OR IGNORE INTO teacher_school_years
+              SELECT t.id, y.id FROM teachers t JOIN school_years y ON y.is_active=1
+              WHERE NOT EXISTS (SELECT 1 FROM teacher_school_years ty WHERE ty.teacher_id=t.id);
+            UPDATE monthly_expenses SET school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
+              WHERE school_year_id IS NULL;
+            INSERT INTO settings (key,value) VALUES ('school_year_membership_migrated','1');
+        "#)?;
+    }
+    tx.execute_batch(r#"
+        CREATE INDEX IF NOT EXISTS idx_expenses_school_year ON monthly_expenses(school_year_id);
+        CREATE TRIGGER IF NOT EXISTS student_active_school_year AFTER INSERT ON students BEGIN
+          INSERT OR IGNORE INTO student_school_years SELECT NEW.id, id FROM school_years WHERE is_active=1;
+        END;
+        CREATE TRIGGER IF NOT EXISTS teacher_active_school_year AFTER INSERT ON teachers BEGIN
+          INSERT OR IGNORE INTO teacher_school_years SELECT NEW.id, id FROM school_years WHERE is_active=1;
+        END;
+        CREATE TRIGGER IF NOT EXISTS enrollment_student_school_year AFTER INSERT ON enrollments BEGIN
+          INSERT OR IGNORE INTO student_school_years SELECT NEW.student_id, school_year_id FROM groups
+            WHERE id=NEW.group_id AND school_year_id IS NOT NULL AND NEW.student_id IS NOT NULL;
+        END;
+        CREATE TRIGGER IF NOT EXISTS expense_active_school_year AFTER INSERT ON monthly_expenses
+          WHEN NEW.school_year_id IS NULL BEGIN
+          UPDATE monthly_expenses SET school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) WHERE id=NEW.id;
+        END;
+    "#)?;
+    tx.commit()
 }
 
 /// Columns introduced after a table was first created.
@@ -569,7 +640,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let tables = table_names(&conn).unwrap();
-        assert_eq!(tables.len(), 19, "expected 19 tables, got {tables:?}");
+        assert_eq!(tables.len(), 22, "expected 22 tables, got {tables:?}");
         for expected in [
             "settings",
             "school_years",
@@ -590,6 +661,9 @@ mod tests {
             "audit_log",
             "monthly_expenses",
             "group_schedules",
+            "student_school_years",
+            "teacher_school_years",
+            "group_year_imports",
         ] {
             assert!(
                 tables.iter().any(|name| name == expected),
