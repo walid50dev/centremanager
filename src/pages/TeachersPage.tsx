@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
 import TeacherModal from '../components/teachers/TeacherModal';
+import ImportButton from '../components/year-import/ImportButton';
 import { toast } from '../components/ui/Toast';
 import { teachersApi } from '../services/teachers';
 import { modeBadge } from '../utils/compensation';
@@ -53,13 +54,14 @@ export function TeachersPage() {
           </span>
         </h1>
 
+        <div className="flex flex-wrap gap-2"><ImportButton kind="teachers" onImported={() => void load()} />
         <Button
           leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
           onClick={() => setFormOpen(true)}
           data-testid="teacher-new"
         >
           {t('teachers.new')}
-        </Button>
+        </Button></div>
       </div>
 
       {loading ? (

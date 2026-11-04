@@ -2,18 +2,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays, Check, Plus } from 'lucide-react';
 import Badge from '../ui/Badge';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import { useAppStore } from '../../stores/appStore';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import SettingsSection from './SettingsSection';
 import { toast } from '../ui/Toast';
 import { schoolYearsApi } from '../../services/settings';
+import { downloadExcel, type ExportSection } from '../../services/yearExport';
+import { downloadYearPdf } from '../year-export/yearPdf';
 import { formatDate } from '../../utils/format';
 import type { SchoolYear } from '../../types';
 
 /** Section 2 — school years, with exactly one active year. */
 export function SchoolYearSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const [years, setYears] = useState<SchoolYear[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +28,10 @@ export function SchoolYearSection() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [activatingId, setActivatingId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState<number | null>(null);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+  const switchYear = useAppStore(state => state.switchSchoolYear);
+  const loadYears = useAppStore(state => state.loadSchoolYears);
 
   const load = useCallback(async () => {
     try {
@@ -44,7 +52,8 @@ export function SchoolYearSection() {
   const handleActivate = async (id: number) => {
     setActivatingId(id);
     try {
-      await schoolYearsApi.setActive(id);
+      await switchYear(id);
+      setPendingId(null);
       await load();
       toast.success(t('settings.schoolYear.activated'));
     } catch (error) {
@@ -52,6 +61,22 @@ export function SchoolYearSection() {
     } finally {
       setActivatingId(null);
     }
+  };
+
+  const handleExport = async (year: SchoolYear, section: ExportSection | 'pdf') => {
+    if (exporting !== null) return;
+    setExporting(year.id);
+    try {
+      if (section === 'pdf') {
+        await downloadYearPdf(year.id, year.label ?? '', {
+          title: t('export.summary', { year: year.label ?? '' }),
+          students: t('export.section_students'), groups: t('export.section_groups'), teachers: t('export.section_teachers'),
+          revenue: t('export.revenue'), expenses: t('export.section_expenses'), salaries: t('export.section_salaries'),
+          net: t('export.net'), subject: t('export.subject'), note: t('export.note'),
+        }, i18n.language === 'ar');
+      } else await downloadExcel(year.id, year.label ?? '', section);
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setExporting(null); }
   };
 
   const handleCreate = async () => {
@@ -72,6 +97,7 @@ export function SchoolYearSection() {
     setSubmitting(true);
     try {
       await schoolYearsApi.create(label.trim(), startDate, endDate);
+      await loadYears();
       setLabel('');
       setStartDate('');
       setEndDate('');
@@ -93,6 +119,9 @@ export function SchoolYearSection() {
       title={t('settings.section.schoolYear')}
       description={t('settings.schoolYear.description')}
     >
+      <ConfirmDialog open={pendingId !== null} title={t('schoolYearSwitch.title')} message={t('schoolYearSwitch.message', { year: years.find(year => year.id === pendingId)?.label ?? '' })}
+        confirmLabel={t('schoolYearSwitch.confirm')} cancelLabel={t('common.cancel')} destructive={false} loading={activatingId !== null}
+        onClose={() => { if (activatingId === null) setPendingId(null); }} onConfirm={() => { if (pendingId !== null) void handleActivate(pendingId); }} />
       {loading ? (
         <p className="text-[13px] text-muted">{t('common.loading')}</p>
       ) : (
@@ -104,7 +133,7 @@ export function SchoolYearSection() {
             options={years.map((year) => ({ value: year.id, label: year.label ?? '' }))}
             onChange={(event) => {
               const id = Number(event.target.value);
-              if (Number.isFinite(id) && id > 0) void handleActivate(id);
+              if (Number.isFinite(id) && id > 0 && id !== activeYear?.id) setPendingId(id);
             }}
           />
 
@@ -130,12 +159,20 @@ export function SchoolYearSection() {
                     {formatDate(year.start_date)} → {formatDate(year.end_date)}
                   </p>
                 </div>
+                <Button size="sm" variant="secondary" disabled={exporting !== null} onClick={() => void handleExport(year, 'pdf')} data-testid={`year-pdf-${year.id}`}>📄 {exporting === year.id ? t('export.generating') : t('export.pdf')}</Button>
+                <select aria-label={t('export.excel')} data-testid={`year-excel-${year.id}`} value="" disabled={exporting !== null}
+                  className="h-8 max-w-[170px] rounded border border-border bg-white px-2 text-[13px]" onChange={event => {
+                    if (event.target.value) void handleExport(year, event.target.value as ExportSection);
+                  }}>
+                  <option value="">📊 {t('export.excel')}</option>
+                  {(['students','groups','teachers','payments','expenses','salaries'] as const).map(section => <option key={section} value={section}>{t(`export.section_${section}`)}</option>)}
+                </select>
                 {!year.is_active && (
                   <Button
                     size="sm"
                     variant="secondary"
                     loading={activatingId === year.id}
-                    onClick={() => void handleActivate(year.id)}
+                    onClick={() => setPendingId(year.id)}
                     leftIcon={<Check className="h-3.5 w-3.5" aria-hidden="true" />}
                   >
                     {t('settings.schoolYear.activate')}

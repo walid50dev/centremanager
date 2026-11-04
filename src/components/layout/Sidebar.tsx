@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { cn } from '../../utils/format';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import { toast } from '../ui/Toast';
 
 interface NavItem {
   to: string;
@@ -52,6 +54,19 @@ export function Sidebar() {
     return () => { active = false; window.removeEventListener(TRASH_CHANGED, refresh); };
   }, []);
   const latePaymentCount = useAppStore((state) => state.latePaymentCount);
+  const years = useAppStore(state => state.schoolYears);
+  const activeYear = useAppStore(state => state.activeSchoolYear);
+  const switchYear = useAppStore(state => state.switchSchoolYear);
+  const [pendingYear, setPendingYear] = useState<number | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const selectedYear = years.find(year => year.id === pendingYear);
+  const confirmSwitch = async () => {
+    if (!pendingYear || switching) return;
+    setSwitching(true);
+    try { await switchYear(pendingYear); setPendingYear(null); }
+    catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setSwitching(false); }
+  };
 
   return (
     <aside
@@ -76,6 +91,20 @@ export function Sidebar() {
         )}
       </div>
 
+      <div className="border-b border-border px-2 py-2">
+        <label className="sr-only" htmlFor="sidebar-school-year">{t('settings.schoolYear.activeYear')}</label>
+        <select id="sidebar-school-year" data-testid="sidebar-school-year" value={activeYear?.id ?? ''}
+          onChange={event => { const id = Number(event.target.value); if (id && id !== activeYear?.id) setPendingYear(id); }}
+          disabled={switching || !activeYear} className="w-full rounded border border-border bg-white px-1 py-2 text-[12px] font-semibold text-foreground">
+          {!activeYear && <option value="">{t('settings.schoolYear.none')}</option>}
+          {years.map(year => <option key={year.id} value={year.id}>{year.is_active ? '🟢 ' : ''}{year.label}</option>)}
+        </select>
+        {activeYear && sidebarOpen && <span className="mt-1 hidden items-center gap-1 text-[10px] font-medium text-emerald-700 lg:flex"><span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />{t('settings.schoolYear.active')}</span>}
+      </div>
+      <ConfirmDialog open={pendingYear !== null} title={t('schoolYearSwitch.title')}
+        message={t('schoolYearSwitch.message', { year: selectedYear?.label ?? '' })}
+        confirmLabel={t('schoolYearSwitch.confirm')} cancelLabel={t('common.cancel')} destructive={false}
+        loading={switching} onClose={() => { if (!switching) setPendingYear(null); }} onConfirm={() => void confirmSwitch()} />
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         <ul className="flex flex-col gap-1">

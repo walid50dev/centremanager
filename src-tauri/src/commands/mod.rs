@@ -41,6 +41,7 @@ pub mod subjects;
 pub mod teachers;
 pub mod trash;
 pub mod year_import;
+pub mod year_export;
 
 /// Uniform translation of a SQLite error into a user-facing French message.
 /// Shared by every command module so error wording stays consistent.

@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'vite';
+const storage = new Map();
+globalThis.localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) };
+globalThis.window = { setTimeout };
+const server = await createServer({ optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true }, appType: 'custom' });
+try {
+  const { devInvoke } = await server.ssrLoadModule('/src/services/settingsDevBackend.ts');
+  const old = await devInvoke('cmd_get_active_school_year');
+  const key = 'centremanager.dev.settings_store_v1';
+  const state = JSON.parse(storage.get(key));
+  const student = state.students[0], group = state.groups[0];
+  state.enrollments = [{ id: 90, student_id: student.id, group_id: group.id, start_date: '2024-09-01', end_date: null, status:'actif' }];
+  state.invoices = [{ id: 90, enrollment_id: 90, period_month:9, period_year:2024, amount_cents:5000, paid_amount_cents:0, status:'impayé', due_date:'2024-09-01', created_at:'2024-09-01' }];
+  state.payments = []; state.nextPaymentId = 100;
+  storage.set(key, JSON.stringify(state));
+  const first = await devInvoke('cmd_record_payment', { studentId:student.id, invoiceIds:[90], amountCents:7000, method:'espèces' });
+  const receipt = await devInvoke('cmd_get_receipt_data', { paymentId:first });
+  assert.equal(receipt.total, 7000); assert.equal(receipt.items[1].kind, 'advance');
+  assert.equal((await devInvoke('cmd_export_year_summary', { yearId:old.id })).revenue_cents, 7000);
+  assert.equal((await devInvoke('cmd_get_payments_history', { studentId:student.id })).total, 2);
+  const next = await devInvoke('cmd_create_school_year', { label:'2025-2026', startDate:'2025-09-01', endDate:'2026-06-30' });
+  await devInvoke('cmd_switch_school_year', { yearId:next });
+  assert.equal((await devInvoke('cmd_export_year_summary', { yearId:next })).revenue_cents, 0);
+  assert.equal((await devInvoke('cmd_get_payments_history', { studentId:student.id })).total, 0);
+  await assert.rejects(devInvoke('cmd_record_payment', { studentId:student.id, invoiceIds:[90], amountCents:1000, method:'espèces' }));
+  const corrupted = JSON.parse(storage.get(key));
+  corrupted.payments.push({ id:999, student_id:student.id, invoice_id:null, school_year_id:null, amount_cents:10, payment_method:'espèces', notes:null, created_at:'2020-01-01 00:00:00' });
+  storage.set(key, JSON.stringify(corrupted));
+  assert.equal(await devInvoke('cmd_get_unattributed_payment_count'), 1);
+  await assert.rejects(devInvoke('cmd_export_year_summary', { yearId:next }), /sans année/);
+  console.log('Year payments: advances, year switch and unresolved-payment safeguards passed');
+} finally { await server.close(); }

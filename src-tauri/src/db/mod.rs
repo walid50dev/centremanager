@@ -150,7 +150,8 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     }
     migrate_group_schedules(conn)?;
     seed_reference_data(conn)?;
-    migrate_school_year_membership(conn)
+    migrate_school_year_membership(conn)?;
+    migrate_payment_school_year(conn)
 }
 
 /// Record year membership independently from enrollment. Imported (or newly
@@ -219,6 +220,44 @@ fn migrate_school_year_membership(conn: &Connection) -> rusqlite::Result<()> {
           WHEN NEW.school_year_id IS NULL BEGIN
           UPDATE monthly_expenses SET school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) WHERE id=NEW.id;
         END;
+    "#)?;
+    tx.commit()
+}
+
+/// Attribute historical payments only when the invoice, batch or audit log
+/// establishes one unambiguous school year. Unknown advances stay NULL rather
+/// than being silently assigned to the wrong year.
+fn migrate_payment_school_year(conn: &Connection) -> rusqlite::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    if !column_exists(&tx, "payments", "school_year_id")? {
+        tx.execute_batch("ALTER TABLE payments ADD COLUMN school_year_id INTEGER REFERENCES school_years(id);")?;
+    }
+    tx.execute_batch(r#"
+      UPDATE payments SET school_year_id=(SELECT g.school_year_id FROM invoices i
+        JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE i.id=payments.invoice_id)
+        WHERE school_year_id IS NULL AND invoice_id IS NOT NULL;
+      UPDATE payments SET school_year_id=(SELECT MIN(other.school_year_id) FROM payments other
+        WHERE other.batch_id=payments.batch_id AND other.school_year_id IS NOT NULL
+        HAVING COUNT(DISTINCT other.school_year_id)=1)
+        WHERE school_year_id IS NULL AND batch_id IS NOT NULL;
+      WITH candidates AS (
+        SELECT p.id AS payment_id, MIN(g.school_year_id) AS year_id, COUNT(DISTINCT g.school_year_id) AS year_count
+        FROM payments p
+        JOIN audit_log a ON a.action='PAYMENT' AND a.entity_type='payment' AND a.entity_id=(
+          SELECT MAX(a2.entity_id) FROM audit_log a2 WHERE a2.action='PAYMENT' AND a2.entity_type='payment' AND a2.entity_id<=p.id)
+        JOIN payments base ON base.id=a.entity_id AND base.student_id=p.student_id AND base.created_at=p.created_at
+        JOIN json_each(CASE WHEN json_valid(a.details) THEN a.details ELSE '{}' END, '$.invoice_ids') j
+        JOIN invoices i ON i.id=j.value JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id
+        WHERE p.school_year_id IS NULL AND g.school_year_id IS NOT NULL
+        GROUP BY p.id
+      )
+      UPDATE payments SET school_year_id=(SELECT c.year_id FROM candidates c WHERE c.payment_id=payments.id AND c.year_count=1)
+        WHERE school_year_id IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_payments_school_year ON payments(school_year_id);
+      CREATE TRIGGER IF NOT EXISTS payment_invoice_school_year AFTER INSERT ON payments
+      WHEN NEW.invoice_id IS NOT NULL AND NEW.school_year_id IS NULL BEGIN
+        UPDATE payments SET school_year_id=(SELECT g.school_year_id FROM invoices i JOIN enrollments e ON e.id=i.enrollment_id JOIN groups g ON g.id=e.group_id WHERE i.id=NEW.invoice_id) WHERE id=NEW.id;
+      END;
     "#)?;
     tx.commit()
 }

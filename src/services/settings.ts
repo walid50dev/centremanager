@@ -31,6 +31,8 @@ export const schoolYearsApi = {
   create: (label: string, startDate: string, endDate: string) =>
     call<number>('cmd_create_school_year', { label, startDate, endDate }),
   setActive: (id: number) => call<void>('cmd_set_active_year', { id }),
+  active: () => call<SchoolYear | null>('cmd_get_active_school_year'),
+  switch: (yearId: number) => call<void>('cmd_switch_school_year', { yearId }),
 };
 
 export const levelsApi = {

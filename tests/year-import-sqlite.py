@@ -10,9 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 db_source = (ROOT / 'src-tauri/src/db/mod.rs').read_text()
 import_source = (ROOT / 'src-tauri/src/commands/year_import.rs').read_text()
-part = db_source.split('fn migrate_school_year_membership', 1)[1].split('/// Columns introduced', 1)[0]
+part = db_source.split('fn migrate_school_year_membership', 1)[1].split('fn migrate_payment_school_year', 1)[0]
 blocks = re.findall(r'r#"(.*?)"#', part, re.S)
 assert len(blocks) == 3
+payment_part = db_source.split('fn migrate_payment_school_year', 1)[1].split('/// Columns introduced', 1)[0]
+payment_sql = re.findall(r'r#"(.*?)"#', payment_part, re.S)[0]
 
 def sql_containing(fragment):
     matches = re.findall(r'"((?:[^"\\]|\\.)*)"', import_source, re.S)
@@ -26,6 +28,9 @@ def migrate(conn):
             and conn.execute("SELECT 1 FROM school_years WHERE is_active=1").fetchone()):
         conn.executescript(blocks[1])
     conn.executescript(blocks[2])
+    if 'school_year_id' not in [row[1] for row in conn.execute('PRAGMA table_info(payments)')]:
+        conn.execute('ALTER TABLE payments ADD COLUMN school_year_id INTEGER REFERENCES school_years(id)')
+    conn.executescript(payment_sql)
 
 class YearImportTests(unittest.TestCase):
     def setUp(self):
@@ -77,6 +82,17 @@ class YearImportTests(unittest.TestCase):
         self.assertEqual(db.execute('SELECT count(*) FROM enrollments WHERE group_id=?', (copy,)).fetchone()[0], 0)
         with self.assertRaises(sqlite3.IntegrityError):
             db.execute('INSERT INTO group_year_imports VALUES (?,?,?)', (1, 2, copy))
+
+    def test_payments_backfill_uses_batch_and_audit_without_guessing(self):
+        db = self.db
+        db.execute("INSERT INTO invoices (id,enrollment_id,amount_cents) VALUES (1,1,10000)")
+        db.execute("INSERT INTO payments (id,student_id,invoice_id,amount_cents,batch_id,created_at) VALUES (1,1,1,8000,1,'2025-01-01 12:00:00')")
+        db.execute("INSERT INTO payments (id,student_id,invoice_id,amount_cents,batch_id,created_at) VALUES (2,1,NULL,2000,1,'2025-01-01 12:00:00')")
+        db.execute("INSERT INTO payments (id,student_id,invoice_id,amount_cents,created_at) VALUES (3,1,NULL,3000,'2025-01-02 12:00:00')")
+        db.execute("INSERT INTO audit_log (action,entity_type,entity_id,details) VALUES ('PAYMENT','payment',3,?)", ('{"invoice_ids":[1]}',))
+        db.execute("INSERT INTO payments (id,student_id,invoice_id,amount_cents,created_at) VALUES (4,2,NULL,3000,'2025-01-03 12:00:00')")
+        migrate(db)
+        self.assertEqual(db.execute('SELECT school_year_id FROM payments ORDER BY id').fetchall(), [(1,), (1,), (1,), (None,)])
 
     def test_teacher_import_and_group_visibility(self):
         db = self.db

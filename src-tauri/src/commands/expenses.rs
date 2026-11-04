@@ -343,11 +343,11 @@ pub fn list_expenses(
     let category = category.map(str::trim).filter(|value| !value.is_empty());
     let sql = match category {
         Some(_) => format!(
-            "{SELECT_EXPENSE} WHERE deleted_at IS NULL AND month = ?1 AND year = ?2 AND category = ?3
+            "{SELECT_EXPENSE} WHERE deleted_at IS NULL AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND month = ?1 AND year = ?2 AND category = ?3
              ORDER BY category COLLATE NOCASE ASC, label COLLATE NOCASE ASC, id ASC"
         ),
         None => format!(
-            "{SELECT_EXPENSE} WHERE deleted_at IS NULL AND month = ?1 AND year = ?2
+            "{SELECT_EXPENSE} WHERE deleted_at IS NULL AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND month = ?1 AND year = ?2
              ORDER BY category COLLATE NOCASE ASC, label COLLATE NOCASE ASC, id ASC"
         ),
     };
@@ -378,7 +378,7 @@ pub fn expenses_summary(
         .prepare(
             "SELECT category, COALESCE(SUM(amount_cents), 0), COUNT(*)
              FROM monthly_expenses
-             WHERE deleted_at IS NULL AND month = ?1 AND year = ?2
+             WHERE deleted_at IS NULL AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND month = ?1 AND year = ?2
              GROUP BY category
              ORDER BY SUM(amount_cents) DESC, category COLLATE NOCASE ASC",
         )
@@ -410,7 +410,7 @@ pub fn expenses_summary(
 pub fn month_total(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
     conn.query_row(
         "SELECT COALESCE(SUM(amount_cents), 0) FROM monthly_expenses
-          WHERE deleted_at IS NULL AND month = ?1 AND year = ?2",
+          WHERE deleted_at IS NULL AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND month = ?1 AND year = ?2",
         params![month, year],
         |row| row.get(0),
     )

@@ -364,7 +364,7 @@ pub fn student_enrollments(
              LEFT JOIN levels l ON l.id = g.level_id
              LEFT JOIN branches b ON b.id = g.branch_id
              LEFT JOIN teachers t ON t.id = g.teacher_id
-             WHERE e.student_id = ?1
+             WHERE e.student_id = ?1 AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
              ORDER BY e.start_date DESC, e.id DESC",
         )
         .map_err(|err| db_err("Préparation des inscriptions", err))?;

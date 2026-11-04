@@ -5,15 +5,14 @@ import Button from '../components/ui/Button';
 import TrashButton from '../components/ui/TrashButton';
 import Card from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
-import Select from '../components/ui/Select';
 import GroupModal from '../components/groups/GroupModal';
+import ImportButton from '../components/year-import/ImportButton';
 import GroupDetailModal from '../components/groups/GroupDetailModal';
 import { toast } from '../components/ui/Toast';
 import { groupsApi, occupancyTone } from '../services/groups';
-import { schoolYearsApi } from '../services/settings';
 import { cn, formatCurrency } from '../utils/format';
 import { groupSchedule, groupTitle } from '../utils/schedule';
-import type { Group, SchoolYear } from '../types';
+import type { Group } from '../types';
 
 const toneClasses = {
   success: 'bg-success',
@@ -32,49 +31,27 @@ export function GroupsPage() {
   const { t } = useTranslation();
 
   const [groups, setGroups] = useState<Group[]>([]);
-  const [schoolYears, setSchoolYears] = useState<SchoolYear[]>([]);
-  const [yearId, setYearId] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Group | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
 
-  // School years first: the default filter is the active one.
-  useEffect(() => {
-    let active = true;
-    schoolYearsApi
-      .list()
-      .then((years) => {
-        if (!active) return;
-        setSchoolYears(years);
-        const activeYear = years.find((year) => year.is_active) ?? years[0];
-        setYearId(activeYear ? String(activeYear.id) : '');
-      })
-      .catch((error: unknown) => {
-        toast.error(error instanceof Error ? error.message : String(error));
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await groupsApi.list({ schoolYearId: yearId ? Number(yearId) : null });
+      const list = await groupsApi.list();
       setGroups(list);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
-  }, [yearId]);
+  }, []);
 
   useEffect(() => {
-    if (yearId === '' && schoolYears.length === 0) return;
     void load();
-  }, [load, yearId, schoolYears.length]);
+  }, [load]);
 
   const totalEnrolled = useMemo(
     () => groups.reduce((sum, group) => sum + group.enrolled_count, 0),
@@ -92,17 +69,7 @@ export function GroupsPage() {
         </h1>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="w-[190px]">
-            <Select
-              aria-label={t('groups.filterYear')}
-              value={yearId}
-              onChange={(event) => setYearId(event.target.value)}
-              options={schoolYears.map((year) => ({
-                value: year.id,
-                label: year.label ?? '',
-              }))}
-            />
-          </div>
+          <ImportButton kind="groups" onImported={() => void load()} />
           <Button
             leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
             onClick={() => {

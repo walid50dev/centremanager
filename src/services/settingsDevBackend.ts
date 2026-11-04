@@ -98,6 +98,10 @@ const SEED_SUBJECTS = [
 ];
 
 interface DevStore {
+  studentYears?: Record<number, number[]>;
+  teacherYears?: Record<number, number[]>;
+  expenseYears?: Record<number, number | null>;
+  groupImports?: Record<string, number>;
   settings: Record<string, string>;
   levels: Level[];
   branches: Branch[];
@@ -198,6 +202,7 @@ interface DevInvoice {
 }
 
 interface DevPayment {
+  school_year_id?: number | null;
   batch_id?: number | null;
   id: number;
   student_id: number;
@@ -1252,7 +1257,7 @@ function devInvoiceRows(store: DevStore, studentId: number): StudentInvoice[] {
     store.enrollments.filter((entry) => entry.student_id === studentId).map((entry) => entry.id),
   );
   return store.invoices
-    .filter((invoice) => enrollmentIds.has(invoice.enrollment_id))
+    .filter((invoice) => enrollmentIds.has(invoice.enrollment_id) && invoiceInActiveYear(store, invoice.id))
     .map((invoice) => {
       const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
       const group = store.groups.find((entry) => entry.id === enrollment?.group_id);
@@ -1285,7 +1290,7 @@ function devAlerts(store: DevStore, month: number, year: number): PaymentAlerts 
   const byStudent = new Map<number, InvoiceAlert & { unpaidDue: string | null }>();
 
   for (const invoice of store.invoices) {
-    if (invoice.period_month !== month || invoice.period_year !== year) continue;
+    if (invoice.period_month !== month || invoice.period_year !== year || !invoiceInActiveYear(store, invoice.id)) continue;
     const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
     const student = store.students.find((entry) => entry.id === enrollment?.student_id);
     const group = store.groups.find(entry => entry.id === enrollment?.group_id);
@@ -1381,7 +1386,7 @@ function devRecordPayment(
     const enrollment = invoice
       ? store.enrollments.find((entry) => entry.id === invoice.enrollment_id)
       : undefined;
-    if (!invoice || enrollment?.student_id !== studentId) {
+    if (!invoice || enrollment?.student_id !== studentId || !store.groups.some(group => group.id === enrollment?.group_id && group.school_year_id === activeYearId(store))) {
       throw new Error(`La facture #${invoiceId} n'appartient pas à cet élève`);
     }
     return invoice;
@@ -1436,7 +1441,10 @@ function devRecordPayment(
   }
 
   for (const payment of store.payments) {
-    if (payment.id >= (firstId ?? Infinity) && payment.id < store.nextPaymentId) payment.batch_id = firstId;
+    if (payment.id >= (firstId ?? Infinity) && payment.id < store.nextPaymentId) {
+      payment.batch_id = firstId;
+      payment.school_year_id = activeYearId(store);
+    }
   }
   logAudit(
     store,
@@ -1466,6 +1474,7 @@ function devPaymentsHistory(
   limit: number,
 ): PaginatedPayments {
   const filtered = store.payments
+    .filter(payment => payment.school_year_id === activeYearId(store) || payment.school_year_id == null)
     .filter((payment) => (studentId === null ? true : payment.student_id === studentId))
     .filter((payment) => {
       if (month === null || year === null) return true;
@@ -1651,7 +1660,7 @@ function teacherRow(store: DevStore, teacher: DevTeacher): Teacher {
     status: teacher.status as Teacher['status'],
     subjects: subjects.join(', '),
     group_count: store.groups.filter(
-      (group) => group.teacher_id === teacher.id && group.status === 'actif',
+      (group) => !group.deleted_at && group.school_year_id === activeYearId(store) && group.teacher_id === teacher.id && group.status === 'actif',
     ).length,
     compensation_mode: (teacher.compensation_mode as CompensationMode | null) ?? null,
     compensation_value_cents: teacher.compensation_value_cents,
@@ -1678,7 +1687,7 @@ function compensationConfig(teacher: DevTeacher) {
 
 function teacherGroups(store: DevStore, teacherId: number): TeacherGroup[] {
   return store.groups
-    .filter((group) => group.teacher_id === teacherId && group.status === 'actif')
+    .filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && group.teacher_id === teacherId && group.status === 'actif')
     .map((group) => ({
       group_id: group.id,
       subject_name: store.subjects.find((s) => s.id === group.subject_id)?.name ?? '—',
@@ -1883,7 +1892,7 @@ function devStudentsDuring(store: DevStore, month: number, year: number): number
     store.enrollments
       .filter(
         (entry) =>
-          entry.start_date <= lastDay && (!entry.end_date || entry.end_date >= firstDay),
+          store.groups.some(group => group.id === entry.group_id && group.school_year_id === activeYearId(store)) && entry.start_date <= lastDay && (!entry.end_date || entry.end_date >= firstDay),
       )
       .map((entry) => entry.student_id),
   );
@@ -1899,15 +1908,15 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
   const pad2 = (value: number) => String(value).padStart(2, '0');
   const monthPrefix = `${year}-${pad2(month)}`;
   const revenue = store.payments
-    .filter((payment) => payment.created_at.startsWith(monthPrefix))
+    .filter((payment) => payment.school_year_id === activeYearId(store) && payment.created_at.startsWith(monthPrefix))
     .reduce((sum, payment) => sum + payment.amount_cents, 0);
   const theoretical = store.invoices
-    .filter((invoice) => invoice.period_month === month && invoice.period_year === year)
+    .filter((invoice) => invoiceInActiveYear(store, invoice.id) && invoice.period_month === month && invoice.period_year === year)
     .reduce((sum, invoice) => sum + invoice.amount_cents, 0);
 
   const prev = month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
   const prevRevenue = store.payments
-    .filter((payment) => payment.created_at.startsWith(`${prev.year}-${pad2(prev.month)}`))
+    .filter((payment) => payment.school_year_id === activeYearId(store) && payment.created_at.startsWith(`${prev.year}-${pad2(prev.month)}`))
     .reduce((sum, payment) => sum + payment.amount_cents, 0);
 
   const expenses = devExpensesTotal(store, month, year);
@@ -1917,13 +1926,13 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
 
   return {
     total_active_students: store.students.filter(
-      (student) => !student.deleted_at && (student.status ?? 'actif') === 'actif',
+      (student) => !student.deleted_at && studentInYear(store, student.id) && (student.status ?? 'actif') === 'actif',
     ).length,
     monthly_revenue_cents: revenue,
     theoretical_revenue_cents: theoretical,
     collection_rate: devCollectionRate(revenue, theoretical),
-    active_groups: store.groups.filter((group) => !group.deleted_at && (group.status ?? 'actif') === 'actif').length,
-    active_teachers: store.teachers.filter((teacher) => !teacher.deleted_at && teacher.status === 'actif').length,
+    active_groups: store.groups.filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && (group.status ?? 'actif') === 'actif').length,
+    active_teachers: store.teachers.filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && teacher.status === 'actif').length,
     prev_month_revenue_cents: prevRevenue,
     prev_month_students: devStudentsDuring(store, prev.month, prev.year),
     // Phase 11 — same arithmetic as `dashboard::net_income_of`.
@@ -1937,14 +1946,14 @@ function devDashboardKpis(store: DevStore, month: number, year: number): Dashboa
 /** Charges of one month (dev mirror of `expenses::month_total`). */
 function devExpensesTotal(store: DevStore, month: number, year: number): number {
   return (store.expenses ?? [])
-    .filter((row) => !row.deleted_at && row.month === month && row.year === year)
+    .filter((row) => !row.deleted_at && store.expenseYears?.[row.id] === activeYearId(store) && row.month === month && row.year === year)
     .reduce((sum, row) => sum + row.amount_cents, 0);
 }
 
 /** Payroll of one month: every active teacher with a configuration. */
 function devPayrollTotal(store: DevStore, month: number, year: number): number {
   return store.teachers
-    .filter((teacher) => teacher.status === 'actif' && compensationConfig(teacher))
+    .filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && teacher.status === 'actif' && compensationConfig(teacher))
     .reduce((sum, teacher) => sum + calculateCompensation(store, teacher.id, month, year).total_cents, 0);
 }
 
@@ -1990,7 +1999,7 @@ function devDashboardAlerts(store: DevStore): AlertItem[] {
   return store.invoices
     .filter(
       (invoice) =>
-        invoice.status !== 'payé' &&
+        invoiceInActiveYear(store, invoice.id) && invoice.status !== 'payé' &&
         invoice.paid_amount_cents < invoice.amount_cents &&
         Boolean(invoice.due_date) &&
         invoice.due_date >= from &&
@@ -2019,6 +2028,7 @@ function devDashboardAlerts(store: DevStore): AlertItem[] {
 function devRecentPayments(store: DevStore, limit: number): RecentPayment[] {
   if (limit <= 0) throw new Error('Limite invalide');
   return [...store.payments]
+    .filter(payment => payment.school_year_id === activeYearId(store))
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
     .slice(0, Math.min(limit, 50))
     .map((payment) => {
@@ -2425,9 +2435,67 @@ function devRemovePermanent(store: DevStore, type: TrashEntityType, id: number):
   rows.splice(index, 1); logAudit(store, 'PURGE', id, null, type); return true;
 }
 
+function activeYearId(store: DevStore): number | null { return store.schoolYears.find(year => year.is_active)?.id ?? null; }
+function initialiseYearMembership(store: DevStore) {
+  const active = activeYearId(store);
+  if (!store.studentYears) {
+    store.studentYears = {};
+    for (const student of store.students) {
+      const ids = store.enrollments.filter(e => e.student_id === student.id).map(e => store.groups.find(g => g.id === e.group_id)?.school_year_id).filter((id): id is number => id != null);
+      store.studentYears[student.id] = [...new Set(ids.length ? ids : active === null ? [] : [active])];
+    }
+  }
+  if (!store.teacherYears) {
+    store.teacherYears = {};
+    for (const teacher of store.teachers) {
+      const ids = store.groups.filter(group => group.teacher_id === teacher.id && group.school_year_id != null).map(group => group.school_year_id!);
+      store.teacherYears[teacher.id] = [...new Set(ids.length ? ids : active === null ? [] : [active])];
+    }
+  }
+  store.expenseYears ??= Object.fromEntries(store.expenses.map(expense => [expense.id, active]));
+  store.groupImports ??= {};
+  for (const payment of store.payments) {
+    if (payment.school_year_id !== undefined) continue;
+    const invoice = store.invoices.find(row => row.id === payment.invoice_id);
+    const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
+    payment.school_year_id = store.groups.find(row => row.id === enrollment?.group_id)?.school_year_id ?? null;
+  }
+  for (const payment of store.payments.filter(row => row.school_year_id === null)) {
+    const batchYears = new Set(store.payments.filter(row => payment.batch_id != null && row.batch_id === payment.batch_id && row.school_year_id != null).map(row => row.school_year_id!));
+    if (batchYears.size === 1) payment.school_year_id = [...batchYears][0];
+    if (payment.school_year_id !== null) continue;
+    const audit = store.auditLog.filter(row => row.action === 'PAYMENT' && row.entity_type === 'payment' && row.entity_id <= payment.id).sort((a,b) => b.entity_id - a.entity_id)[0];
+    const first = store.payments.find(row => row.id === audit?.entity_id);
+    if (!audit || !first || first.student_id !== payment.student_id || first.created_at !== payment.created_at) continue;
+    try {
+      const details = JSON.parse(audit.details ?? '{}') as { invoice_ids?: number[] };
+      const years = new Set((details.invoice_ids ?? []).map(id => {
+        const invoice = store.invoices.find(row => row.id === id);
+        const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
+        return store.groups.find(row => row.id === enrollment?.group_id)?.school_year_id;
+      }).filter((id): id is number => id != null));
+      if (years.size === 1) payment.school_year_id = [...years][0];
+    } catch { /* leave unknown rather than guessing */ }
+  }
+}
+function studentInYear(store: DevStore, id: number, year: number | null = activeYearId(store)): boolean {
+  return year !== null && (store.studentYears?.[id]?.includes(year) ?? false);
+}
+function teacherInYear(store: DevStore, id: number, year: number | null = activeYearId(store)): boolean {
+  return year !== null && ((store.teacherYears?.[id]?.includes(year) ?? false) || store.groups.some(group => !group.deleted_at && group.teacher_id === id && group.school_year_id === year));
+}
+function invoiceInActiveYear(store: DevStore, id: number | null): boolean {
+  const invoice = store.invoices.find(row => row.id === id);
+  const enrollment = store.enrollments.find(row => row.id === invoice?.enrollment_id);
+  return !!enrollment && store.groups.some(group => group.id === enrollment.group_id && group.school_year_id === activeYearId(store));
+}
+
 export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
   await delay();
   const store = load();
+  const needsMembership = !store.studentYears || !store.teacherYears || !store.expenseYears || !store.groupImports || store.payments.some(row => row.school_year_id === undefined);
+  initialiseYearMembership(store);
+  if (needsMembership) save(store);
 
   switch (cmd) {
     case 'cmd_check_duplicates': {
@@ -2568,6 +2636,92 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return undefined;
     }
 
+    case 'cmd_get_importable_students':
+    case 'cmd_get_importable_teachers':
+    case 'cmd_get_importable_groups': {
+      const prev = asNumber(args, 'prevYearId');
+      const active = activeYearId(store);
+      if (active === null || prev === active) throw new Error('Année source invalide');
+      if (cmd === 'cmd_get_importable_students') return clone(store.students.filter(row => !row.deleted_at && studentInYear(store, row.id, prev)).map(row => ({ id: row.id, label: row.full_name, detail: `${row.phone ?? ''} · ${row.level_name ?? ''}`, already_imported: studentInYear(store, row.id, active) })));
+      if (cmd === 'cmd_get_importable_teachers') return clone(store.teachers.filter(row => !row.deleted_at && teacherInYear(store, row.id, prev)).map(row => ({ id: row.id, label: row.full_name, detail: row.phone ?? '', already_imported: teacherInYear(store, row.id, active) })));
+      return clone(store.groups.filter(row => !row.deleted_at && row.school_year_id === prev).map(row => {
+        const group = groupRow(store, row);
+        return { id: row.id, label: `${group.subject_name} — ${group.level_name}`, detail: `${group.teacher_name ?? ''} · ${group.schedule_text}`, already_imported: Boolean(store.groupImports?.[`${row.id}:${active}`]) };
+      }));
+    }
+    case 'cmd_import_students':
+    case 'cmd_import_teachers':
+    case 'cmd_import_groups': {
+      const active = activeYearId(store);
+      const target = cmd === 'cmd_import_teachers' ? active : asNumber(args, 'targetYearId');
+      if (target === null || target !== active) throw new Error("L'année cible doit être l'année active");
+      const key = cmd === 'cmd_import_students' ? 'studentIds' : cmd === 'cmd_import_teachers' ? 'teacherIds' : 'groupIds';
+      const ids = Array.isArray(args?.[key]) ? args[key] as number[] : [];
+      let count = 0;
+      for (const id of ids) {
+        if (cmd === 'cmd_import_students') {
+          const row = store.students.find(row => row.id === id && !row.deleted_at);
+          if (row && !studentInYear(store, id, target)) { (store.studentYears![id] ??= []).push(target); count++; }
+        } else if (cmd === 'cmd_import_teachers') {
+          const row = store.teachers.find(row => row.id === id && !row.deleted_at);
+          if (row && !teacherInYear(store, id, target)) { (store.teacherYears![id] ??= []).push(target); row.status = 'actif'; count++; }
+        } else {
+          const source = store.groups.find(row => row.id === id && !row.deleted_at && row.school_year_id !== target && row.school_year_id !== null);
+          if (store.groupImports![`${id}:${target}`]) continue;
+          if (!source) throw new Error('Groupe source introuvable ou année invalide');
+          const newId = store.nextGroupId++;
+          const schedules = source.schedules.map(slot => ({ ...slot, id: store.nextScheduleId++ }));
+          store.groups.push({ ...source, id: newId, school_year_id: target, schedules, enrolled_count: 0 });
+          store.groupImports![`${id}:${target}`] = newId;
+          count++;
+        }
+      }
+      save(store);
+      return count;
+    }
+
+    case 'cmd_export_year_summary':
+    case 'cmd_export_year_data': {
+      const yearId = asNumber(args, 'yearId');
+      const schoolYear = store.schoolYears.find(year => year.id === yearId);
+      if (!schoolYear) throw new Error('Année scolaire introuvable');
+      const groups = store.groups.filter(group => group.school_year_id === yearId);
+      const payments = store.payments.filter(row => row.school_year_id === yearId);
+      if ((cmd === 'cmd_export_year_summary' || asString(args, 'section') === 'payments') && store.payments.some(row => row.school_year_id == null)) throw new Error('Export impossible : paiement(s) historique(s) sans année scolaire identifiable');
+      const expenses = store.expenses.filter(row => !row.deleted_at && store.expenseYears?.[row.id] === yearId);
+      const salaries = store.teacherSettlements.filter(row => {
+        const period = `${row.year}-${String(row.month).padStart(2, '0')}`;
+        return !!schoolYear.start_date && !!schoolYear.end_date && period >= schoolYear.start_date.slice(0, 7) && period <= schoolYear.end_date.slice(0, 7);
+      });
+      const students = store.students.filter(row => !row.deleted_at && studentInYear(store, row.id, yearId));
+      const teachers = store.teachers.filter(row => !row.deleted_at && teacherInYear(store, row.id, yearId));
+      if (cmd === 'cmd_export_year_summary') {
+        const revenue = payments.reduce((sum, row) => sum + row.amount_cents, 0);
+        const cost = expenses.reduce((sum, row) => sum + row.amount_cents, 0);
+        const payroll = salaries.reduce((sum, row) => sum + row.amount_cents, 0);
+        const subjectIds = [...new Set(groups.map(group => group.subject_id))];
+        return { label: schoolYear.label ?? '', students: students.length, groups: groups.filter(row => !row.deleted_at).length, teachers: teachers.length, revenue_cents: revenue, expenses_cents: cost, salaries_cents: payroll, net_cents: revenue - cost - payroll,
+          subjects: subjectIds.map(id => {
+            const ids = new Set(groups.filter(g => g.subject_id === id).map(g => g.id));
+            const enrollments = store.enrollments.filter(e => ids.has(e.group_id));
+            const invoiceIds = new Set(store.invoices.filter(i => enrollments.some(e => e.id === i.enrollment_id)).map(i => i.id));
+            return { name: store.subjects.find(s => s.id === id)?.name ?? '—', students: new Set(enrollments.map(e => e.student_id)).size, revenue_cents: payments.filter(p => p.invoice_id !== null && invoiceIds.has(p.invoice_id)).reduce((sum,p) => sum + p.amount_cents, 0) };
+          }) };
+      }
+      const section = asString(args, 'section');
+      let rows: Array<Record<string, unknown>>;
+      switch (section) {
+        case 'students': rows = students.map(s => ({ id:s.id,first_name:s.first_name,last_name:s.last_name,full_name:s.full_name,phone:s.phone,level:s.level_name,branch:s.branch_name,guardian_name:s.guardian_name,school_name:s.school_name,status:s.status })); break;
+        case 'groups': rows = groups.filter(g => !g.deleted_at).map(g => { const r = groupRow(store,g); return { id:r.id,subject:r.subject_name,level:r.level_name,branch:r.branch_name,teacher:r.teacher_name,day_of_week:r.day_of_week,start_time:r.start_time,end_time:r.end_time,schedules:r.schedules.map(s => `${s.day_of_week} ${s.start_time}-${s.end_time}`).join(', '),room:r.room,monthly_fee_cents:r.monthly_fee_cents,capacity:r.capacity,status:r.status }; }); break;
+        case 'teachers': rows = teachers.map(t => ({id:t.id,full_name:t.full_name,phone:t.phone,email:t.email,status:t.status})); break;
+        case 'payments': rows = payments.map(p => ({id:p.id,student:store.students.find(s => s.id === p.student_id)?.full_name,invoice_id:p.invoice_id,amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
+        case 'expenses': rows = expenses.map(e => ({id:e.id,label:e.label,amount_cents:e.amount_cents,category:e.category,month:e.month,year:e.year,notes:e.notes,created_at:e.created_at})); break;
+        case 'salaries': rows = salaries.map(p => ({id:p.id,teacher:store.teachers.find(t => t.id === p.teacher_id)?.full_name,month:p.month,year:p.year,amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
+        default: throw new Error("Section d'export invalide");
+      }
+      return rows.map(row => Object.fromEntries(Object.entries(row).map(([key,value]) => [key, value == null ? '' : String(value)])));
+    }
+
     // -- Levels & branches ------------------------------------------------
     case 'cmd_get_levels':
       return clone(
@@ -2698,7 +2852,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const rawLimit = typeof args?.limit === 'number' ? args.limit : 20;
       const limit = rawLimit <= 0 ? 20 : Math.min(rawLimit, 100);
 
-      let rows = store.students.filter(student => !student.deleted_at);
+      let rows = store.students.filter(student => !student.deleted_at && studentInYear(store, student.id));
       if (search) {
         rows = rows.filter(
           (student) =>
@@ -2765,6 +2919,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         created_at: now,
         updated_at: now,
       });
+      store.studentYears![id] = activeYearId(store) === null ? [] : [activeYearId(store)!];
       logAudit(store, 'CREATE', id, JSON.stringify(clean));
       save(store);
       return id;
@@ -2864,7 +3019,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         : asString(args, 'status').trim();
 
       const groups = store.groups
-        .filter((group) => !group.deleted_at && (schoolYearId === null ? true : group.school_year_id === schoolYearId))
+        .filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && (schoolYearId === null ? true : group.school_year_id === schoolYearId))
         .filter((group) => (status ? group.status === status : true))
         .map((group) => groupRow(store, group));
       return clone(sortGroups(groups));
@@ -3021,7 +3176,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
 
       const entries: TimetableEntry[] = [];
       store.groups
-        .filter((group) => !group.deleted_at && (group.status ?? 'actif') === 'actif')
+        .filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && (group.status ?? 'actif') === 'actif')
         .filter((group) => (levelId === null ? true : group.level_id === levelId))
         .filter((group) => (subjectId === null ? true : group.subject_id === subjectId))
         .filter((group) => (teacherId === null ? true : group.teacher_id === teacherId))
@@ -3059,7 +3214,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const rooms = Array.from(
         new Set(
           store.groups
-            .filter((group) => !group.deleted_at && (group.status ?? 'actif') === 'actif')
+            .filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && (group.status ?? 'actif') === 'actif')
             .map((group) => (group.room ?? '').trim())
             .filter(Boolean),
         ),
@@ -3071,7 +3226,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_get_teacher_options':
       return clone(
         [...store.teachers]
-          .filter((teacher) => !teacher.deleted_at && teacher.status === 'actif')
+          .filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && teacher.status === 'actif')
           .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'))
           .map((teacher) => ({ id: teacher.id, full_name: teacher.full_name })),
       );
@@ -3086,7 +3241,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       }
       return clone(
         store.teachers
-          .filter((teacher) => !teacher.deleted_at && (status ? teacher.status === status : true))
+          .filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && (status ? teacher.status === status : true))
           .map((teacher) => teacherRow(store, teacher))
           .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr')),
       );
@@ -3106,6 +3261,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         created_at: stamp,
         updated_at: stamp,
       });
+      store.teacherYears![id] = activeYearId(store) === null ? [] : [activeYearId(store)!];
       logAudit(
         store,
         'CREATE',
@@ -3302,7 +3458,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       validatePeriod(month, year);
 
       const summaries: TeacherCompSummary[] = store.teachers
-        .filter((teacher) => !teacher.deleted_at && teacher.status === 'actif')
+        .filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && teacher.status === 'actif')
         .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'))
         .map((teacher) => {
           if (!compensationConfig(teacher)) {
@@ -3457,7 +3613,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     case 'cmd_get_student_enrollments': {
       const studentId = asNumber(args, 'studentId');
       const rows: StudentEnrollment[] = store.enrollments
-        .filter((enrollment) => enrollment.student_id === studentId)
+        .filter((enrollment) => enrollment.student_id === studentId && store.groups.some(group => group.id === enrollment.group_id && group.school_year_id === activeYearId(store)))
         .map((enrollment) => {
           const raw = store.groups.find((group) => group.id === enrollment.group_id);
           return {
@@ -3491,7 +3647,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
           .map((enrollment) => enrollment.group_id),
       );
       const groups = store.groups
-        .filter((group) => !group.deleted_at && group.status === 'actif' && !activeGroupIds.has(group.id))
+        .filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && group.status === 'actif' && !activeGroupIds.has(group.id))
         .filter((group) => (levelId === null ? true : group.level_id === levelId))
         .map((group) => groupRow(store, group));
       return clone(sortGroups(groups));
@@ -3505,7 +3661,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new Error('Année invalide');
 
       let created = 0;
-      for (const enrollment of store.enrollments.filter((entry) => entry.status === 'actif' && store.students.some(s => s.id === entry.student_id && !s.deleted_at) && store.groups.some(g => g.id === entry.group_id && !g.deleted_at))) {
+      for (const enrollment of store.enrollments.filter((entry) => entry.status === 'actif' && store.students.some(s => s.id === entry.student_id && !s.deleted_at) && store.groups.some(g => g.id === entry.group_id && !g.deleted_at && g.school_year_id === activeYearId(store)))) {
         const exists = store.invoices.some(
           (invoice) =>
             invoice.enrollment_id === enrollment.id &&
@@ -3550,7 +3706,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const today = new Date().toISOString().slice(0, 10);
       return store.invoices.filter(
         (invoice) =>
-          store.enrollments.some(e => e.id === invoice.enrollment_id && store.students.some(s => s.id === e.student_id && !s.deleted_at) && store.groups.some(g => g.id === e.group_id && !g.deleted_at)) &&
+          invoiceInActiveYear(store, invoice.id) && store.enrollments.some(e => e.id === invoice.enrollment_id && store.students.some(s => s.id === e.student_id && !s.deleted_at) && store.groups.some(g => g.id === e.group_id && !g.deleted_at)) &&
           invoice.status !== 'payé' &&
           invoice.paid_amount_cents < invoice.amount_cents &&
           Boolean(invoice.due_date) &&
@@ -3581,6 +3737,8 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         save(store);
       }
     }
+
+    case 'cmd_get_unattributed_payment_count': return store.payments.filter(row => row.school_year_id == null).length;
 
     case 'cmd_get_payments_history': {
       const studentId = args?.studentId === null || args?.studentId === undefined
@@ -3632,7 +3790,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         typeof rawCategory === 'string' && rawCategory.trim() ? rawCategory.trim() : null;
 
       const rows = (store.expenses ?? [])
-        .filter((row) => !row.deleted_at && row.month === month && row.year === year)
+        .filter((row) => !row.deleted_at && store.expenseYears?.[row.id] === activeYearId(store) && row.month === month && row.year === year)
         .filter((row) => (category ? row.category === category : true))
         .sort(
           (a, b) =>
@@ -3650,7 +3808,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       validatePeriod(month, year);
 
       const rows = (store.expenses ?? []).filter(
-        (row) => !row.deleted_at && row.month === month && row.year === year,
+        (row) => !row.deleted_at && store.expenseYears?.[row.id] === activeYearId(store) && row.month === month && row.year === year,
       );
       const totalsByCategory = new Map<string, CategoryTotal>();
       for (const row of rows) {
@@ -3681,6 +3839,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const id = store.nextExpenseId++;
       store.expenses ??= [];
+      store.expenseYears![id] = activeYearId(store)!;
       store.expenses.push({
         id,
         ...input,
