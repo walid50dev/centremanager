@@ -27,14 +27,8 @@
     "close": "Fermer",
     "loading": "Chargement…",
     "actions": "Actions",
-    "noData": "Aucune donnée",
-    "all": "Tous",
-    "yes": "Oui",
-    "no": "Non",
     "required": "Ce champ est obligatoire",
-    "retry": "Réessayer",
     "error": "Une erreur est survenue",
-    "minChars": "{{count}} caractères minimum",
     "previous": "Précédent",
     "next": "Suivant",
     "months": {
@@ -53,7 +47,6 @@
     },
     "refresh": "Actualiser",
     "suffix": {
-      "dh": "DH",
       "percent": "%",
       "hours": "h",
       "students": "élèves"
@@ -62,16 +55,10 @@
     "creating": "Création…",
     "create": "Créer",
     "noOptions": "Aucune option",
-    "clear": "Effacer",
-    "quickCreate": "Création rapide"
+    "clear": "Effacer"
   },
   "quickCreate": {
     "created": "{{entity}} créé(e) ✓",
-    "hint": "Cet enregistrement rapide ne quitte pas le formulaire en cours : les champs déjà remplis sont conservés.",
-    "teacher": {
-      "title": "Nouvel enseignant (rapide)",
-      "description": "Nom, téléphone et matières. Le reste (email, notes, rémunération) se règle sur la fiche enseignant."
-    },
     "subject": {
       "title": "Nouvelle matière",
       "description": "Une matière est partagée par les groupes et les enseignants."
@@ -80,65 +67,31 @@
       "title": "Nouveau niveau",
       "description": "Le niveau range les groupes et les élèves (Primaire, Collège, Lycée)."
     },
-    "student": {
-      "title": "Nouvel élève (rapide)",
-      "description": "Nom, téléphone et niveau. La fiche complète reste accessible depuis la liste des élèves."
-    },
-    "group": {
-      "title": "Nouveau groupe (rapide)",
-      "description": "Matière, niveau et enseignant — puis l’horaire et le tarif.",
-      "step": "Étape {{current}} sur {{total}}",
-      "schedule": "Horaire et tarif",
-      "basics": "Matière et niveau"
-    },
     "category": {
       "title": "Nouvelle catégorie",
       "description": "La catégorie est ajoutée à la liste des catégories de dépenses."
     },
     "fields": {
-      "name": "Nom complet",
-      "namePlaceholder": "Ex. Ahmed Benali",
       "subjectName": "Nom de la matière",
       "subjectPlaceholder": "Ex. Physique-Chimie",
       "levelName": "Nom du niveau",
       "levelPlaceholder": "Ex. Tronc Commun",
       "category": "Catégorie",
-      "phone": "Téléphone",
-      "level": "Niveau",
-      "subjects": "Matières",
-      "subjectsHint": "Recommandé : au moins une matière, pour que le groupe s’affiche correctement.",
       "categoryName": "Nom de la catégorie",
-      "categoryPlaceholder": "Ex. Sécurité",
-      "subject": "Matière",
-      "teacher": "Enseignant",
-      "day": "Jour",
-      "startTime": "Heure début",
-      "endTime": "Heure fin",
-      "fee": "Tarif mensuel",
-      "capacity": "Capacité"
+      "categoryPlaceholder": "Ex. Sécurité"
     },
     "validation": {
       "nameRequired": "Le nom est obligatoire",
       "nameTooShort": "Au moins 2 caractères",
-      "phoneRequired": "Le téléphone est obligatoire",
-      "phoneInvalid": "Numéro marocain invalide (06/07 + 8 chiffres)",
-      "categoryRequired": "Choisissez une catégorie",
-      "subjectRequired": "Choisissez une matière",
-      "levelRequired": "Choisissez un niveau",
-      "feePositive": "Le tarif doit être supérieur à 0",
-      "capacityPositive": "La capacité doit être au moins 1",
-      "endAfterStart": "La fin doit être après le début"
+      "categoryRequired": "Choisissez une catégorie"
     },
-    "existing": "Cette valeur existe déjà",
-    "noSchoolYear": "Aucune année scolaire active — créez-la dans Paramètres."
+    "existing": "Cette valeur existe déjà"
   },
   "header": {
     "language": "Langue",
     "lock": "Verrouiller la session",
-    "logout": "Se déconnecter",
     "toggleLanguage": "Changer la langue",
-    "center": "Centre",
-    "locked": "Session verrouillée"
+    "center": "Centre"
   },
   "pages": {
     "dashboard": {
@@ -164,10 +117,6 @@
     },
     "login": {
       "title": "Connexion"
-    },
-    "expenses": {
-      "title": "Frais du mois",
-      "description": "Charges mensuelles du centre et résultat net"
     }
   },
   "login": {
@@ -178,16 +127,10 @@
     "placeholder": "Saisissez votre mot de passe",
     "tooManyAttempts": "Trop de tentatives. Réessayez dans {{seconds}}s",
     "attemptsLeft": "Encore {{count}} tentative(s) avant verrouillage",
-    "success": "Connexion réussie",
     "notConfigured": "Aucun mot de passe n'est configuré pour ce centre"
   },
   "status": {
-    "actif": "Actif",
-    "inactif": "Inactif",
-    "impaye": "Impayé",
-    "partiel": "Partiel",
-    "paye": "Payé",
-    "annule": "Annulé"
+    "inactif": "Inactif"
   },
   "setup": {
     "welcome": "Bienvenue sur CentreManager",
@@ -207,15 +150,13 @@
     "title": "Session verrouillée",
     "subtitle": "Saisissez votre mot de passe pour reprendre",
     "unlock": "Déverrouiller",
-    "success": "Session déverrouillée ✓",
-    "lockedAfter": "Verrouillage automatique après {{minutes}} min d'inactivité"
+    "success": "Session déverrouillée ✓"
   },
   "settings": {
     "intro": "Configurez votre centre, vos données de référence et vos préférences. Chaque section se déplie au clic.",
     "save": "Enregistrer",
     "footer": "Les modifications sont enregistrées localement dans la base de données du centre.",
     "section": {
-      "center": "Centre",
       "schoolYear": "Année scolaire",
       "levels": "Niveaux",
       "subjects": "Matières",
@@ -226,13 +167,9 @@
     },
     "center": {
       "description": "Nom, coordonnées et logo affichés sur les reçus.",
-      "name": "Nom du centre",
       "address": "Adresse",
       "phone": "Téléphone",
-      "logo": "Logo",
       "logoHint": "PNG, JPG ou SVG, 500 Ko maximum",
-      "chooseLogo": "Choisir un logo",
-      "removeLogo": "Retirer",
       "logoUpdated": "Logo mis à jour ✓",
       "logoRemoved": "Logo retiré",
       "logoTooLarge": "L’image dépasse 500 Ko",
@@ -364,7 +301,6 @@
     "upload_logo": "Choisir un logo",
     "remove_logo": "Supprimer le logo",
     "logo_preview": "Aperçu du logo",
-    "enrollment_fee": "Frais d'inscription",
     "enrollment_fee_label": "Frais d'inscription (par élève, par an)",
     "enrollment_fee_hint": "Montant par élève à la première inscription de l’année. 0 = pas de frais ; les modifications ne sont pas rétroactives.",
     "enrollment_fee_saved": "Frais d’inscription enregistrés"
@@ -494,7 +430,6 @@
     "formHint": "Un groupe réunit une matière, un niveau et un créneau hebdomadaire.",
     "noGroups": "Aucun groupe pour cette année scolaire",
     "noGroupsHint": "Créez un premier groupe pour commencer les inscriptions.",
-    "filterYear": "Filtrer par année scolaire",
     "subject": "Matière",
     "level": "Niveau",
     "branch": "Branche",
@@ -507,7 +442,6 @@
     "endTime": "Heure fin",
     "room": "Salle",
     "roomPlaceholder": "Salle 3",
-    "fee": "Tarif mensuel",
     "monthlyFee": "Tarif mensuel",
     "feeHint": "Montant en dirhams, facturé chaque mois.",
     "capacity": "Capacité",
@@ -534,10 +468,6 @@
       "subjectRequired": "La matière est obligatoire",
       "levelRequired": "Le niveau est obligatoire",
       "schoolYearRequired": "L'année scolaire est obligatoire",
-      "dayRequired": "Le jour est obligatoire",
-      "startRequired": "L'heure de début est obligatoire",
-      "endRequired": "L'heure de fin est obligatoire",
-      "endAfterStart": "L'heure de fin doit être après l'heure de début",
       "feePositive": "Le tarif doit être supérieur à 0",
       "capacityPositive": "La capacité doit être au moins 1",
       "atLeastOneDay": "Cochez au moins un jour de cours",
@@ -565,8 +495,7 @@
     },
     "untitled": "Groupe sans intitulé",
     "schedules": "Jours de cours",
-    "schedulesHint": "Cochez les jours où le groupe a cours, puis ajustez les horaires.",
-    "sameHours": "Horaires identiques pour tous les jours"
+    "schedulesHint": "Cochez les jours où le groupe a cours, puis ajustez les horaires."
   },
   "timetable": {
     "title": "Emploi du temps",
@@ -576,17 +505,9 @@
       "subject": "Matière",
       "teacher": "Enseignant",
       "room": "Salle",
-      "all": "Tous",
       "reset": "Réinitialiser"
     },
     "days": {
-      "monday": "Lundi",
-      "tuesday": "Mardi",
-      "wednesday": "Mercredi",
-      "thursday": "Jeudi",
-      "friday": "Vendredi",
-      "saturday": "Samedi",
-      "sunday": "Dimanche",
       "short": {
         "monday": "Lun",
         "tuesday": "Mar",
@@ -597,12 +518,10 @@
         "sunday": "Dim"
       }
     },
-    "summary": "{{count}} cours cette semaine",
     "empty": "Aucun cours programmé",
     "emptyHint": "Ajoutez des jours de cours à vos groupes, ou élargissez les filtres.",
     "loading": "Chargement de l'emploi du temps…",
     "showSunday": "Afficher dimanche",
-    "free": "libre",
     "tooltipGroup": "Groupe"
   },
   "enrollment": {
@@ -631,8 +550,6 @@
     "noGroupsAvailableHint": "Tous les groupes sont complets ou l'élève y est déjà inscrit.",
     "noStudentsFound": "Aucun élève trouvé",
     "noStudentsFoundHint": "Modifiez la recherche : les élèves déjà inscrits sont masqués.",
-    "alreadyEnrolled": "Déjà inscrit dans ce groupe",
-    "groupFull": "Groupe complet",
     "toast": {
       "ended": "Inscription terminée ✓",
       "created_one": "{{count}} inscription créée ✓",
@@ -655,11 +572,6 @@
     "startDate": "Début",
     "endDate": "Fin",
     "ended": "Terminée",
-    "tab": {
-      "enrollments": "Inscriptions",
-      "activeEnrollments": "Inscriptions actives",
-      "endedEnrollments": "Inscriptions terminées"
-    },
     "totalDue": "Total dû",
     "totalPaid": "Total payé",
     "remaining": "Reste",
@@ -687,7 +599,6 @@
     }
   },
   "payments": {
-    "title": "Paiements",
     "tabCollections": "Encaissements",
     "tabTeacherSettlements": "Règlements enseignants",
     "generateInvoices": "Générer factures",
@@ -770,11 +681,9 @@
     "count_one": "{{count}} dépense",
     "count_other": "{{count}} dépenses",
     "deleteTitle": "Supprimer cette dépense ?",
-    "confirmDelete": "« {{label}} » ({{amount}}) sera définitivement supprimée. Les paiements et les factures ne sont pas concernés.",
     "delete": "Supprimer",
     "save": "Enregistrer",
     "period": "Mois des frais",
-    "monthColumn": "Mois",
     "createdAt": "Enregistrée le",
     "columns": {
       "category": "Catégorie",
@@ -784,17 +693,14 @@
       "actions": "Actions"
     },
     "summary": {
-      "total": "Total frais",
       "count": "Dépenses",
       "byCategory": "Par catégorie",
-      "share": "{{pct}} des frais",
-      "noCategory": "Aucune catégorie pour ce mois"
+      "share": "{{pct}} des frais"
     },
     "validation": {
       "labelRequired": "Le libellé est obligatoire",
       "categoryRequired": "Choisissez une catégorie",
-      "amountPositive": "Le montant doit être supérieur à zéro",
-      "periodRequired": "Mois et année sont obligatoires"
+      "amountPositive": "Le montant doit être supérieur à zéro"
     },
     "toast": {
       "created": "Dépense ajoutée ✓",
@@ -821,7 +727,6 @@
     "selectStudent": "Recherchez et sélectionnez un élève",
     "searchPlaceholder": "Nom ou téléphone...",
     "selectInvoices": "Sélectionnez les factures à régler",
-    "paymentDetails": "Détails du paiement",
     "confirmation": "Vérifiez avant de valider",
     "amount": "Montant",
     "method": "Mode de paiement",
@@ -836,18 +741,13 @@
     "noUnpaid": "Toutes les factures sont payées ✓",
     "noUnpaidHint": "Il n'y a rien à encaisser pour cet élève.",
     "totalSelected": "Total sélectionné",
-    "selectAtLeastOne": "Sélectionnez au moins une facture",
     "confirm": "Confirmer",
     "confirmAndPrint": "Confirmer & Imprimer",
     "next": "Suivant",
     "previous": "Précédent",
     "cancel": "Annuler",
-    "period": "Période",
-    "group": "Groupe",
     "invoiceAmount": "Montant",
     "paid": "Payé",
-    "remaining": "Reste",
-    "advanceLabel": "Avance",
     "studentLabel": "Élève :",
     "invoicesLabel": "Factures :",
     "amountLabel": "Montant :",
@@ -855,7 +755,6 @@
     "notesLabel": "Notes :",
     "advanceHint": "Ce montant dépasse les factures sélectionnées : {{amount}} seront enregistrés comme avance.",
     "partialHint": "Il restera {{amount}} à payer sur les factures sélectionnées.",
-    "saving": "Enregistrement...",
     "toast": {
       "recorded": "Paiement enregistré ✓",
       "error": "Paiement impossible",
@@ -863,8 +762,7 @@
     },
     "validation": {
       "amountRequired": "Le montant doit être supérieur à 0",
-      "invoicesRequired": "Sélectionnez au moins une facture",
-      "studentRequired": "Sélectionnez un élève"
+      "invoicesRequired": "Sélectionnez au moins une facture"
     }
   },
   "receipt": {
@@ -875,10 +773,8 @@
     "student": "Élève",
     "groups": "Groupe(s)",
     "period": "Période",
-    "amount": "Montant",
     "method": "Mode de paiement",
     "thanks": "Merci de votre confiance",
-    "print": "Imprimer",
     "close": "Fermer",
     "advance": "Avance sur factures",
     "loading": "Chargement du reçu...",
@@ -1067,7 +963,6 @@
     "greeting": "Bonjour 👋",
     "period": "Période",
     "seeAll": "Voir tout",
-    "loading": "Chargement du tableau de bord…",
     "loadError": "Certaines données du tableau de bord n'ont pas pu être chargées.",
     "kpi": {
       "students": "Élèves actifs",
@@ -1079,8 +974,7 @@
       "netTooltip": "Revenus : {{revenue}} — Frais : {{expenses}} — Salaires : {{compensation}}",
       "netPositive": "Bénéfice du mois",
       "netNegative": "Perte du mois",
-      "netZero": "Équilibre",
-      "netBreakdown": "Revenus : {{revenue}} — Frais : {{expenses}} — Salaires : {{compensation}}"
+      "netZero": "Équilibre"
     },
     "trend": {
       "up": "+{{value}}%",
@@ -1119,10 +1013,6 @@
     "title": "Une erreur est survenue",
     "message": "Cette page n'a pas pu s'afficher. Vos données sont intactes.",
     "reload": "Recharger"
-  },
-  "keyboard": {
-    "search": "Rechercher (Ctrl+K)",
-    "lock": "Verrouiller (Ctrl+L)"
   },
   "trash": {
     "title": "Corbeille",

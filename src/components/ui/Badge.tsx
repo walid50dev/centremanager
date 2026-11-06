@@ -50,18 +50,4 @@ export function statusVariant(status?: string | null): BadgeVariant {
   }
 }
 
-export interface StatusBadgeProps {
-  status?: string | null;
-  label?: string;
-  className?: string;
-}
-
-export function StatusBadge({ status, label, className }: StatusBadgeProps) {
-  return (
-    <Badge variant={statusVariant(status)} className={className}>
-      {label ?? status ?? '—'}
-    </Badge>
-  );
-}
-
 export default Badge;

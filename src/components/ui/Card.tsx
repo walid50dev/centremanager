@@ -32,20 +32,4 @@ export function CardHeader({ title, description, actions, className, children, .
   );
 }
 
-export function CardContent({ className, children, ...props }: CardProps) {
-  return (
-    <div className={cn('px-5 py-4', className)} {...props}>
-      {children}
-    </div>
-  );
-}
-
-export function CardFooter({ className, children, ...props }: CardProps) {
-  return (
-    <div className={cn('flex items-center justify-end gap-2 border-t border-border px-5 py-3', className)} {...props}>
-      {children}
-    </div>
-  );
-}
-
 export default Card;
