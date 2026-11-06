@@ -4,7 +4,6 @@
 mod commands;
 mod db;
 mod models;
-mod services;
 
 use tauri::Manager;
 
@@ -141,7 +140,6 @@ fn main() {
             // Monthly expenses (Phase 11)
             commands::expenses::cmd_create_expense,
             commands::expenses::cmd_update_expense,
-            commands::expenses::cmd_delete_expense,
             commands::expenses::cmd_get_expenses,
             commands::expenses::cmd_get_expenses_summary,
             commands::expenses::cmd_get_expense_categories,

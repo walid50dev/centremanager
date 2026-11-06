@@ -15,7 +15,6 @@
 //! | --- | --- |
 //! | [`cmd_create_expense`] | insert + `CREATE` audit row |
 //! | [`cmd_update_expense`] | update + `UPDATE` audit row (diff, skipped when nothing changed) |
-//! | [`cmd_delete_expense`] | delete + `DELETE` audit row (snapshot kept in the details) |
 //! | [`cmd_get_expenses`] | one month, optionally one category |
 //! | [`cmd_get_expenses_summary`] | total + per-category totals for the dashboard |
 //! | [`cmd_get_expense_categories`] | the editable category list |
@@ -323,11 +322,6 @@ pub fn update_expense(
     log_audit(conn, "UPDATE", id, Some(Value::Object(diff).to_string()))
 }
 
-/// Move one expense to the reversible trash.
-pub fn delete_expense(conn: &Connection, id: i64) -> Result<(), String> {
-    super::trash::delete_to_trash(conn, "expense", id)
-}
-
 /// One month of expenses, optionally narrowed to a single category.
 ///
 /// `ORDER BY category, label` puts the same charge together, which is how the
@@ -498,12 +492,6 @@ pub fn cmd_update_expense(
 }
 
 #[tauri::command]
-pub fn cmd_delete_expense(db: State<'_, Db>, id: i64) -> Result<(), String> {
-    let conn = db.conn();
-    delete_expense(&conn, id)
-}
-
-#[tauri::command]
 pub fn cmd_get_expenses(
     db: State<'_, Db>,
     month: i32,
@@ -663,7 +651,7 @@ mod tests {
             .unwrap();
         assert_eq!(before, after, "an unchanged update must not be logged");
 
-        delete_expense(&conn, id).unwrap();
+        super::super::trash::delete_to_trash(&conn, "expense", id).unwrap();
         assert_eq!(list_expenses(&conn, 11, 2026, None).unwrap().len(), 0);
 
         let deleted: i64 = conn.query_row(
@@ -672,7 +660,7 @@ mod tests {
         assert_eq!(deleted, 1);
 
         // Deleting twice is an error, not a silent success.
-        assert!(delete_expense(&conn, id).is_err());
+        assert!(super::super::trash::delete_to_trash(&conn, "expense", id).is_err());
         assert!(update_expense(&conn, id, &updated).is_err());
     }
 

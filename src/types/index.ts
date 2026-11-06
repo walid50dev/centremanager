@@ -7,9 +7,6 @@
  */
 
 export type Language = 'fr' | 'ar';
-
-export type ActiveStatus = 'actif' | 'inactif';
-export type EnrollmentStatus = 'actif' | 'termine' | 'annule';
 export type InvoiceStatus = 'impayé' | 'partiel' | 'payé' | 'annulé';
 export type PaymentMethod = 'espèces' | 'virement' | 'chèque' | 'autre';
 /** Phase 6: payroll state of one teacher for one month. */
@@ -17,19 +14,6 @@ export type CompensationStatus = 'pending' | 'partial' | 'settled' | 'not_config
 /** Phase 6: main compensation modes (the recruitment bonus is cumulative). */
 export type CompensationMode = 'fixed_monthly' | 'hourly' | 'per_session' | 'percentage';
 export type ActivityType = 'cours' | 'rattrapage' | 'examen' | 'autre';
-export type DayOfWeek =
-  | 'lundi'
-  | 'mardi'
-  | 'mercredi'
-  | 'jeudi'
-  | 'vendredi'
-  | 'samedi'
-  | 'dimanche';
-
-export interface Setting {
-  key: string;
-  value: string;
-}
 
 export interface SchoolYear {
   id: number;
@@ -58,22 +42,6 @@ export interface Subject {
   is_active: boolean;
 }
 
-// `Student` lives at the bottom of this file (Phase 3 shape: joined level and
-// branch names, non-null phone). `NewStudent` mirrors its input fields.
-// `Teacher` and the payroll types live at the bottom too (Phase 6 shape).
-
-/** Payload used when creating a student (no server-generated fields). */
-export type NewStudent = StudentInput;
-
-export interface TeacherSubject {
-  teacher_id: number;
-  subject_id: number;
-}
-
-/**
- * Phase 4 group: every label is joined by the backend, `enrolled_count` is
- * computed from the active enrollments (never stored).
- */
 /** One weekly slot of a group (Phase 13). */
 export interface GroupSchedule {
   id: number;
@@ -98,6 +66,7 @@ export interface ScheduleConflict {
   room: string;
 }
 
+/** Joined group labels and computed active-enrollment count. */
 export interface Group {
   deleted_at?: string | null;
   id: number;
@@ -198,37 +167,6 @@ export interface EnrollmentInput {
   start_date: string;
 }
 
-export interface Enrollment {
-  id: number;
-  student_id: number;
-  group_id: number;
-  start_date: string;
-  end_date: string | null;
-  status: string;
-}
-
-export interface Invoice {
-  id: number;
-  enrollment_id: number;
-  period_month: number | null;
-  period_year: number | null;
-  amount_cents: number;
-  paid_amount_cents: number;
-  status: string;
-  due_date: string | null;
-  created_at: string | null;
-}
-
-export interface Payment {
-  id: number;
-  student_id: number;
-  invoice_id: number | null;
-  amount_cents: number;
-  payment_method: string | null;
-  notes: string | null;
-  created_at: string | null;
-}
-
 export interface Receipt {
   id: number;
   payment_id: number;
@@ -241,58 +179,11 @@ export interface Receipt {
   created_at: string | null;
 }
 
-export interface TeacherActivity {
-  id: number;
-  teacher_id: number;
-  activity_date: string | null;
-  activity_type: string | null;
-  hours: number | null;
-  sessions: number | null;
-  notes: string | null;
-}
-
-export interface TeacherCompensation {
-  id: number;
-  teacher_id: number;
-  month: number | null;
-  year: number | null;
-  mode: string | null;
-  base_amount_cents: number | null;
-  bonus_amount_cents: number;
-  total_amount_cents: number | null;
-  status: string;
-}
-
-export interface TeacherSettlement {
-  id: number;
-  teacher_id: number;
-  compensation_id: number | null;
-  amount_cents: number | null;
-  payment_method: string | null;
-  notes: string | null;
-  created_at: string | null;
-}
-
-export interface AuditLogEntry {
-  id: number;
-  action: string | null;
-  entity_type: string | null;
-  entity_id: number | null;
-  details: string | null;
-  created_at: string | null;
-}
-
 /** Database file snapshot shown in Settings → Sauvegarde. */
 export interface DbInfo {
   path: string;
   size_bytes: number;
   last_backup: string | null;
-}
-
-/** Result wrapper for paginated list commands (reserved for later). */
-export interface Paginated<T> {
-  items: T[];
-  total: number;
 }
 
 // ---------------------------------------------------------------------------

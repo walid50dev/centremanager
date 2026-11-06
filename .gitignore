@@ -8,5 +8,6 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 
-# Local scratch scripts (the phase suites are tracked on purpose)
-*-dbg.tmp.mjs
+# Local scratch and generated files
+*.tmp.*
+*.bak

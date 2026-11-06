@@ -1,3 +1,5 @@
+> **Nettoyage :** le kit de réparation Phase 14 et les scripts E2E temporaires historiques ont été retirés. Les vérifications maintenues se trouvent dans `tests/` et `scripts/check-i18n.mjs`. Les sections historiques ci-dessous peuvent décrire des fonctionnalités ou fichiers qui ne sont plus présents.
+
 # CentreManager
 
 Desktop application (Windows) for managing tutoring centres in Morocco — students, groups, teachers, monthly billing and payroll. Bilingual **French (default, LTR)** / **Arabic (RTL)**, with every amount stored in **centimes** and formatted as `DH`.
@@ -102,22 +104,11 @@ the first day, so every older read path still works and pre-Phase 13 groups appe
 | --- | --- | --- |
 | ![Settings](docs/screenshots/tauri-settings-01-center-saved.png) | ![Levels](docs/screenshots/tauri-settings-04-branches.png) | ![Backup](docs/screenshots/tauri-settings-10-backup.png) |
 
-**Phase 14** closes the year. *Paramètres → Année scolaire* grows one prominent button —
-**Nouvelle rentrée** — that opens a four-step wizard: the new year (label and dates, refused when
-the label already exists or the end is not after the start), the groups to carry over (all
-pre-ticked, with their whole week, teacher, fee and capacity), the students to re-enroll
-(searchable, all pre-ticked, with the date of the new enrollments) and a recap. `Confirmer la
-rentrée` runs **one transaction**: create and activate the year, copy the chosen groups with their
-weekly schedules, give every chosen student a *fresh* enrollment in the copy of each group they were
-in — a new start date and its first invoice, through the same `enroll_on` as the enrollment wizard —
-close the old enrollments (`terminé`) and write one `RENTREE` audit row. Nothing is deleted and
-nothing is guessed: a student who was not in a group is not put in one, and an inactive student is
-never re-enrolled.
-
-> **The *Bilan* page shipped with 1.5.0 and was removed on request.** The frontend (page, route,
-> sidebar entry, service call, types, dev-backend mock, `bilan.*` translations) is gone; the Rust
-> command `cmd_get_bilan` is deliberately kept in place, unused and unexposed, in case the page comes
-> back. `/bilan` now falls through to the dashboard.
+**Années scolaires.** La version actuelle permet de créer et sélectionner une année,
+ainsi que d’importer explicitement des élèves, groupes et enseignants depuis une autre année.
+L’ancien assistant de rentrée et la page Bilan ont été retirés, y compris leurs commandes Rust.
+Les descriptions et captures de ces fonctionnalités dans le journal historique ci-dessous
+correspondent à des versions antérieures.
 
 | The wizard, step 2 | Students to re-enroll | …and the result |
 | --- | --- | --- |
@@ -210,7 +201,6 @@ centremanager/
 │       │   ├── activities.rs      # daily activity log (Phase 6)
 │       │   ├── dashboard.rs       # KPIs, échéances, recent payments (Phase 7)
 │       │   └── backup.rs          # WAL checkpoint + file copy, DB info
-│       └── services/mod.rs
 └── src/
     ├── App.tsx                    # bootstrap, ProtectedRoute, routes
     ├── components/
@@ -1698,7 +1688,7 @@ listed only where one was written for that phase.
 | `cargo fmt --check` / `cargo clippy --all-targets` | clean, **0 warnings** |
 | `npx tsc --noEmit` / `vite build` | clean, **655.49 kB (181.09 kB gzip)**, CSS 41.68 kB (8.03 kB gzip) — the date column and its formatter cost 1.57 kB |
 | `npm run check:i18n` | fr **757** / ar **757** keys, all present (`expenses.date`, `expenses.columns.date`, `expenses.hints.date`, `expenses.validation.dateRequired`) |
-| Browser suite (`node phase15-e2e.tmp.mjs`) | **39 assertions, 0 failed, 0 console errors** — the Date column first in the table, every row printing `DD/MM/YYYY`, the rendered order descending, the form defaulting to today (not disabled), a charge saved with an explicit day (stored, period derived, audited), a **back-dated** charge landing in its own month and the page following it there, an edit moving the date, an empty date refused with its message, the dashboard net card unchanged, and the Arabic pass (`التاريخ`, `تاريخ المصروف`, dates printed `YYYY/MM/DD`) |
+| Browser suite (`suite historique retirée`) | **39 assertions, 0 failed, 0 console errors** — the Date column first in the table, every row printing `DD/MM/YYYY`, the rendered order descending, the form defaulting to today (not disabled), a charge saved with an explicit day (stored, period derived, audited), a **back-dated** charge landing in its own month and the page following it there, an edit moving the date, an empty date refused with its message, the dashboard net card unchanged, and the Arabic pass (`التاريخ`, `تاريخ المصروف`, dates printed `YYYY/MM/DD`) |
 | Regression | Phase 11 **64 / 0**, Phase 14 **85 / 0**, Phase 13 **67 / 0**, Phase 12 **75 / 0**, Phase 10 **68 / 0** |
 | Database | still **19 tables**: one column added to `monthly_expenses`, plus `idx_expenses_date` |
 | Screenshots | `docs/screenshots/phase15-01…05` — the *Date* column, the date picker on today, a dated row, a back-dated charge in its own month, the Arabic form |
@@ -1876,8 +1866,8 @@ Design notes worth keeping:
 | `cargo fmt --check` / `cargo clippy --all-targets` / `cargo build` | clean, **0 warnings** (clippy included — four pre-existing lints in `dashboard.rs`, `groups.rs`, `payments.rs`, `edge_cases.rs` were cleaned on the way) |
 | `npx tsc --noEmit` / `vite build` | clean, **556.72 kB (155.74 kB gzip)**, CSS 33.92 kB (6.85 kB gzip) — the `NumberInput` costs ~5 kB raw |
 | `npm run check:i18n` | fr **593** / ar **593** keys, all present (`students.fatherName`, `students.homeAddress`, `students.phonePlaceholder`, `common.suffix.*`) |
-| Browser suite (`node phase10-e2e.tmp.mjs`, dev backend, headless) | **68 assertions, 0 failures**, 0 console errors, 0 React warnings |
-| Phase 0–9 regression (`node phase9-e2e.tmp.mjs`, headed) | **42 assertions, 0 failures** (one expectation updated: the phone is now grouped), 4 expected console errors — identical to the Phase 9 baseline |
+| Browser suite (`suite historique retirée`, dev backend, headless) | **68 assertions, 0 failures**, 0 console errors, 0 React warnings |
+| Phase 0–9 regression (`suite historique retirée`, headed) | **42 assertions, 0 failures** (one expectation updated: the phone is now grouped), 4 expected console errors — identical to the Phase 9 baseline |
 | Release binary (`cargo build --release`, `CARGO_BUILD_JOBS=1`) | **built and launched**: `target/release/centremanager`, **6 960 840 bytes (6.6 MiB)**, database created at `~/.local/share/com.centremanager.app/centremanager.db` |
 | Real-database migration (release binary, Xvfb) | the `students` table was renamed back to its Phase 9 shape (`home_address` → `address`, `father_name` dropped) and a student `Ancien Eleve` inserted; the next launch leaves `home_address = '5 rue Atlas, Casablanca'`, `notes = 'Migré'` **intact** and adds `father_name` |
 
@@ -1949,7 +1939,7 @@ already a `<select>`, and it stays one. `MoneyInput` is now a thin wrapper
 | `cargo fmt --check` / `cargo build` | clean, **0 warnings** |
 | `npx tsc --noEmit` / `vite build` | clean, **551.70 kB (153.99 kB gzip)**, CSS 33.75 kB (6.82 kB gzip); the `@react-pdf` chunk stays lazy at 1 235.56 kB (455.45 kB gzip) |
 | `npm run check:i18n` | fr **586** / ar **586** keys, all present (`settings.demo.*` added) |
-| Browser suite (`node phase9-e2e.tmp.mjs` with `npm run dev` up, headed) | **42 assertions, 0 failures**, 0 unexpected console errors (4 expected: the `/__error` route it provokes), 0 React warnings |
+| Browser suite (`suite historique retirée` with `npm run dev` up, headed) | **42 assertions, 0 failures**, 0 unexpected console errors (4 expected: the `/__error` route it provokes), 0 React warnings |
 | Demo seed, measured | `Demo data: 15 students, 5 teachers, 8 groups, 50 invoices, 22 payments`, 25 enrollments, current-month collection **58.5 %**, fees 200 → 500 DH, capacities 10 → 20, 2 settlements |
 | Real Tauri window (`tauri dev`) | seeded the demo centre in one click (507 kB → 4.1 MB), dashboard `15 élèves / 8 groupes / 5 enseignants` with 13 échéances and 6 recent payments, a payment posted, receipt `REC-20261101-0001` (850,00 DH) rendered by `PDFViewer` |
 | V1.0 → V1.1 upgrade | planted `~/.local/share/ma.centremanager.desktop/centremanager.db`, started V1.1: `[CentreManager] base V1.0 migrée depuis …` in the log, the login screen shows the V1.0 centre name, the dashboard its 15 students; the old folder is untouched |

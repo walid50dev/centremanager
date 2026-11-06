@@ -289,7 +289,8 @@ fn enroll_on(
         enrollment_fee_amount_cents: fee_invoice_id.map(|_| fee) })
 }
 
-/// Enroll a student in one group (single transaction).
+/// Test helper: exercise a single enrollment transaction directly.
+#[cfg(test)]
 pub fn enroll_student(
     conn: &Connection,
     student_id: i64,
@@ -305,7 +306,8 @@ pub fn enroll_student(
     Ok(id.id)
 }
 
-/// Enroll in several groups **atomically**: one failure rolls everything back.
+/// Test helper exposing the IDs for atomic batch assertions.
+#[cfg(test)]
 pub fn enroll_student_batch(
     conn: &Connection,
     items: &[BatchEnrollmentInput],

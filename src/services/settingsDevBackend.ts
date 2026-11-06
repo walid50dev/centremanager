@@ -2269,10 +2269,9 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return result.sort((a, b) => rank[a.match_type] - rank[b.match_type] || a.entity_id - b.entity_id);
     }
     case 'cmd_delete_to_trash':
-    case 'cmd_delete_student':
-    case 'cmd_delete_expense': {
-      const type = (cmd === 'cmd_delete_expense' ? 'expense' : cmd === 'cmd_delete_student' ? 'student' : asString(args, 'entityType')) as TrashEntityType;
-      const id = cmd === 'cmd_delete_expense' || cmd === 'cmd_delete_student' ? asNumber(args, 'id') : asNumber(args, 'entityId');
+    case 'cmd_delete_student': {
+      const type = (cmd === 'cmd_delete_student' ? 'student' : asString(args, 'entityType')) as TrashEntityType;
+      const id = cmd === 'cmd_delete_student' ? asNumber(args, 'id') : asNumber(args, 'entityId');
       const year = activeYearId(store);
       if (year === null) throw new Error('Type de corbeille invalide');
       if (type === 'student') {

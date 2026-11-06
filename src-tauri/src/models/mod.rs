@@ -4,21 +4,11 @@
 //! straight to the React frontend (`src/types/index.ts` mirrors them 1:1).
 //! Every monetary field is an `i64` number of centimes (1 DH = 100).
 
-// The structs are the public data contract for the commands added in the next
-// milestones, so they are intentionally unused for now.
+// DTO fields are consumed by serde derives, which dead-code analysis does not
+// consider field reads. Keep this allowance for serialized command contracts.
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
-
-// ---------------------------------------------------------------------------
-// 1. Settings
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Setting {
-    pub key: String,
-    pub value: Option<String>,
-}
 
 // ---------------------------------------------------------------------------
 // 2. School years
@@ -66,204 +56,6 @@ fn default_true() -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Students
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Student {
-    pub id: i64,
-    pub full_name: String,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
-    pub guardian_phone: Option<String>,
-    pub guardian_relation: Option<String>,
-    pub secondary_contact_name: Option<String>,
-    pub school_name: Option<String>,
-    pub enrollment_date: String,
-    pub birth_date: Option<String>,
-    pub phone: Option<String>,
-    pub secondary_contact_phone: Option<String>,
-    pub guardian_name: Option<String>,
-    pub level_id: Option<i64>,
-    pub branch_id: Option<i64>,
-    pub address: Option<String>,
-    pub notes: Option<String>,
-    pub status: Option<String>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 7-8. Teachers + teacher <-> subject link
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Teacher {
-    pub id: i64,
-    pub full_name: String,
-    pub phone: Option<String>,
-    pub email: Option<String>,
-    pub photo: Option<String>,
-    pub notes: Option<String>,
-    pub status: Option<String>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeacherSubject {
-    pub teacher_id: i64,
-    pub subject_id: i64,
-}
-
-// ---------------------------------------------------------------------------
-// 9. Groups
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Group {
-    pub id: i64,
-    pub subject_id: Option<i64>,
-    pub level_id: Option<i64>,
-    pub branch_id: Option<i64>,
-    pub teacher_id: Option<i64>,
-    pub school_year_id: Option<i64>,
-    pub day_of_week: Option<String>,
-    pub start_time: Option<String>,
-    pub end_time: Option<String>,
-    pub room: Option<String>,
-    /// Monthly fee in centimes.
-    pub monthly_fee_cents: i64,
-    pub capacity: i64,
-    pub status: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 10. Enrollments
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Enrollment {
-    pub id: i64,
-    pub student_id: i64,
-    pub group_id: i64,
-    pub start_date: String,
-    pub end_date: Option<String>,
-    pub status: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 11. Invoices
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Invoice {
-    pub id: i64,
-    pub enrollment_id: Option<i64>,
-    pub period_month: Option<i64>,
-    pub period_year: Option<i64>,
-    /// Amount due, in centimes.
-    pub amount_cents: i64,
-    /// Amount already collected, in centimes.
-    pub paid_amount_cents: i64,
-    pub status: Option<String>,
-    pub due_date: Option<String>,
-    pub created_at: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 12. Payments
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Payment {
-    pub id: i64,
-    pub student_id: i64,
-    pub invoice_id: Option<i64>,
-    /// Amount paid, in centimes.
-    pub amount_cents: i64,
-    pub payment_method: Option<String>,
-    pub notes: Option<String>,
-    pub created_at: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 13. Receipts
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Receipt {
-    pub id: i64,
-    pub payment_id: i64,
-    pub receipt_number: Option<String>,
-    pub student_name: Option<String>,
-    pub amount_cents: Option<i64>,
-    pub payment_date: Option<String>,
-    pub groups_text: Option<String>,
-    pub center_name: Option<String>,
-    pub created_at: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 14. Teacher activities
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeacherActivity {
-    pub id: i64,
-    pub teacher_id: i64,
-    pub activity_date: Option<String>,
-    pub activity_type: Option<String>,
-    /// Hours worked (fractional, e.g. 1.5).
-    pub hours: Option<f64>,
-    pub sessions: Option<i64>,
-    pub notes: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 15-16. Teacher compensation + settlements
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeacherCompensation {
-    pub id: i64,
-    pub teacher_id: i64,
-    pub month: Option<i64>,
-    pub year: Option<i64>,
-    pub mode: Option<String>,
-    pub base_amount_cents: Option<i64>,
-    #[serde(default)]
-    pub bonus_amount_cents: i64,
-    pub total_amount_cents: Option<i64>,
-    pub status: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TeacherSettlement {
-    pub id: i64,
-    pub teacher_id: i64,
-    pub compensation_id: Option<i64>,
-    pub amount_cents: Option<i64>,
-    pub payment_method: Option<String>,
-    pub notes: Option<String>,
-    pub created_at: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// 17. Audit log
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuditLogEntry {
-    pub id: i64,
-    pub action: Option<String>,
-    pub entity_type: Option<String>,
-    pub entity_id: Option<i64>,
-    pub details: Option<String>,
-    pub created_at: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
 // Command DTOs
 // ---------------------------------------------------------------------------
 
@@ -284,8 +76,7 @@ pub struct DbInfo {
 
 /// A student row enriched with its level and branch names.
 ///
-/// The Phase 0 [`Student`] mirrors the raw table; this one is the shape the
-/// students list/detail commands return (joined names, non-optional phone).
+/// Shape returned by the student list/detail commands (joined names, non-optional phone).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StudentRow {
     pub id: i64,

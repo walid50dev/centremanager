@@ -27,14 +27,8 @@
     "close": "إغلاق",
     "loading": "جارٍ التحميل…",
     "actions": "الإجراءات",
-    "noData": "لا توجد بيانات",
-    "all": "الكل",
-    "yes": "نعم",
-    "no": "لا",
     "required": "هذا الحقل مطلوب",
-    "retry": "إعادة المحاولة",
     "error": "حدث خطأ ما",
-    "minChars": "{{count}} أحرف على الأقل",
     "previous": "السابق",
     "next": "التالي",
     "months": {
@@ -53,7 +47,6 @@
     },
     "refresh": "تحديث",
     "suffix": {
-      "dh": "د.م",
       "percent": "%",
       "hours": "س",
       "students": "تلاميذ"
@@ -62,16 +55,10 @@
     "creating": "جاري الإنشاء…",
     "create": "إنشاء",
     "noOptions": "لا توجد خيارات",
-    "clear": "مسح",
-    "quickCreate": "إنشاء سريع"
+    "clear": "مسح"
   },
   "quickCreate": {
     "created": "تم إنشاء {{entity}} ✓",
-    "hint": "هذا الإنشاء السريع لا يغادر النموذج الحالي: تبقى الحقول المملوءة محفوظة.",
-    "teacher": {
-      "title": "أستاذ جديد (سريع)",
-      "description": "الاسم والهاتف والمواد. الباقي (البريد، الملاحظات، الأجر) يُضبط في بطاقة الأستاذ."
-    },
     "subject": {
       "title": "مادة جديدة",
       "description": "المادة مشتركة بين المجموعات والأساتذة."
@@ -80,65 +67,31 @@
       "title": "مستوى جديد",
       "description": "المستوى يرتّب المجموعات والتلاميذ (ابتدائي، إعدادي، ثانوي)."
     },
-    "student": {
-      "title": "تلميذ جديد (سريع)",
-      "description": "الاسم والهاتف والمستوى. البطاقة الكاملة تبقى متاحة من لائحة التلاميذ."
-    },
-    "group": {
-      "title": "مجموعة جديدة (سريعة)",
-      "description": "المادة والمستوى والأستاذ — ثم التوقيت والثمن.",
-      "step": "الخطوة {{current}} من {{total}}",
-      "schedule": "التوقيت والثمن",
-      "basics": "المادة والمستوى"
-    },
     "category": {
       "title": "فئة جديدة",
       "description": "تُضاف الفئة إلى لائحة فئات المصاريف."
     },
     "fields": {
-      "name": "الاسم الكامل",
-      "namePlaceholder": "مثال: أحمد بنعلي",
       "subjectName": "اسم المادة",
       "subjectPlaceholder": "مثال: الفيزياء والكيمياء",
       "levelName": "اسم المستوى",
       "levelPlaceholder": "مثال: الجذع المشترك",
       "category": "الفئة",
-      "phone": "الهاتف",
-      "level": "المستوى",
-      "subjects": "المواد",
-      "subjectsHint": "مستحسن: مادة واحدة على الأقل حتى تظهر المجموعة بشكل صحيح.",
       "categoryName": "اسم الفئة",
-      "categoryPlaceholder": "مثال: الأمن",
-      "subject": "المادة",
-      "teacher": "الأستاذ",
-      "day": "اليوم",
-      "startTime": "ساعة البداية",
-      "endTime": "ساعة النهاية",
-      "fee": "الثمن الشهري",
-      "capacity": "الطاقة"
+      "categoryPlaceholder": "مثال: الأمن"
     },
     "validation": {
       "nameRequired": "الاسم إلزامي",
       "nameTooShort": "حرفان على الأقل",
-      "phoneRequired": "الهاتف إلزامي",
-      "phoneInvalid": "رقم مغربي غير صحيح (06/07 + 8 أرقام)",
-      "categoryRequired": "اختر فئة",
-      "subjectRequired": "اختر مادة",
-      "levelRequired": "اختر مستوى",
-      "feePositive": "يجب أن يكون الثمن أكبر من 0",
-      "capacityPositive": "الطاقة يجب أن تكون 1 على الأقل",
-      "endAfterStart": "النهاية يجب أن تكون بعد البداية"
+      "categoryRequired": "اختر فئة"
     },
-    "existing": "هذه القيمة موجودة بالفعل",
-    "noSchoolYear": "لا توجد سنة دراسية نشطة — أنشئها في الإعدادات."
+    "existing": "هذه القيمة موجودة بالفعل"
   },
   "header": {
     "language": "اللغة",
     "lock": "قفل الجلسة",
-    "logout": "تسجيل الخروج",
     "toggleLanguage": "تغيير اللغة",
-    "center": "المركز",
-    "locked": "الجلسة مقفلة"
+    "center": "المركز"
   },
   "pages": {
     "dashboard": {
@@ -164,10 +117,6 @@
     },
     "login": {
       "title": "تسجيل الدخول"
-    },
-    "expenses": {
-      "title": "مصاريف الشهر",
-      "description": "المصاريف الشهرية للمركز والصافي"
     }
   },
   "login": {
@@ -178,16 +127,10 @@
     "placeholder": "أدخل كلمة المرور",
     "tooManyAttempts": "محاولات كثيرة. أعد المحاولة بعد {{seconds}} ثانية",
     "attemptsLeft": "تبقّت {{count}} محاولة قبل القفل",
-    "success": "تم تسجيل الدخول",
     "notConfigured": "لا توجد كلمة مرور مُعدّة لهذا المركز"
   },
   "status": {
-    "actif": "نشط",
-    "inactif": "غير نشط",
-    "impaye": "غير مدفوع",
-    "partiel": "مدفوع جزئياً",
-    "paye": "مدفوع",
-    "annule": "ملغى"
+    "inactif": "غير نشط"
   },
   "setup": {
     "welcome": "مرحباً بك في CentreManager",
@@ -207,15 +150,13 @@
     "title": "الجلسة مقفلة",
     "subtitle": "أدخل كلمة المرور للمتابعة",
     "unlock": "إلغاء القفل",
-    "success": "تم إلغاء قفل الجلسة ✓",
-    "lockedAfter": "قفل تلقائي بعد {{minutes}} دقيقة من عدم النشاط"
+    "success": "تم إلغاء قفل الجلسة ✓"
   },
   "settings": {
     "intro": "اضبط مركزك وبياناتك المرجعية وتفضيلاتك. كل قسم يُفتح عند النقر عليه.",
     "save": "حفظ",
     "footer": "تُحفظ التعديلات محلياً في قاعدة بيانات المركز.",
     "section": {
-      "center": "المركز",
       "schoolYear": "السنة الدراسية",
       "levels": "المستويات",
       "subjects": "المواد",
@@ -226,13 +167,9 @@
     },
     "center": {
       "description": "الاسم ومعلومات الاتصال والشعار الظاهرة على الوصولات.",
-      "name": "اسم المركز",
       "address": "العنوان",
       "phone": "الهاتف",
-      "logo": "الشعار",
       "logoHint": "PNG أو JPG أو SVG، بحد أقصى 500 كيلوبايت",
-      "chooseLogo": "اختيار شعار",
-      "removeLogo": "إزالة",
       "logoUpdated": "تم تحديث الشعار ✓",
       "logoRemoved": "تمت إزالة الشعار",
       "logoTooLarge": "حجم الصورة يتجاوز 500 كيلوبايت",
@@ -364,7 +301,6 @@
     "upload_logo": "اختيار الشعار",
     "remove_logo": "حذف الشعار",
     "logo_preview": "معاينة الشعار",
-    "enrollment_fee": "رسوم التسجيل",
     "enrollment_fee_label": "رسوم التسجيل (لكل تلميذ، سنوياً)",
     "enrollment_fee_hint": "المبلغ لكل تلميذ عند أول تسجيل في السنة. 0 يعني دون رسوم؛ لا تسري التغييرات بأثر رجعي.",
     "enrollment_fee_saved": "تم حفظ رسوم التسجيل"
@@ -494,7 +430,6 @@
     "formHint": "تضم المجموعة مادة ومستوى وحصة أسبوعية.",
     "noGroups": "لا توجد مجموعات لهذه السنة الدراسية",
     "noGroupsHint": "أنشئ مجموعة أولى لبدء التسجيل.",
-    "filterYear": "تصفية حسب السنة الدراسية",
     "subject": "المادة",
     "level": "المستوى",
     "branch": "الشعبة",
@@ -507,7 +442,6 @@
     "endTime": "وقت النهاية",
     "room": "القاعة",
     "roomPlaceholder": "القاعة 3",
-    "fee": "الثمن الشهري",
     "monthlyFee": "الثمن الشهري",
     "feeHint": "المبلغ بالدرهم، يُفوتر كل شهر.",
     "capacity": "الطاقة الاستيعابية",
@@ -534,10 +468,6 @@
       "subjectRequired": "المادة مطلوبة",
       "levelRequired": "المستوى مطلوب",
       "schoolYearRequired": "السنة الدراسية مطلوبة",
-      "dayRequired": "اليوم مطلوب",
-      "startRequired": "وقت البداية مطلوب",
-      "endRequired": "وقت النهاية مطلوب",
-      "endAfterStart": "يجب أن يكون وقت النهاية بعد وقت البداية",
       "feePositive": "يجب أن يكون الثمن أكبر من 0",
       "capacityPositive": "يجب أن تكون الطاقة الاستيعابية 1 على الأقل",
       "atLeastOneDay": "حدّد يومًا واحدًا على الأقل",
@@ -569,8 +499,7 @@
     },
     "untitled": "مجموعة بدون عنوان",
     "schedules": "أيام الحصص",
-    "schedulesHint": "حدّد أيام الحصص ثم اضبط التوقيت.",
-    "sameHours": "نفس التوقيت لجميع الأيام"
+    "schedulesHint": "حدّد أيام الحصص ثم اضبط التوقيت."
   },
   "timetable": {
     "title": "جدول الحصص",
@@ -580,17 +509,9 @@
       "subject": "المادة",
       "teacher": "الأستاذ",
       "room": "القاعة",
-      "all": "الكل",
       "reset": "إعادة التعيين"
     },
     "days": {
-      "monday": "الاثنين",
-      "tuesday": "الثلاثاء",
-      "wednesday": "الأربعاء",
-      "thursday": "الخميس",
-      "friday": "الجمعة",
-      "saturday": "السبت",
-      "sunday": "الأحد",
       "short": {
         "monday": "اثن",
         "tuesday": "ثلا",
@@ -601,12 +522,10 @@
         "sunday": "أحد"
       }
     },
-    "summary": "{{count}} حصة هذا الأسبوع",
     "empty": "لا توجد حصص مبرمجة",
     "emptyHint": "أضف أيام الحصص إلى مجموعاتك، أو وسّع عوامل التصفية.",
     "loading": "جارٍ تحميل جدول الحصص…",
     "showSunday": "إظهار الأحد",
-    "free": "فارغ",
     "tooltipGroup": "المجموعة"
   },
   "enrollment": {
@@ -635,8 +554,6 @@
     "noGroupsAvailableHint": "كل المجموعات مكتملة أو أن التلميذ مسجل بها مسبقاً.",
     "noStudentsFound": "لا يوجد تلميذ مطابق",
     "noStudentsFoundHint": "عدّل البحث: التلاميذ المسجلون مسبقاً مخفيون.",
-    "alreadyEnrolled": "مسجل مسبقاً في هذه المجموعة",
-    "groupFull": "المجموعة مكتملة",
     "toast": {
       "ended": "تم إنهاء التسجيل ✓",
       "created_zero": "تم إنشاء {{count}} تسجيل ✓",
@@ -663,11 +580,6 @@
     "startDate": "البداية",
     "endDate": "النهاية",
     "ended": "منتهية",
-    "tab": {
-      "enrollments": "التسجيلات",
-      "activeEnrollments": "التسجيلات النشطة",
-      "endedEnrollments": "التسجيلات المنتهية"
-    },
     "totalDue": "المجموع المستحق",
     "totalPaid": "المجموع المدفوع",
     "remaining": "الباقي",
@@ -695,7 +607,6 @@
     }
   },
   "payments": {
-    "title": "المدفوعات",
     "tabCollections": "التحصيل",
     "tabTeacherSettlements": "أجور الأساتذة",
     "generateInvoices": "توليد الفواتير",
@@ -794,11 +705,9 @@
     "count_many": "{{count}} مصروفًا",
     "count_other": "{{count}} مصروف",
     "deleteTitle": "حذف هذا المصروف؟",
-    "confirmDelete": "سيُحذف «{{label}}» ({{amount}}) نهائيا. لا علاقة لهذا بالمدفوعات والفواتير.",
     "delete": "حذف",
     "save": "حفظ",
     "period": "شهر المصاريف",
-    "monthColumn": "الشهر",
     "createdAt": "سُجّل في",
     "columns": {
       "category": "الفئة",
@@ -808,17 +717,14 @@
       "actions": "إجراءات"
     },
     "summary": {
-      "total": "مجموع المصاريف",
       "count": "المصاريف",
       "byCategory": "حسب الفئة",
-      "share": "{{pct}} من المصاريف",
-      "noCategory": "لا توجد فئات لهذا الشهر"
+      "share": "{{pct}} من المصاريف"
     },
     "validation": {
       "labelRequired": "البيان إلزامي",
       "categoryRequired": "اختر فئة",
-      "amountPositive": "يجب أن يكون المبلغ أكبر من صفر",
-      "periodRequired": "الشهر والسنة إلزاميان"
+      "amountPositive": "يجب أن يكون المبلغ أكبر من صفر"
     },
     "toast": {
       "created": "تمت إضافة المصروف ✓",
@@ -845,7 +751,6 @@
     "selectStudent": "ابحث واختر تلميذاً",
     "searchPlaceholder": "الاسم أو الهاتف...",
     "selectInvoices": "اختر الفواتير المراد تسديدها",
-    "paymentDetails": "تفاصيل الدفع",
     "confirmation": "تحقق قبل التأكيد",
     "amount": "المبلغ",
     "method": "طريقة الدفع",
@@ -860,18 +765,13 @@
     "noUnpaid": "كل الفواتير مسددة ✓",
     "noUnpaidHint": "لا يوجد مبلغ للتحصيل من هذا التلميذ.",
     "totalSelected": "المجموع المحدد",
-    "selectAtLeastOne": "اختر فاتورة واحدة على الأقل",
     "confirm": "تأكيد",
     "confirmAndPrint": "تأكيد وطباعة",
     "next": "التالي",
     "previous": "السابق",
     "cancel": "إلغاء",
-    "period": "الفترة",
-    "group": "المجموعة",
     "invoiceAmount": "المبلغ",
     "paid": "المدفوع",
-    "remaining": "الباقي",
-    "advanceLabel": "دفعة مسبقة",
     "studentLabel": "التلميذ:",
     "invoicesLabel": "الفواتير:",
     "amountLabel": "المبلغ:",
@@ -879,7 +779,6 @@
     "notesLabel": "ملاحظات:",
     "advanceHint": "هذا المبلغ يتجاوز الفواتير المحددة: سيُسجل {{amount}} كدفعة مسبقة.",
     "partialHint": "سيبقى {{amount}} للدفع على الفواتير المحددة.",
-    "saving": "جارٍ التسجيل...",
     "toast": {
       "recorded": "تم تسجيل الدفع ✓",
       "error": "تعذر تسجيل الدفع",
@@ -887,8 +786,7 @@
     },
     "validation": {
       "amountRequired": "يجب أن يكون المبلغ أكبر من 0",
-      "invoicesRequired": "اختر فاتورة واحدة على الأقل",
-      "studentRequired": "اختر تلميذاً"
+      "invoicesRequired": "اختر فاتورة واحدة على الأقل"
     }
   },
   "receipt": {
@@ -899,10 +797,8 @@
     "student": "التلميذ",
     "groups": "المجموعة/المجموعات",
     "period": "الفترة",
-    "amount": "المبلغ",
     "method": "طريقة الدفع",
     "thanks": "شكراً لثقتكم",
-    "print": "طباعة",
     "close": "إغلاق",
     "advance": "دفعة مسبقة على الفواتير",
     "loading": "جارٍ تحميل الإيصال...",
@@ -1111,7 +1007,6 @@
     "greeting": "مرحبا 👋",
     "period": "الفترة",
     "seeAll": "عرض الكل",
-    "loading": "جارٍ تحميل لوحة التحكم…",
     "loadError": "تعذّر تحميل بعض بيانات لوحة التحكم.",
     "kpi": {
       "students": "التلاميذ النشطون",
@@ -1123,8 +1018,7 @@
       "netTooltip": "المداخيل: {{revenue}} — المصاريف: {{expenses}} — الأجور: {{compensation}}",
       "netPositive": "ربح الشهر",
       "netNegative": "خسارة الشهر",
-      "netZero": "التوازن",
-      "netBreakdown": "المداخيل: {{revenue}} — المصاريف: {{expenses}} — الأجور: {{compensation}}"
+      "netZero": "التوازن"
     },
     "trend": {
       "up": "+{{value}}%",
@@ -1175,10 +1069,6 @@
     "title": "حدث خطأ",
     "message": "تعذر عرض هذه الصفحة. بياناتك سليمة.",
     "reload": "إعادة التحميل"
-  },
-  "keyboard": {
-    "search": "بحث (Ctrl+K)",
-    "lock": "قفل (Ctrl+L)"
   },
   "trash": {
     "title": "سلة المحذوفات",
