@@ -11,3 +11,6 @@ src-tauri/gen
 # Local scratch and generated files
 *.tmp.*
 *.bak
+
+# Generated synthetic load-test databases
+test-data/*.db
