@@ -2229,3 +2229,47 @@ Les dépenses masquées sont exclues des totaux courants jusqu'à leur restaurat
 Test du backend de développement : `node tests/trash-dev-backend.mjs`. Les tests
 Rust du module `commands::trash` couvrent la restauration, la purge et la protection
 des écritures financières. Effectuez une sauvegarde avant toute mise à niveau.
+
+## Jeu de données isolé pour test de charge
+
+Ce jeu **fictif** contient 200 élèves, 14 groupes (dont deux sans horaire),
+6 enseignants, 300 inscriptions, jusqu’à trois mois récents de factures dans l’année de
+test et 180 frais d’inscription. Pour le mois courant, 140 élèves sont à jour,
+30 sont partiellement réglés et 30 n’ont pas payé. Les paiements enseignants et
+12 dépenses sont également inclus. L’année de test court de septembre à août
+pour rester utilisable toute l’année ; une autre année vide permet de tester le
+changement d’année. Les dates, téléphones et personnes sont synthétiques.
+
+### Prévisualisation navigateur isolée
+
+```sh
+npm ci
+VITE_LOAD_TEST_FIXTURE=1 npm run dev -- --host 0.0.0.0 --port 4175 --strictPort
+```
+
+Dans un **profil navigateur vierge**, ouvrir le serveur et se connecter avec le
+mot de passe de test `test1234`. Le chargement est limité à Vite en mode dev,
+n’est pas disponible dans Tauri ou le build de production, et ne remplace jamais
+un profil navigateur existant. Sans la variable, les données de développement
+habituelles ne changent pas. Le stockage navigateur n’est pas la base SQLite
+des utilisateurs ; la prévisualisation ne modifie donc pas la base réelle.
+
+### Base SQLite autonome
+
+```sh
+npm ci
+python3 scripts/create-load-test-db.py --output /chemin/vers/nouveau-test.db
+```
+
+Le script crée **uniquement un nouveau fichier** et refuse tout chemin déjà
+existant. Il ne réinitialise ni ne remplace la base active. Il n’y a aucun mot
+de passe préconfiguré dans la base : la configuration initiale de Tauri crée le
+mot de passe au premier lancement. Pour tester la version desktop, utiliser une
+copie dans un répertoire de données applicatif séparé ; sauvegarder et fermer
+l’application avant toute manipulation de sa base habituelle, WAL et SHM compris.
+Ne pas mélanger le WAL/SHM d’une ancienne base avec une autre base.
+
+Les contrôles reproductibles sont `node tests/load-test-fixture.mjs`,
+`python3 tests/load-test-sqlite.py` et, avec le serveur de test démarré,
+`node tests/browser/load-test.mjs`. Les temps mesurés par le dernier test
+concernent le backend navigateur simulé, pas une mesure de performance Tauri.
