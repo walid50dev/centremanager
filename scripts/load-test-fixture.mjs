@@ -101,3 +101,26 @@ export async function seedLoadTest({overwrite=false, now=new Date()}={}) {
     throw error;
   }
 }
+
+/** Apply the checked-in, fixed load-test dataset once per browser profile.
+ * A snapshot is retained before replacing any existing development data.
+ */
+export async function applyBundledLoadTest() {
+  if (!import.meta.env.DEV || window.__TAURI_INTERNALS__) throw new Error('Réservé au navigateur de développement.');
+  const marker = 'centremanager.dev.load-test-applied-v1';
+  const previous = 'centremanager.dev.pre-load-test-backup-v1';
+  const original = localStorage.getItem(KEY);
+  if (localStorage.getItem(marker) === '1' && original !== null) return false;
+  const {default: fixture} = await import('../test-data/centremanager-charge.json');
+  if (original !== null && localStorage.getItem(previous) === null) localStorage.setItem(previous, original);
+  try {
+    localStorage.setItem(KEY, JSON.stringify(fixture));
+    localStorage.setItem(marker, '1');
+  } catch (error) {
+    // If quota or storage access fails, don't leave a partial reset behind.
+    localStorage.removeItem(KEY);
+    if (original !== null) localStorage.setItem(KEY, original);
+    throw error;
+  }
+  return true;
+}

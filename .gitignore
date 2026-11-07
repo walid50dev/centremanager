@@ -14,3 +14,4 @@ src-tauri/gen
 
 # Generated synthetic load-test databases
 test-data/*.db
+!test-data/centremanager-charge.db

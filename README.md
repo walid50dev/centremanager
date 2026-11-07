@@ -2234,42 +2234,51 @@ des écritures financières. Effectuez une sauvegarde avant toute mise à niveau
 
 Ce jeu **fictif** contient 200 élèves, 14 groupes (dont deux sans horaire),
 6 enseignants, 300 inscriptions, jusqu’à trois mois récents de factures dans l’année de
-test et 180 frais d’inscription. Pour le mois courant, 140 élèves sont à jour,
-30 sont partiellement réglés et 30 n’ont pas payé. Les paiements enseignants et
+test et 180 frais d’inscription. Pour novembre 2026, 140 élèves sont à jour, 30 sont partiellement réglés
+et 30 n’ont pas payé (les dates du jeu fourni sont fixes). Les paiements enseignants et
 12 dépenses sont également inclus. L’année de test court de septembre à août
 pour rester utilisable toute l’année ; une autre année vide permet de tester le
 changement d’année. Les dates, téléphones et personnes sont synthétiques.
 
-### Prévisualisation navigateur isolée
+### Données actives en développement
 
 ```sh
 npm ci
-VITE_LOAD_TEST_FIXTURE=1 npm run dev -- --host 0.0.0.0 --port 4175 --strictPort
+npm run dev                 # navigateur
+npm run tauri dev           # application desktop debug
 ```
 
-Dans un **profil navigateur vierge**, ouvrir le serveur et se connecter avec le
-mot de passe de test `test1234`. Le chargement est limité à Vite en mode dev,
-n’est pas disponible dans Tauri ou le build de production, et ne remplace jamais
-un profil navigateur existant. Sans la variable, les données de développement
-habituelles ne changent pas. Le stockage navigateur n’est pas la base SQLite
-des utilisateurs ; la prévisualisation ne modifie donc pas la base réelle.
+Au premier lancement navigateur, le profil **dev** est remplacé une fois par
+`test-data/centremanager-charge.json`, une représentation des mêmes données que
+la base SQLite fournie. Une copie de l’ancien stockage est conservée dans
+`localStorage` sous `centremanager.dev.pre-load-test-backup-v1`. Les modifications
+ultérieures sont conservées aux redémarrages. Le mot de passe existant reste
+inchangé ; dans un profil neuf, il est `test1234`. Pour désactiver l’application
+du jeu sur un profil non encore initialisé : `VITE_LOAD_TEST_FIXTURE=0 npm run dev`.
+
+Tauri **debug** copie `test-data/centremanager-charge.db` vers
+`test-data/centremanager-dev.db` uniquement si cette dernière n’existe pas, puis
+utilise cette copie persistante. Au premier démarrage, le mot de passe de test
+est `test1234` ; il n’est pas réinitialisé ensuite. Pour recommencer, fermer
+Tauri et mettre de côté la base de développement ainsi que ses fichiers `-wal`
+et `-shm` avant de relancer. La base réelle du répertoire applicatif et les
+builds de production ne sont pas modifiés.
 
 ### Base SQLite autonome
 
 ```sh
-npm ci
-python3 scripts/create-load-test-db.py --output /chemin/vers/nouveau-test.db
+python3 scripts/create-load-test-db.py --input-json test-data/centremanager-charge.json --output /chemin/vers/nouveau-test.db
 ```
 
 Le script crée **uniquement un nouveau fichier** et refuse tout chemin déjà
-existant. Il ne réinitialise ni ne remplace la base active. Il n’y a aucun mot
-de passe préconfiguré dans la base : la configuration initiale de Tauri crée le
-mot de passe au premier lancement. Pour tester la version desktop, utiliser une
-copie dans un répertoire de données applicatif séparé ; sauvegarder et fermer
-l’application avant toute manipulation de sa base habituelle, WAL et SHM compris.
-Ne pas mélanger le WAL/SHM d’une ancienne base avec une autre base.
+existant. Il ne réinitialise ni ne remplace la base active. La base modèle ne
+contient aucun mot de passe ; l’authentification de test est initialisée sur la
+copie Tauri debug uniquement. Ne jamais mélanger les fichiers WAL/SHM d’une base
+avec ceux d’une autre base. Les données fournies sont fictives et ne doivent
+pas être utilisées comme données de production.
 
-Les contrôles reproductibles sont `node tests/load-test-fixture.mjs`,
+Les contrôles reproductibles sont `node tests/dev-database-fixture.mjs`,
+`python3 tests/dev-fixture-sqlite.py`, `node tests/load-test-fixture.mjs`,
 `python3 tests/load-test-sqlite.py` et, avec le serveur de test démarré,
 `node tests/browser/load-test.mjs`. Les temps mesurés par le dernier test
 concernent le backend navigateur simulé, pas une mesure de performance Tauri.
