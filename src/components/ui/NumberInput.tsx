@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../utils/format';
 
@@ -105,6 +105,19 @@ export function NumberInput({
   const [typed, setTyped] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectOnMouseUp = useRef(false);
+  const selectionAfterRender = useRef<{ start: number; end: number } | null>(null);
+
+  // Focus changes the formatted value to the raw draft. Select after that render,
+  // otherwise React's value update can collapse the browser's selection.
+  useLayoutEffect(() => {
+    if (!focused || !inputRef.current) return;
+    if (selectionAfterRender.current) {
+      const { start, end } = selectionAfterRender.current;
+      inputRef.current.setSelectionRange(start, end);
+      selectionAfterRender.current = null;
+    }
+  }, [focused, typed]);
 
   // A disabled field must not keep a stale draft.
   useEffect(() => {
@@ -148,8 +161,25 @@ export function NumberInput({
     return `${negative ? '-' : ''}${body}`;
   };
 
-  const handleChange = (raw: string) => {
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = event.currentTarget.value;
     const clean = sanitise(raw);
+    if (clean !== raw) {
+      const start = event.currentTarget.selectionStart ?? raw.length;
+      const end = event.currentTarget.selectionEnd ?? start;
+      const selection = { start: sanitise(raw.slice(0, start)).length, end: sanitise(raw.slice(0, end)).length };
+      if (clean === typed) {
+        // An ignored character may leave the draft unchanged, so React will not
+        // render. Restore the caret after it restores the controlled input value.
+        const input = event.currentTarget;
+        selectionAfterRender.current = null;
+        queueMicrotask(() => {
+          if (document.activeElement === input && input.value === clean) input.setSelectionRange(selection.start, selection.end);
+        });
+      } else {
+        selectionAfterRender.current = selection;
+      }
+    }
     setTyped(clean);
     const parsed = parseNumber(clean);
     // Emit while typing (parents need live feedback for validation), `0` for an
@@ -207,7 +237,7 @@ export function NumberInput({
       {label && (
         <label htmlFor={inputId} className="mb-1.5 block text-label text-muted">
           {label}
-          {required && <span className="ms-0.5 text-destructive">*</span>}
+          {required && <span className="ms-0.5 text-red-500" aria-hidden="true">*</span>}
         </label>
       )}
 
@@ -250,12 +280,20 @@ export function NumberInput({
           required={required}
           placeholder={placeholder}
           value={display}
-          onFocus={() => {
+          onMouseDown={() => { selectOnMouseUp.current = document.activeElement !== inputRef.current; }}
+          onMouseUp={(event) => {
+            if (selectOnMouseUp.current) event.currentTarget.select();
+            selectOnMouseUp.current = false;
+          }}
+          onFocus={(event) => {
+            const raw = Number.isFinite(value) ? String(value) : '';
+            selectionAfterRender.current = { start: 0, end: raw.length };
             setFocused(true);
-            setTyped(Number.isFinite(value) ? String(value) : '');
+            setTyped(raw);
+            event.currentTarget.select();
           }}
           onBlur={commit}
-          onChange={(event) => handleChange(event.target.value)}
+          onChange={handleChange}
           onWheel={(event) => {
             // Scrolling the page must never change a fee or a capacity.
             if (document.activeElement === inputRef.current) {
@@ -270,7 +308,7 @@ export function NumberInput({
               event.preventDefault();
               nudge(-1);
             } else if (event.key === 'Enter') {
-              commit();
+              event.currentTarget.blur();
             }
           }}
           className={cn(

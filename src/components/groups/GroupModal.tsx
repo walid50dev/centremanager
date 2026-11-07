@@ -65,7 +65,7 @@ type FieldName = keyof FormState;
 /** `schedule` is the shared error line under the week editor. */
 type Errors = Partial<Record<FieldName | 'schedule', string>>;
 
-/** A week with no class on any day; Monday is ticked by default (the old default). */
+/** A new group may have no weekly slots. */
 const EMPTY_WEEK: Week = Object.fromEntries(
   WEEK_DAYS.map((day) => [day, { enabled: false, start: '16:00', end: '18:00' }]),
 );
@@ -76,7 +76,7 @@ const EMPTY_FORM: FormState = {
   branchId: '',
   teacherId: '',
   schoolYearId: '',
-  week: { ...EMPTY_WEEK, Lundi: { enabled: true, start: '16:00', end: '18:00' } },
+  week: EMPTY_WEEK,
   room: '',
   fee: '',
   capacity: '10',
@@ -245,26 +245,22 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
     if (!form.levelId) next.levelId = t('groups.validation.levelRequired');
     if (!form.schoolYearId) next.schoolYearId = t('groups.validation.schoolYearRequired');
     const activeDays = WEEK_DAYS.filter((day) => form.week[day]?.enabled);
-    if (activeDays.length === 0) {
-      next.schedule = t('groups.validation.atLeastOneDay');
-    } else {
-      const incomplete = activeDays.find((day) => {
-        const slot = form.week[day];
-        return !slot.start || !slot.end;
+    const incomplete = activeDays.find((day) => {
+      const slot = form.week[day];
+      return !slot.start || !slot.end;
+    });
+    const reversed = activeDays.find((day) => {
+      const slot = form.week[day];
+      return slot.start && slot.end && slot.end <= slot.start;
+    });
+    if (incomplete) {
+      next.schedule = t('groups.validation.scheduleIncomplete', {
+        day: t(`groups.dayNames.${incomplete}`),
       });
-      const reversed = activeDays.find((day) => {
-        const slot = form.week[day];
-        return slot.start && slot.end && slot.end <= slot.start;
+    } else if (reversed) {
+      next.schedule = t('groups.validation.endAfterStartDay', {
+        day: t(`groups.dayNames.${reversed}`),
       });
-      if (incomplete) {
-        next.schedule = t('groups.validation.scheduleIncomplete', {
-          day: t(`groups.dayNames.${incomplete}`),
-        });
-      } else if (reversed) {
-        next.schedule = t('groups.validation.endAfterStartDay', {
-          day: t(`groups.dayNames.${reversed}`),
-        });
-      }
     }
     const fee = amountToCents(form.fee);
     if (!form.fee.trim() || fee <= 0) next.fee = t('groups.validation.feePositive');
@@ -346,7 +342,7 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
       <Modal
       open={open}
       onClose={onClose}
-      size="lg"
+      size="wide"
       zIndex={zIndex}
       title={
         <span className="flex items-center gap-2">
@@ -453,12 +449,9 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
         <fieldset className="sm:col-span-2" data-testid="group-week">
           <legend className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-foreground">
             {t('groups.schedules')}
-            <span className="text-destructive" aria-hidden="true">
-              *
-            </span>
           </legend>
           <p className="mb-2 text-[12px] text-muted">{t('groups.schedulesHint')}</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
             {WEEK_DAYS.map((day) => {
               const slot = form.week[day] ?? { enabled: false, start: '16:00', end: '18:00' };
               const dayLabel = t(`groups.dayNames.${day}`);
@@ -497,7 +490,7 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
                       disabled={!slot.enabled}
                       onChange={(event) => setWeekDay(day, { start: event.target.value })}
                       data-testid={`group-day-${day}-start`}
-                      className="w-full rounded-md border border-border bg-white px-1 py-0.5 text-[12px] text-foreground disabled:cursor-not-allowed disabled:bg-transparent"
+                      className="w-full min-w-[112px] rounded-md border border-border bg-white px-1 py-0.5 text-[13px] text-foreground disabled:cursor-not-allowed disabled:bg-transparent"
                     />
                     <input
                       type="time"
@@ -506,7 +499,7 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
                       disabled={!slot.enabled}
                       onChange={(event) => setWeekDay(day, { end: event.target.value })}
                       data-testid={`group-day-${day}-end`}
-                      className="w-full rounded-md border border-border bg-white px-1 py-0.5 text-[12px] text-foreground disabled:cursor-not-allowed disabled:bg-transparent"
+                      className="w-full min-w-[112px] rounded-md border border-border bg-white px-1 py-0.5 text-[13px] text-foreground disabled:cursor-not-allowed disabled:bg-transparent"
                     />
                   </div>
                 </div>

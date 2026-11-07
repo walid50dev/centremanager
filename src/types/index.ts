@@ -9,11 +9,8 @@
 export type Language = 'fr' | 'ar';
 export type InvoiceStatus = 'impayé' | 'partiel' | 'payé' | 'annulé';
 export type PaymentMethod = 'espèces' | 'virement' | 'chèque' | 'autre';
-/** Phase 6: payroll state of one teacher for one month. */
-export type CompensationStatus = 'pending' | 'partial' | 'settled' | 'not_configured';
 /** Phase 6: main compensation modes (the recruitment bonus is cumulative). */
 export type CompensationMode = 'fixed_monthly' | 'hourly' | 'per_session' | 'percentage';
-export type ActivityType = 'cours' | 'rattrapage' | 'examen' | 'autre';
 
 export interface SchoolYear {
   id: number;
@@ -419,61 +416,13 @@ export interface TeacherDetail {
   compensation_config: CompensationConfig | null;
 }
 
-/** One group of the theoretical-revenue breakdown (used for localised lines). */
-export interface CompensationGroupLine {
-  group_id: number;
-  subject_name: string;
-  level_name: string;
-  branch_name: string | null;
-  enrolled_count: number;
-  monthly_fee_cents: number;
-  total_cents: number;
-}
-
-export interface CompensationDetail {
-  teacher_name: string;
-  mode: CompensationMode;
-  base_amount_cents: number;
-  bonus_amount_cents: number;
-  total_cents: number;
-  /** French breakdown computed by the backend (used as a fallback). */
-  detail_lines: string[];
-  already_settled_cents: number;
-  remaining_cents: number;
-  groups: CompensationGroupLine[];
-  theoretical_cents: number;
-  value_cents: number;
-  bonus_pct: number | null;
-  hours: number | null;
-  sessions: number | null;
-}
-
-export interface Settlement {
+export interface TeacherPayment {
   id: number;
   amount_cents: number;
+  payment_date: string;
   payment_method: string;
   notes: string | null;
   created_at: string;
-}
-
-export interface Activity {
-  id: number;
-  activity_date: string;
-  activity_type: ActivityType;
-  hours: number | null;
-  sessions: number | null;
-  notes: string | null;
-}
-
-/** One row of the payroll tab on the Payments page. */
-export interface TeacherCompSummary {
-  teacher_id: number;
-  teacher_name: string;
-  mode: string;
-  total_due_cents: number;
-  total_settled_cents: number;
-  remaining_cents: number;
-  status: CompensationStatus;
 }
 
 /** Payload for `cmd_create_teacher` / `cmd_update_teacher`. */
@@ -484,19 +433,6 @@ export interface TeacherInput {
   notes: string | null;
   subject_ids: number[];
 }
-
-/** Payload for `cmd_record_activity`. */
-export interface ActivityInput {
-  teacher_id: number;
-  activity_date: string;
-  activity_type: ActivityType;
-  hours: number | null;
-  sessions: number | null;
-  notes: string | null;
-}
-
-/** Activity types offered by the form (values stored in SQLite). */
-export const ACTIVITY_TYPES = ['cours', 'rattrapage', 'examen', 'autre'] as const;
 
 /** Main compensation modes, in the order the select shows them. */
 export const COMPENSATION_MODES = [

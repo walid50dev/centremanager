@@ -84,8 +84,9 @@ try {
     assert.equal(query(`[data-testid="${id}"]`).value, '2001-01');
     if (id === 'payments-period') {
       await click(document.querySelectorAll('[role="tab"]')[1]);
-      await act(async () => { await wait(150); });
-      assert.match(document.body.textContent, /Période : janvier 2001/i);
+      await act(async () => { await wait(500); });
+      assert.equal(document.querySelector('[data-testid="payments-period"]'), null, 'teacher payments are scoped to the active school year, not the student billing month');
+      assert.match(document.body.textContent, /année scolaire active/i);
     }
   }
   assert.equal((await devInvoke('cmd_get_active_school_year')).id, activeYear.id, 'calendar periods must not switch school years');

@@ -220,7 +220,7 @@ export function CompensationConfigCard({
           <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
           {t('teachers.estimate')}
         </p>
-        {groups.length === 0 ? (
+        {groups.length === 0 && mode !== 'fixed_monthly' ? (
           <p className="mt-1 text-[13px] text-muted">{t('teachers.noGroups')}</p>
         ) : (
           <div className="mt-1 space-y-1 text-[13px]">
@@ -231,7 +231,7 @@ export function CompensationConfigCard({
               })}
             </p>
             {mode === 'hourly' || mode === 'per_session' ? (
-              <p className="text-muted">{t('teachers.estimateNeedsActivities')}</p>
+              <p className="text-muted">{t('teachers.payment.rateOnly')}</p>
             ) : (
               <p className={cn('font-semibold tabular-nums text-foreground')}>
                 {formatCurrency(estimate + bonusEstimate)}

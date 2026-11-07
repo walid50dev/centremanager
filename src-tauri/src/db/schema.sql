@@ -224,6 +224,8 @@ CREATE TABLE IF NOT EXISTS teacher_settlements (
     -- salary paid in October is still counted in September.
     month           INTEGER,
     year            INTEGER,
+    payment_date    TEXT,
+    school_year_id  INTEGER REFERENCES school_years(id),
     created_at      TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

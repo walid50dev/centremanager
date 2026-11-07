@@ -231,7 +231,7 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved, onCreated
           <Button variant="secondary" onClick={onClose} disabled={submitting}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void handleSubmit()} loading={submitting} disabled={!isValid}>
+          <Button onClick={() => void handleSubmit()} loading={submitting} disabled={submitting}>
             {t('common.save')}
           </Button>
         </>
@@ -239,6 +239,7 @@ export function TeacherModal({ open, teacher = null, onClose, onSaved, onCreated
     >
       <form
         className="grid gap-4 sm:grid-cols-2"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();

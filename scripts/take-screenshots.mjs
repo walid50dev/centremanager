@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const base = process.env.SCREENSHOT_BASE_URL || 'http://localhost:1420';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const output = path.join(root, 'screenshots');
+const output = process.env.SCREENSHOT_OUTPUT_DIR ? path.resolve(process.env.SCREENSHOT_OUTPUT_DIR) : path.join(root, 'screenshots');
 await mkdir(output, { recursive: true });
 const launch = { headless: true };
 if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) launch.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;

@@ -108,15 +108,10 @@ fn normalise_day(day: &str) -> Option<&'static str> {
 
 /// Clean, validated, de-duplicated slots in week order.
 ///
-/// Rejects an empty list (a group without any class makes no sense), an unknown
-/// weekday, a reversed or empty time range, and two slots on the same day — the
+/// Allows an empty list, but rejects an unknown weekday, a reversed or empty time range, and two slots on the same day — the
 /// last one because `UNIQUE(group_id, day_of_week)` would refuse it anyway, and a
 /// raw SQLite error would be a poor message.
 pub fn clean_schedules(schedules: &[ScheduleInput]) -> Result<Vec<GroupSchedule>, String> {
-    if schedules.is_empty() {
-        return Err("Au moins un jour de cours est requis".to_string());
-    }
-
     let mut cleaned: Vec<GroupSchedule> = Vec::with_capacity(schedules.len());
     for input in schedules {
         let day = normalise_day(&input.day_of_week)
@@ -445,8 +440,9 @@ pub fn schedules_from_payload(
     end_time: &str,
 ) -> Vec<ScheduleInput> {
     match schedules {
-        Some(list) if !list.is_empty() => list.to_vec(),
-        _ => vec![ScheduleInput {
+        Some(list) => list.to_vec(),
+        None if day_of_week.trim().is_empty() && start_time.trim().is_empty() && end_time.trim().is_empty() => vec![],
+        None => vec![ScheduleInput {
             day_of_week: day_of_week.to_string(),
             start_time: start_time.to_string(),
             end_time: end_time.to_string(),
@@ -536,6 +532,39 @@ mod tests {
     }
 
     #[test]
+    fn unscheduled_group_can_be_created_scheduled_and_cleared() {
+        let conn = test_conn();
+        let mut input = group_input("Lundi", "16:00", "18:00");
+        input.schedules = Some(vec![]); // Explicitly empty overrides the legacy triple.
+        input.room = None;
+        let id = create_group(&conn, &input).unwrap();
+        let group = get_group(&conn, id).unwrap();
+        assert!(group.schedules.is_empty());
+        assert_eq!(group.day_of_week, "");
+        assert!(!timetable(&conn, None).unwrap().iter().any(|entry| entry.group_id == id));
+
+        set_group_schedules(&conn, id, &slots(&[("Lundi", "04:00", "05:00")])).unwrap();
+        assert!(timetable(&conn, None).unwrap().iter().any(|entry| entry.group_id == id));
+        update_group(&conn, id, &input).unwrap();
+        let group = get_group(&conn, id).unwrap();
+        assert!(group.schedules.is_empty());
+        assert_eq!(group.day_of_week, "");
+        assert!(!timetable(&conn, None).unwrap().iter().any(|entry| entry.group_id == id));
+
+        set_group_schedules(&conn, id, &slots(&[("Mardi", "10:00", "12:00")])).unwrap();
+        assert!(set_group_schedules(&conn, id, &[]).unwrap().is_empty());
+        assert_eq!(get_group(&conn, id).unwrap().day_of_week, "");
+        let mut no_legacy = group_input("", "", "");
+        no_legacy.schedules = None;
+        let without_triple = create_group(&conn, &no_legacy).unwrap();
+        assert!(get_group(&conn, without_triple).unwrap().schedules.is_empty());
+        no_legacy.start_time = "04:00".to_string();
+        assert!(create_group(&conn, &no_legacy).is_err());
+        let legacy = create_group(&conn, &group_input("Lundi", "16:00", "18:00")).unwrap();
+        assert_eq!(get_group(&conn, legacy).unwrap().schedules.len(), 1);
+    }
+
+    #[test]
     fn a_group_can_meet_three_times_a_week() {
         let conn = test_conn();
         let id = create_group(&conn, &group_input("Lundi", "16:00", "18:00")).unwrap();
@@ -573,10 +602,6 @@ mod tests {
         let conn = test_conn();
         let id = create_group(&conn, &group_input("Lundi", "16:00", "18:00")).unwrap();
 
-        assert_eq!(
-            set_group_schedules(&conn, id, &[]).unwrap_err(),
-            "Au moins un jour de cours est requis"
-        );
         assert_eq!(
             set_group_schedules(&conn, id, &slots(&[("Lunedi", "16:00", "18:00")])).unwrap_err(),
             "Jour de la semaine invalide : Lunedi"

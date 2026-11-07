@@ -13,10 +13,10 @@
 //! - `payments`      — payment allocation, history, frozen receipts (Phase 5)
 //! - `teachers`      — teacher directory & payroll configuration (Phase 6)
 //! - `compensation`  — monthly payroll calculation & settlements (Phase 6)
-//! - `activities`    — hours/sessions log feeding the hourly modes (Phase 6)
 //! - `dashboard`     — read-only home page aggregates (Phase 7)
 //! - `expenses`      — monthly charges, totals & editable categories (Phase 11)
 
+#[cfg(test)]
 pub mod activities;
 pub mod auth;
 pub mod backup;
@@ -40,6 +40,7 @@ pub mod settings;
 pub mod students;
 pub mod subjects;
 pub mod teachers;
+pub mod teacher_payments;
 pub mod trash;
 pub mod year_import;
 pub mod year_export;

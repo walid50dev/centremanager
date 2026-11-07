@@ -21,6 +21,8 @@ try {
   assert.ok(result.every(x => x.laneCount === 5));
   result = assignTimetableLanes([slot(1, '08:00', '17:00'), slot(2, '09:00', '10:00'), slot(3, '10:00', '11:00'), slot(4, '10:30', '12:00')]);
   assert.deepEqual(result.map(x => [x.laneIndex, x.laneCount]), [[0, 3], [1, 3], [1, 3], [2, 3]]);
+  result = assignTimetableLanes([slot(1, '18:15', '19:30'), slot(2, '19:30', '21:30'), slot(3, '20:45', '21:00')]);
+  assert.deepEqual(result.map(x => [x.entry.group_id, x.laneIndex, x.laneCount]), [[1, 0, 1], [2, 0, 2], [3, 1, 2]], 'quarter-hour boundaries and overlap');
   // For every pair of overlapping intervals, assert the lanes differ; no input is lost.
   let seed = 12345;
   const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

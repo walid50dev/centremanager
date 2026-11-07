@@ -28,6 +28,7 @@ export function CenterSection({ settings, updateLocal }: CenterSectionProps) {
   const [phone, setPhone] = useState('');
   const [logo, setLogo] = useState('');
   const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState(false);
 
   // Re-hydrate whenever the persisted settings change (first load / save).
   useEffect(() => { setName(settings.centre_name || settings.center_name || 'CentreManager'); }, [settings.centre_name, settings.center_name]);
@@ -37,10 +38,11 @@ export function CenterSection({ settings, updateLocal }: CenterSectionProps) {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast.error(t('settings.center.nameRequired'));
+      setNameError(true);
       return;
     }
 
+    setNameError(false);
     setSaving(true);
     try {
       await settingsApi.setCentreInfo(name.trim(), logo || null);
@@ -120,14 +122,15 @@ export function CenterSection({ settings, updateLocal }: CenterSectionProps) {
           label={t('settings.centre_name')}
           required
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          error={nameError && !name.trim() ? t('settings.center.nameRequired') : undefined}
+          onChange={(event) => { setName(event.target.value); setNameError(false); }}
           placeholder={t('setup.centerNamePlaceholder')}
         />
         <Input
           label={t('settings.center.phone')}
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
-          placeholder="+212 5 22 00 00 00"
+          placeholder="05 22 00 00 00"
           type="tel"
         />
         <Input
@@ -135,7 +138,7 @@ export function CenterSection({ settings, updateLocal }: CenterSectionProps) {
           label={t('settings.center.address')}
           value={address}
           onChange={(event) => setAddress(event.target.value)}
-          placeholder="12 rue des Écoles, Casablanca"
+          placeholder="12 rue des Écoles"
         />
       </div>
 

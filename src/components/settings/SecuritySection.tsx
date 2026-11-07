@@ -63,7 +63,8 @@ export function SecuritySection() {
     const nextErrors: typeof fieldErrors = {};
     if (!oldPassword) nextErrors.oldPassword = t('settings.security.required');
     if (newPassword.length < 4) nextErrors.newPassword = t('settings.security.tooShort');
-    if (confirmPassword !== newPassword) {
+    if (!confirmPassword) nextErrors.confirmPassword = t('common.required');
+    else if (confirmPassword !== newPassword) {
       nextErrors.confirmPassword = t('settings.security.mismatch');
     }
     setFieldErrors(nextErrors);
@@ -134,6 +135,7 @@ export function SecuritySection() {
       >
         <form
           className="flex flex-col gap-4"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void handleChangePassword();
@@ -142,6 +144,7 @@ export function SecuritySection() {
           <Input
             type="password"
             label={t('settings.security.oldPassword')}
+            required
             autoFocus
             autoComplete="current-password"
             value={oldPassword}
@@ -155,6 +158,7 @@ export function SecuritySection() {
           <Input
             type="password"
             label={t('settings.security.newPassword')}
+            required
             hint={t('settings.security.tooShort')}
             autoComplete="new-password"
             value={newPassword}
@@ -168,6 +172,7 @@ export function SecuritySection() {
           <Input
             type="password"
             label={t('settings.security.confirmPassword')}
+            required
             autoComplete="new-password"
             value={confirmPassword}
             onChange={(event) => {

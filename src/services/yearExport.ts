@@ -19,7 +19,7 @@ export const EXPORT_COLUMNS: Record<ExportSection, string[]> = {
   teachers: ['id', 'full_name', 'phone', 'email', 'status'],
   payments: ['id', 'student', 'invoice_id', 'invoice_kind', 'amount_cents', 'payment_method', 'notes', 'created_at'],
   expenses: ['id', 'label', 'amount_cents', 'category', 'month', 'year', 'notes', 'created_at'],
-  salaries: ['id', 'teacher', 'month', 'year', 'amount_cents', 'payment_method', 'notes', 'created_at'],
+  salaries: ['id', 'teacher', 'month', 'year', 'amount_cents', 'payment_method', 'notes', 'payment_date', 'created_at'],
 };
 export async function downloadExcel(yearId: number, label: string, section: ExportSection) {
   const [rows, xlsx] = await Promise.all([yearExportApi.data(yearId, section), import('xlsx')]);

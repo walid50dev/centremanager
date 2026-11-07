@@ -29,7 +29,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
       {label && (
         <label htmlFor={selectId} className="mb-1.5 block text-label text-muted">
           {label}
-          {required && <span className="ms-0.5 text-destructive">*</span>}
+          {required && <span className="ms-0.5 text-red-500" aria-hidden="true">*</span>}
         </label>
       )}
       <div className="relative">
@@ -38,6 +38,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
           id={selectId}
           required={required}
           aria-invalid={!!error}
+          aria-describedby={error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined}
           className={cn(
             'h-9 w-full appearance-none rounded-md border bg-white px-3 pe-9 text-body text-foreground',
             'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20',
@@ -61,9 +62,9 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
         />
       </div>
       {error ? (
-        <p className="mt-1 text-[13px] text-destructive">{error}</p>
+        <p id={`${selectId}-error`} className="mt-1 text-[13px] text-destructive">{error}</p>
       ) : hint ? (
-        <p className="mt-1 text-[13px] text-muted">{hint}</p>
+        <p id={`${selectId}-hint`} className="mt-1 text-[13px] text-muted">{hint}</p>
       ) : null}
     </div>
   );

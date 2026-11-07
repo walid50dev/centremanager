@@ -23,12 +23,9 @@ import type {
   StudentInvoice,
   Subject,
   TimetableEntry,
-  Activity,
-  CompensationDetail,
   CompensationMode,
-  Settlement,
+  TeacherPayment,
   Teacher,
-  TeacherCompSummary,
   TeacherDetail,
   TeacherGroup,
   AlertItem,
@@ -180,6 +177,8 @@ interface DevSettlement {
   month: number;
   year: number;
   created_at: string;
+  payment_date?: string | null;
+  school_year_id?: number | null;
 }
 
 /** Enrollments are stored raw, like the SQL table. */
@@ -631,13 +630,7 @@ function seedGroups(
   };
 }
 
-/**
- * Two teachers with different payroll configurations, plus a couple of
- * activities and one settlement so every Phase 6 screen has content:
- *
- * * teacher 1 — `percentage` 40 % + 5 % recruitment bonus
- * * teacher 2 — `hourly` 80 DH, no bonus, 3 h already logged this month
- */
+/** Two sample teachers and one manually recorded payment. */
 function seedTeachers(): Pick<
   DevStore,
   'teachers' | 'teacherActivities' | 'teacherSettlements' | 'nextTeacherId' | 'nextActivityId' | 'nextSettlementId'
@@ -679,26 +672,7 @@ function seedTeachers(): Pick<
     },
   ];
 
-  const teacherActivities: DevActivity[] = [
-    {
-      id: 1,
-      teacher_id: 2,
-      activity_date: day(3),
-      activity_type: 'cours',
-      hours: 2,
-      sessions: 1,
-      notes: 'Salle 2',
-    },
-    {
-      id: 2,
-      teacher_id: 2,
-      activity_date: day(10),
-      activity_type: 'rattrapage',
-      hours: 1,
-      sessions: null,
-      notes: null,
-    },
-  ];
+  const teacherActivities: DevActivity[] = [];
 
   const teacherSettlements: DevSettlement[] = [
     {
@@ -709,6 +683,8 @@ function seedTeachers(): Pick<
       notes: 'Acompte',
       month,
       year,
+      payment_date: day(10),
+      school_year_id: 1,
       created_at: stamp,
     },
   ];
@@ -1010,13 +986,11 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 /**
  * Validate a week of slots (mirror of `clean_schedules` in `schedules.rs`):
- * at least one day, known weekday, `end > start`, no duplicate day. The result
+ * known weekday, `end > start`, no duplicate day; an empty week is allowed. The result
  * is sorted Monday-first, which is what the backend stores.
  */
 function cleanSchedules(raw: Array<Record<string, unknown>>): GroupSchedule[] {
   const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-
-  if (raw.length === 0) throw new Error('Au moins un jour de cours est requis');
 
   const cleaned: GroupSchedule[] = [];
   raw.forEach((entry) => {
@@ -1078,20 +1052,16 @@ function validateGroupInput(store: DevStore, input: Record<string, unknown>): Gr
   }
 
   // Phase 13: the form sends the whole week, older callers send one slot.
-  const rawSchedules = Array.isArray(input.schedules) && input.schedules.length > 0
+  const rawSchedules = Array.isArray(input.schedules)
     ? (input.schedules as Array<Record<string, unknown>>)
-    : [
-        {
-          day_of_week: input.day_of_week,
-          start_time: input.start_time,
-          end_time: input.end_time,
-        },
-      ];
+    : !text(input.day_of_week) && !text(input.start_time) && !text(input.end_time)
+      ? []
+      : [{ day_of_week: input.day_of_week, start_time: input.start_time, end_time: input.end_time }];
   const schedules = cleanSchedules(rawSchedules);
   const first = schedules[0];
-  const day_of_week = first.day_of_week;
-  const start_time = first.start_time;
-  const end_time = first.end_time;
+  const day_of_week = first?.day_of_week ?? '';
+  const start_time = first?.start_time ?? '';
+  const end_time = first?.end_time ?? '';
 
   const monthly_fee_cents = number(input.monthly_fee_cents);
   if (!Number.isFinite(monthly_fee_cents) || monthly_fee_cents <= 0) {
@@ -1265,11 +1235,16 @@ function invoiceStatus(paid: number, amount: number): string {
   return 'impayé';
 }
 
+function devGroupName(store: DevStore, group: Group): string {
+  return [store.subjects.find(subject => subject.id === group.subject_id)?.name,
+    store.levels.find(level => level.id === group.level_id)?.name].filter(Boolean).join(' ');
+}
+
 function devGroupLabel(store: DevStore, invoice: DevInvoice): string {
   const enrollment = store.enrollments.find((entry) => entry.id === invoice.enrollment_id);
   const group = store.groups.find((entry) => entry.id === enrollment?.group_id);
   if (!group) return '—';
-  return `${group.subject_name} ${group.level_name}`.trim();
+  return devGroupName(store, group) || '—';
 }
 
 /** Joined, newest-first invoice list of one student. */
@@ -1319,7 +1294,9 @@ function devAlerts(store: DevStore, month: number, year: number): PaymentAlerts 
     const group = store.groups.find(entry => entry.id === enrollment?.group_id);
     if (!student || student.deleted_at || (!invoice.fee_student_id && (!group || group.deleted_at))) continue;
 
-    const label = devGroupLabel(store, invoice);
+    // Annual enrollment-fee invoices do not refer to a specific group.
+    // Do not let their display dash mask a real group label or the fallback.
+    const label = group ? devGroupName(store, group) : '';
     const current = byStudent.get(student.id) ?? {
       student_id: student.id,
       student_name: student.full_name,
@@ -1354,6 +1331,16 @@ function devAlerts(store: DevStore, month: number, year: number): PaymentAlerts 
   const current: InvoiceAlert[] = [];
 
   for (const entry of byStudent.values()) {
+    if (!entry.groups) {
+      const activeYear = store.schoolYears.find(year => year.is_active)?.id;
+      const labels = store.enrollments
+        .filter(enrollment => enrollment.student_id === entry.student_id && enrollment.status === 'actif')
+        .map(enrollment => store.groups.find(group => group.id === enrollment.group_id && group.school_year_id === activeYear && !group.deleted_at))
+        .filter((group): group is Group => !!group)
+        .map(group => devGroupName(store, group))
+        .filter(Boolean);
+      entry.groups = [...new Set(labels)].sort().join(', ');
+    }
     const lastPayment = store.payments
       .filter((payment) => {
         if (payment.student_id !== entry.student_id || payment.invoice_id === null) return false;
@@ -1661,13 +1648,6 @@ function devReceiptData(store: DevStore, receiptId: number): ReceiptData {
 
 const TEACHER_MODES = ['fixed_monthly', 'hourly', 'per_session', 'percentage'] as const;
 
-const money = (cents: number) => `${(cents / 100).toFixed(2)} DH`;
-const num = (value: number) => {
-  const rounded = Math.round(value * 100) / 100;
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
-};
-const pct = (value: number) => num(value / 100);
-
 function teacherRow(store: DevStore, teacher: DevTeacher): Teacher {
   const subjects = teacher.subject_ids
     .map((id) => store.subjects.find((subject) => subject.id === id)?.name)
@@ -1781,125 +1761,6 @@ function validatePeriod(month: number, year: number): void {
   if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new Error('Année invalide');
 }
 
-const periodPrefix = (month: number, year: number) =>
-  `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
-
-function settledTotal(store: DevStore, teacherId: number, month: number, year: number): number {
-  return store.teacherSettlements
-    .filter((row) => row.teacher_id === teacherId && row.month === month && row.year === year)
-    .reduce((sum, row) => sum + row.amount_cents, 0);
-}
-
-function compensationStatus(total: number, settled: number): string {
-  if (total > 0 && settled >= total) return 'settled';
-  if (settled > 0) return 'partial';
-  return 'pending';
-}
-
-/** Mirrors `commands::compensation::calculate_compensation`. */
-function calculateCompensation(
-  store: DevStore,
-  teacherId: number,
-  month: number,
-  year: number,
-): CompensationDetail {
-  validatePeriod(month, year);
-  const teacher = findTeacher(store, teacherId);
-  const config = compensationConfig(teacher);
-  if (!config) throw new Error('Compensation non configurée');
-
-  const groups = teacherGroups(store, teacherId);
-  const theoretical = groups.reduce(
-    (sum, group) => sum + group.monthly_fee_cents * group.enrolled_count,
-    0,
-  );
-
-  const monthActivities = store.teacherActivities.filter(
-    (activity) =>
-      activity.teacher_id === teacherId &&
-      activity.activity_date.startsWith(periodPrefix(month, year)),
-  );
-  const hours = monthActivities.reduce((sum, activity) => sum + (activity.hours ?? 0), 0);
-  const sessions = monthActivities.reduce((sum, activity) => sum + (activity.sessions ?? 0), 0);
-
-  const detailLines: string[] = [];
-  let base = 0;
-  let reportedHours: number | null = null;
-  let reportedSessions: number | null = null;
-
-  switch (config.mode) {
-    case 'fixed_monthly': {
-      base = config.value_cents;
-      detailLines.push(`Montant fixe : ${money(base)}`);
-      break;
-    }
-    case 'hourly': {
-      base = Math.round(hours * config.value_cents);
-      reportedHours = hours;
-      detailLines.push(`${num(hours)} heures × ${money(config.value_cents)} / heure = ${money(base)}`);
-      break;
-    }
-    case 'per_session': {
-      base = config.value_cents * sessions;
-      reportedSessions = sessions;
-      detailLines.push(`${sessions} séances × ${money(config.value_cents)} / séance = ${money(base)}`);
-      break;
-    }
-    case 'percentage': {
-      for (const group of groups) {
-        const total = group.monthly_fee_cents * group.enrolled_count;
-        detailLines.push(
-          `${group.subject_name} — ${group.level_name}${group.branch_name ? ` · ${group.branch_name}` : ''} : ` +
-            `${group.enrolled_count} élèves × ${money(group.monthly_fee_cents)} = ${money(total)}`,
-        );
-      }
-      detailLines.push(`Total théorique : ${money(theoretical)}`);
-      base = Math.round((theoretical * (config.value_cents / 100)) / 100);
-      detailLines.push(`Montant principal (${pct(config.value_cents)}%) : ${money(base)}`);
-      break;
-    }
-    default:
-      throw new Error('Mode de compensation invalide');
-  }
-
-  let bonus = 0;
-  if (config.bonus_pct && config.bonus_pct > 0) {
-    bonus = Math.round((theoretical * config.bonus_pct) / 100);
-    detailLines.push(
-      `Bonus recrutement : ${money(theoretical)} × ${num(config.bonus_pct)}% = ${money(bonus)}`,
-    );
-  }
-
-  const total = base + bonus;
-  const alreadySettled = settledTotal(store, teacherId, month, year);
-
-  return {
-    teacher_name: teacher.full_name,
-    mode: config.mode,
-    base_amount_cents: base,
-    bonus_amount_cents: bonus,
-    total_cents: total,
-    detail_lines: detailLines,
-    already_settled_cents: alreadySettled,
-    remaining_cents: total - alreadySettled,
-    groups: groups.map((group) => ({
-      group_id: group.group_id,
-      subject_name: group.subject_name,
-      level_name: group.level_name,
-      branch_name: group.branch_name,
-      enrolled_count: group.enrolled_count,
-      monthly_fee_cents: group.monthly_fee_cents,
-      total_cents: group.monthly_fee_cents * group.enrolled_count,
-    })),
-    theoretical_cents: theoretical,
-    value_cents: config.value_cents,
-    bonus_pct: config.bonus_pct,
-    hours: reportedHours,
-    sessions: reportedSessions,
-  };
-}
-
-/** Execute a command against the local development store. */
 /**
  * Phase 7 — the browser stand-in for `commands/dashboard.rs`.
  *
@@ -1973,11 +1834,11 @@ function devExpensesTotal(store: DevStore, month: number, year: number): number 
     .reduce((sum, row) => sum + row.amount_cents, 0);
 }
 
-/** Payroll of one month: every active teacher with a configuration. */
+/** Actual teacher payments for the month in the active academic year. */
 function devPayrollTotal(store: DevStore, month: number, year: number): number {
-  return store.teachers
-    .filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && teacher.status === 'actif' && compensationConfig(teacher))
-    .reduce((sum, teacher) => sum + calculateCompensation(store, teacher.id, month, year).total_cents, 0);
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  return store.teacherSettlements.filter(row => teacherPaymentYear(store, row) === activeYearId(store) && (row.payment_date ?? row.created_at ?? '').startsWith(prefix))
+    .reduce((sum, row) => sum + row.amount_cents, 0);
 }
 
 /** Dev mirror of `expenses::categories_from_json` (defaults when unusable). */
@@ -2150,7 +2011,7 @@ function devRemovePermanent(store: DevStore, type: TrashEntityType, id: number):
       const matches = store.schoolYears.filter(y => y.start_date && y.end_date && value >= (month ? y.start_date.slice(0,7) : y.start_date) && value <= (month ? y.end_date.slice(0,7) : y.end_date));
       return matches.length === 1 && matches[0].id === year;
     };
-    store.teacherSettlements = store.teacherSettlements.filter(s => s.teacher_id !== id || !s.year || !s.month || !belongsOnlyToYear(`${s.year}-${String(s.month).padStart(2,'0')}-01`,true));
+    store.teacherSettlements = store.teacherSettlements.filter(s => s.teacher_id !== id || teacherPaymentYear(store, s) !== year);
     store.teacherActivities = store.teacherActivities.filter(a => a.teacher_id !== id || !a.activity_date || !belongsOnlyToYear(a.activity_date));
     store.groups.forEach(group => { if (group.teacher_id === id && group.school_year_id === year) { group.teacher_id = null; group.teacher_name = null; } });
     store.teacherYears![id] = (store.teacherYears![id] ?? []).filter(y => y !== year);
@@ -2229,6 +2090,16 @@ function studentInYear(store: DevStore, id: number, year: number | null = active
 function teacherInYear(store: DevStore, id: number, year: number | null = activeYearId(store)): boolean {
   return year !== null && !store.teacherYearTrash?.[`${id}:${year}`] && ((store.teacherYears?.[id]?.includes(year) ?? false) || store.groups.some(group => !group.deleted_at && group.teacher_id === id && group.school_year_id === year));
 }
+
+/** Explicit ownership for new payments; legacy periods are only used when unambiguous. */
+function teacherPaymentYear(store: DevStore, row: DevSettlement): number | null {
+  if (row.school_year_id != null) return row.school_year_id;
+  if (!row.year || !row.month) return null;
+  const period = `${row.year}-${String(row.month).padStart(2, '0')}`;
+  const matches = store.schoolYears.filter(y => y.start_date && y.end_date && period >= y.start_date.slice(0, 7) && period <= y.end_date.slice(0, 7));
+  return matches.length === 1 ? matches[0].id : null;
+}
+
 function invoiceInActiveYear(store: DevStore, id: number | null): boolean {
   const invoice = store.invoices.find(row => row.id === id);
   if (invoice?.fee_school_year_id != null) return invoice.fee_school_year_id === activeYearId(store);
@@ -2416,7 +2287,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         const matches = store.schoolYears.filter(y => y.start_date && y.end_date && value >= (month ? y.start_date.slice(0, 7) : y.start_date) && value <= (month ? y.end_date.slice(0, 7) : y.end_date));
         return matches.length === 1 && matches[0].id === id;
       };
-      store.teacherSettlements = store.teacherSettlements.filter(s => !s.year || !s.month || !belongsOnlyToYear(`${s.year}-${String(s.month).padStart(2, '0')}-01`, true));
+      store.teacherSettlements = store.teacherSettlements.filter(s => teacherPaymentYear(store, s) !== id);
       store.teacherActivities = store.teacherActivities.filter(a => !a.activity_date || !belongsOnlyToYear(a.activity_date));
       removePayments(store, new Set(store.payments.filter(p => p.school_year_id === id).map(p => p.id)));
       for (const group of [...store.groups]) if (group.school_year_id === id) removeGroup(store,group.id);
@@ -2499,10 +2370,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const payments = store.payments.filter(row => row.school_year_id === yearId);
       if ((cmd === 'cmd_export_year_summary' || asString(args, 'section') === 'payments') && store.payments.some(row => row.school_year_id == null)) throw new Error('Export impossible : paiement(s) historique(s) sans année scolaire identifiable');
       const expenses = store.expenses.filter(row => !row.deleted_at && store.expenseYears?.[row.id] === yearId);
-      const salaries = store.teacherSettlements.filter(row => {
-        const period = `${row.year}-${String(row.month).padStart(2, '0')}`;
-        return !!schoolYear.start_date && !!schoolYear.end_date && period >= schoolYear.start_date.slice(0, 7) && period <= schoolYear.end_date.slice(0, 7);
-      });
+      const salaries = store.teacherSettlements.filter(row => teacherPaymentYear(store, row) === yearId);
       const students = store.students.filter(row => !row.deleted_at && studentInYear(store, row.id, yearId));
       const teachers = store.teachers.filter(row => !row.deleted_at && teacherInYear(store, row.id, yearId));
       if (cmd === 'cmd_export_year_summary') {
@@ -2526,7 +2394,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         case 'teachers': rows = teachers.map(t => ({id:t.id,full_name:t.full_name,phone:t.phone,email:t.email,status:t.status})); break;
         case 'payments': rows = payments.map(p => ({id:p.id,student:store.students.find(s => s.id === p.student_id)?.full_name,invoice_id:p.invoice_id,invoice_kind:store.invoices.find(i => i.id === p.invoice_id)?.fee_student_id ? 'enrollment_fee' : p.invoice_id === null ? 'advance' : 'invoice',amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
         case 'expenses': rows = expenses.map(e => ({id:e.id,label:e.label,amount_cents:e.amount_cents,category:e.category,month:e.month,year:e.year,notes:e.notes,created_at:e.created_at})); break;
-        case 'salaries': rows = salaries.map(p => ({id:p.id,teacher:store.teachers.find(t => t.id === p.teacher_id)?.full_name,month:p.month,year:p.year,amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
+        case 'salaries': rows = salaries.map(p => ({id:p.id,teacher:store.teachers.find(t => t.id === p.teacher_id)?.full_name,month:p.month,year:p.year,amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,payment_date:p.payment_date ?? p.created_at.slice(0,10),created_at:p.created_at})); break;
         default: throw new Error("Section d'export invalide");
       }
       return rows.map(row => Object.fromEntries(Object.entries(row).map(([key,value]) => [key, value == null ? '' : String(value)])));
@@ -2966,9 +2834,9 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       // The legacy columns follow the first slot, exactly like `sync_legacy_columns`.
       raw.schedules = schedules;
       raw.schedule_text = scheduleText(schedules);
-      raw.day_of_week = schedules[0].day_of_week;
-      raw.start_time = schedules[0].start_time;
-      raw.end_time = schedules[0].end_time;
+      raw.day_of_week = schedules[0]?.day_of_week ?? '';
+      raw.start_time = schedules[0]?.start_time ?? '';
+      raw.end_time = schedules[0]?.end_time ?? '';
       save(store);
       return clone(schedules);
     }
@@ -3187,188 +3055,33 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return undefined;
     }
 
-    case 'cmd_calculate_compensation':
-      return clone(
-        calculateCompensation(store, asNumber(args, 'teacherId'), asNumber(args, 'month'), asNumber(args, 'year')),
-      );
-
-    case 'cmd_record_settlement': {
+    case 'cmd_create_teacher_payment': {
       const teacherId = asNumber(args, 'teacherId');
-      const month = asNumber(args, 'month');
-      const year = asNumber(args, 'year');
-      const amountCents = asNumber(args, 'amountCents');
+      const amount = asNumber(args, 'amountCents');
+      const paymentDate = asString(args, 'paymentDate').trim();
       const method = asString(args, 'method').trim();
       const notes = typeof args?.notes === 'string' && args.notes.trim() ? args.notes.trim() : null;
-
-      validatePeriod(month, year);
-      if (!(amountCents > 0)) throw new Error('Le montant doit être supérieur à 0');
-      if (!method) throw new Error('Le mode de paiement est obligatoire');
-
-      const detail = calculateCompensation(store, teacherId, month, year);
+      findTeacher(store, teacherId);
+      const active = activeYearId(store);
+      if (active === null) throw new Error('Aucune année scolaire active');
+      if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Le montant doit être supérieur à 0');
+      const parsed = new Date(`${paymentDate}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0,10) !== paymentDate) throw new Error('Date invalide');
+      if (!['espèces', 'virement', 'chèque'].includes(method)) throw new Error('Mode de paiement invalide');
       const id = store.nextSettlementId++;
-      store.teacherSettlements.push({
-        id,
-        teacher_id: teacherId,
-        amount_cents: amountCents,
-        payment_method: method,
-        notes,
-        month,
-        year,
-        created_at: nowTimestamp(),
-      });
-
-      const settled = settledTotal(store, teacherId, month, year);
-      logAudit(
-        store,
-        'SETTLEMENT',
-        teacherId,
-        JSON.stringify({
-          settlement_id: id,
-          month,
-          year,
-          amount_cents: amountCents,
-          method,
-          total_cents: detail.total_cents,
-          settled_cents: settled,
-          status: compensationStatus(detail.total_cents, settled),
-        }),
-        'teacher',
-      );
+      store.teacherSettlements.push({ id, teacher_id:teacherId, amount_cents:amount, payment_method:method, notes, month:Number(paymentDate.slice(5,7)), year:Number(paymentDate.slice(0,4)), payment_date:paymentDate, school_year_id:active, created_at:nowTimestamp() });
+      logAudit(store, 'SETTLEMENT', teacherId, JSON.stringify({ settlement_id:id, amount_cents:amount, payment_date:paymentDate, school_year_id:active, method }), 'teacher');
       save(store);
       return id;
     }
-
-    case 'cmd_get_teacher_settlements': {
+    case 'cmd_list_teacher_payments':
+    case 'cmd_list_unattributed_teacher_payments': {
       const teacherId = asNumber(args, 'teacherId');
-      const month = args?.month === null || args?.month === undefined ? null : asNumber(args, 'month');
-      const year = args?.year === null || args?.year === undefined ? null : asNumber(args, 'year');
       findTeacher(store, teacherId);
-      return clone(
-        store.teacherSettlements
-          .filter(
-            (row) =>
-              row.teacher_id === teacherId &&
-              (month === null || row.month === month) &&
-              (year === null || row.year === year),
-          )
-          .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
-          .map<Settlement>((row) => ({
-            id: row.id,
-            amount_cents: row.amount_cents,
-            payment_method: row.payment_method,
-            notes: row.notes,
-            created_at: row.created_at,
-          })),
-      );
-    }
-
-    case 'cmd_get_all_teacher_compensation_summary': {
-      const month = asNumber(args, 'month');
-      const year = asNumber(args, 'year');
-      validatePeriod(month, year);
-
-      const summaries: TeacherCompSummary[] = store.teachers
-        .filter((teacher) => !teacher.deleted_at && teacherInYear(store, teacher.id) && teacher.status === 'actif')
-        .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr'))
-        .map((teacher) => {
-          if (!compensationConfig(teacher)) {
-            return {
-              teacher_id: teacher.id,
-              teacher_name: teacher.full_name,
-              mode: '',
-              total_due_cents: 0,
-              total_settled_cents: 0,
-              remaining_cents: 0,
-              status: 'not_configured' as TeacherCompSummary['status'],
-            };
-          }
-          const detail = calculateCompensation(store, teacher.id, month, year);
-          const settled = settledTotal(store, teacher.id, month, year);
-          return {
-            teacher_id: teacher.id,
-            teacher_name: teacher.full_name,
-            mode: detail.mode,
-            total_due_cents: detail.total_cents,
-            total_settled_cents: settled,
-            remaining_cents: detail.total_cents - settled,
-            status: compensationStatus(detail.total_cents, settled) as TeacherCompSummary['status'],
-          };
-        });
-      return clone(summaries);
-    }
-
-    // -- Activities (Phase 6) ---------------------------------------------
-    case 'cmd_record_activity': {
-      const teacherId = asNumber(args, 'teacherId');
-      const activityDate = asString(args, 'activityDate').trim();
-      const activityType = asString(args, 'activityType').trim();
-      const rawHours = args?.hours;
-      const rawSessions = args?.sessions;
-      const hours = typeof rawHours === 'number' && rawHours > 0 ? rawHours : null;
-      const sessions = typeof rawSessions === 'number' && rawSessions > 0 ? rawSessions : null;
-      const notes = typeof args?.notes === 'string' && args.notes.trim() ? args.notes.trim() : null;
-
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(activityDate)) {
-        throw new Error('Date invalide (format attendu AAAA-MM-JJ)');
-      }
-      if (!['cours', 'rattrapage', 'examen', 'autre'].includes(activityType)) {
-        throw new Error("Type d'activité invalide (cours, rattrapage, examen, autre)");
-      }
-      if (hours === null && sessions === null) {
-        throw new Error('Indiquez au moins des heures ou des séances');
-      }
-      findTeacher(store, teacherId);
-
-      const id = store.nextActivityId++;
-      store.teacherActivities.push({
-        id,
-        teacher_id: teacherId,
-        activity_date: activityDate,
-        activity_type: activityType,
-        hours,
-        sessions,
-        notes,
-      });
-      logAudit(
-        store,
-        'ACTIVITY',
-        teacherId,
-        JSON.stringify({
-          activity_id: id,
-          activity_date: activityDate,
-          activity_type: activityType,
-          hours,
-          sessions,
-        }),
-        'teacher',
-      );
-      save(store);
-      return id;
-    }
-
-    case 'cmd_get_activities': {
-      const teacherId = asNumber(args, 'teacherId');
-      const month = args?.month === null || args?.month === undefined ? null : asNumber(args, 'month');
-      const year = args?.year === null || args?.year === undefined ? null : asNumber(args, 'year');
-      if (month !== null || year !== null) validatePeriod(month ?? 1, year ?? 2000);
-      const prefix = month !== null && year !== null ? periodPrefix(month, year) : null;
-      return clone(
-        store.teacherActivities
-          .filter(
-            (row) =>
-              row.teacher_id === teacherId &&
-              (prefix === null || row.activity_date.startsWith(prefix)),
-          )
-          .sort((a, b) => b.activity_date.localeCompare(a.activity_date) || b.id - a.id)
-          .map<Activity>((row) => ({
-            id: row.id,
-            activity_date: row.activity_date,
-            activity_type: row.activity_type as Activity['activity_type'],
-            hours: row.hours,
-            sessions: row.sessions,
-            notes: row.notes,
-          })),
-      );
+      const year = cmd === 'cmd_list_teacher_payments' ? activeYearId(store) : null;
+      return clone(store.teacherSettlements.filter(row => row.teacher_id === teacherId && teacherPaymentYear(store, row) === year)
+        .map<TeacherPayment>(row => ({ id:row.id, amount_cents:row.amount_cents, payment_date:row.payment_date ?? row.created_at?.slice(0,10) ?? '', payment_method:row.payment_method, notes:row.notes, created_at:row.created_at }))
+        .sort((a,b) => b.payment_date.localeCompare(a.payment_date) || b.id-a.id));
     }
 
     // -- Enrollments (Phase 4) --------------------------------------------

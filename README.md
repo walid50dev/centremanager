@@ -696,172 +696,41 @@ delete action anywhere.
 
 ---
 
-## Teachers & compensation (Phase 6)
+## Teachers, estimates and manual payments
 
-A teacher is a first-class record: identity, subjects, the groups they run, the
-activities they declare, and **one payroll configuration** — a main mode plus an
-optional recruitment bonus, both cumulative. The percentage mode is paid on the
-**theoretical** revenue of the teacher's groups (`tarif × inscrits`), never on
-what the families actually paid: a month with zero cash collected still owes the
-teacher their share.
+The teacher directory and profile are scoped to the active academic year. The
+profile has information, groups and payments tabs. There is no activity log.
+Existing activity data is retained in the database for historical compatibility.
 
-| Teachers grid (real window) | Teacher sheet · Informations |
-| --- | --- |
-| ![Teachers](docs/screenshots/tauri-teachers-01-grid.png) | ![Info](docs/screenshots/tauri-teachers-02-info.png) |
+### Compensation estimates
 
-| Compensation configuration | Groups & theoretical total |
-| --- | --- |
-| ![Config](docs/screenshots/tauri-teachers-03-config.png) | ![Groups](docs/screenshots/tauri-teachers-04-groups.png) |
+The teacher's configuration remains on the information tab. Fixed monthly
+amounts and percentages (including an optional bonus based on current groups'
+theoretical revenue) are indicative estimates, not amounts automatically owed
+or paid. Historical hourly and per-session configurations remain editable as
+rates, but there is no automatic amount derived from an activity journal.
 
-| Activities of the month | Payroll detail (percentage + bonus) |
-| --- | --- |
-| ![Activities](docs/screenshots/tauri-teachers-06-activities.png) | ![Payroll](docs/screenshots/tauri-teachers-07-compensation.png) |
+### Manual payments
 
-| Partially settled | Fully settled |
-| --- | --- |
-| ![Partial](docs/screenshots/tauri-teachers-08-settlement-partial.png) | ![Settled](docs/screenshots/tauri-teachers-09-settlement-settled.png) |
+From either the teacher's Payments tab or Payments → teacher payments, choose
+**Enregistrer un paiement**. The single form asks for a positive amount, payment
+date, method (cash, transfer or cheque) and an optional note. It works even when
+no compensation is configured. The profile lists each payment's date, amount,
+method and note and shows the active-year total. Like the previous settlement
+flow, payment rows are immutable and are not deleted from the UI.
 
-| Payments → Règlements enseignants | Arabic / RTL payroll |
-| --- | --- |
-| ![Payments tab](docs/screenshots/tauri-teachers-10-payments.png) | ![AR payroll](docs/screenshots/tauri-teachers-12-arabic-compensation.png) |
+New payments carry an explicit active-school-year owner, independent of the
+payment date. Legacy settlements remain unchanged and are shown in the year
+identified by their payroll period only when the match is unique. Ambiguous or
+undated historical rows are available separately on the teacher profile and are
+excluded from yearly totals rather than assigned by guesswork. Year exports and
+year deletion use the same ownership rules. The dashboard net result deducts
+actual teacher payments by payment date, not compensation estimates.
 
-### Compensation model
-
-| Concept | Rule |
-| --- | --- |
-| Main mode | exactly one of `fixed_monthly` (a flat amount), `hourly` (`rate × hours` of the month's activities), `per_session` (`rate × séances` of the month's activities), `percentage` (`pct × theoretical revenue` of the teacher's groups) |
-| Bonus | optional `bonus_pct`, computed on the **same theoretical total** and **added on top** of the main amount — never instead of it, never on the remaining |
-| Where the rates live | on the teacher (`teachers.compensation_mode`, `compensation_value_cents`, `bonus_pct`) — the configuration is *per teacher*, it is not copied per month |
-| When it is computed | every time the payroll of a month is opened: `cmd_calculate_compensation(teacher_id, month, year)` reads the **current** groups, fees, enrollments and activities |
-| Percentage basis | `Σ (groups.monthly_fee_cents × active enrollments)` — invoices and payments are **not** consulted at all |
-| Unconfigured teacher | `Non configuré` everywhere, zero amounts in the monthly summary, `Régler` disabled — the payroll tab links straight to the configuration card |
-
-The proof used in the desktop run: two groups (350.00 DH + 300.00 DH, one
-student each, **0.00 DH collected**) → `Total théorique : 650.00 DH`,
-`Montant principal (40%) : 260.00 DH`, `Bonus recrutement : 650.00 DH × 5% =
-32.50 DH` → **292.50 DH due**. The same rule is unit-tested in Rust
-(`percentage_uses_theoretical_revenue_not_collections`).
-
-The calculation card lists one line per rule, in this exact shape:
-
-```
-Arabe — 2ème Bac · Autre : 1 élève × 350.00 DH = 350.00 DH
-Mathématiques — Tronc Commun : 1 élève × 300.00 DH = 300.00 DH
-Total théorique : 650.00 DH
-Montant principal (40%) : 260.00 DH
-Bonus recrutement : 650.00 DH × 5% = 32.50 DH
-```
-
-Fixed / hourly / per-session print `Montant fixe : 5000.00 DH`,
-`4 heures × 80.00 DH / heure = 320.00 DH` and
-`3 séances × 150.00 DH / séance = 450.00 DH` respectively. Every formula is
-wrapped in a `dir="ltr"` span, and `formatCurrency()` surrounds the amounts with
-the Unicode isolates `U+2066 … U+2069`, so `292.50 DH` keeps that order inside an
-Arabic paragraph instead of flipping to `DH 292.50`.
-
-### The teachers page (`pages/TeachersPage.tsx`)
-
-Title with a count badge (`2 enseignants · 2 actifs` in the footer), `+ Nouvel
-enseignant`, and a responsive card grid: name, subject badges, `👥 X groupes`,
-and the configuration badge — `Fixe : 1 000.00 DH/mois`, `Horaire : 80.00 DH/h`,
-`Séance : 150.00 DH`, `40% du théorique`, or a muted `Non configuré`. Clicking a
-card (or pressing Enter on it) opens `/teachers/:id`. Two teachers that have
-never been configured, zero teachers → `Aucun enseignant` empty state.
-
-### The teacher form (`components/teachers/TeacherModal.tsx`)
-
-`Nom complet*`, `Téléphone` (Moroccan format: `05/06/07XXXXXXXX` or
-`+212…`, validated in the browser by `isValidTeacherPhone()` *and* in Rust),
-`Email`, a checkbox grid of the active subjects and free-text notes. Errors
-appear on blur, the save button stays disabled while the name is empty, and the
-edit variant reloads the current `subject_ids` before showing the grid.
-
-### The teacher sheet (`pages/TeacherDetailPage.tsx`, `/teachers/:id`)
-
-Back arrow, name + status badge + `Modifier` + `Désactiver`/`Réactiver`
-(`ConfirmDialog`), then four tabs:
-
-| Tab | Content |
-| --- | --- |
-| ① Informations | identity card (phone, email, notes, created/updated, subject badges) and the **compensation card**: mode select, mode-dependent value field (`MoneyInput`, or a `%` field for the percentage mode), bonus toggle + percentage, live estimate (`2 groupes · 650.00 DH théoriques → 292.50 DH dont bonus 32.50 DH`), `Sauvegarder la compensation` |
-| ② Groupes | table of the teacher's groups (subject, level, branch, slot, students, fee) and three totals: groups, students, theoretical monthly revenue |
-| ③ Activités | month/year selects, `Ajouter activité`, the rows of the month (date, type badge — `Cours` blue, `Rattrapage` yellow, `Examen` purple, `Autre` grey — hours, sessions, notes) and a `Totaux — Novembre 2026` footer; empty state `Aucune activité ce mois` |
-| ④ Compensation | the calculation card of the month (lines + `Montant principal` / `Bonus` / `Total`, `Total réglé`, `Reste`, the reminder `Calculé sur les tarifs × inscrits, jamais sur les encaissements`), the status badge 🔴 `Non réglé` / 🟡 `Partiel` / 🟢 `Réglé`, the settlements table, `Régler` |
-
-Statuses derive from the amounts, never from a stored flag: `pending`
-(`settled = 0`), `partial` (`0 < settled < total`), `settled`
-(`settled ≥ total`), plus `not_configured`. `remaining_cents` is allowed to go
-negative when a teacher is overpaid.
-
-### Settlements (`components/teachers/SettlementModal.tsx`)
-
-Several settlements per month, **cumulative**: the modal opens prefilled with the
-remaining amount, shows the month total, the four methods (Espèces / Virement /
-Chèque / Autre, cash by default), notes and the reminder *« Plusieurs règlements
-sont possibles pour un même mois ; aucun ne peut être supprimé. »*. The same
-modal opens from the payroll tab and from the Payments page. **There is no
-delete action** — a mistake is corrected by recording another settlement, exactly
-like the invoices and payments of Phase 5.
-
-### Teacher payroll summary (Payments tab 2)
-
-`components/payments/TeacherSettlementsTab.tsx`: month/year selectors, one row
-per **active** teacher — name, mode label, `Total dû`, `Total réglé`, `Reste`,
-status badge (🔴 / 🟡 / 🟢 / ⚪ `Non configuré`) and a `Régler` button disabled for
-`settled` and `not_configured` rows — plus a totals row and the period label.
-Empty state: `Aucun enseignant configuré`.
-
-### Activities (`components/teachers/ActivityModal.tsx`)
-
-A manual log per day: date (today by default), type (`cours`, `rattrapage`,
-`examen`, `autre`), hours, sessions and notes, with **at least one of hours or
-sessions** required in both the UI and Rust. Only the `hourly` and `per_session`
-modes read them, but they are recorded for every teacher.
-
-### Storage
-
-* `teachers` grew three guarded columns — `compensation_mode`,
-  `compensation_value_cents`, `bonus_pct` — added by `upgrade_phase6_columns()`
-  on existing databases (idempotent, covered by a migration test).
-* The percentage is stored as **pct × 100** in `compensation_value_cents`
-  (`40 % → 4000`), which keeps a single integer column for the four modes.
-* `teacher_compensation` is the per-month snapshot, unique on
-  `(teacher_id, month, year)` and upserted with `ON CONFLICT … DO UPDATE`;
-  `teacher_settlements` carry their own `month`/`year`.
-
-### Business rules
-
-* **Cumulative, not exclusive** — bonus is always added to the main amount.
-* **Theoretical, not collected** — the percentage and the bonus ignore
-  `payments`/`invoices` entirely.
-* **Per teacher, not per month** — the configuration is edited once and reused;
-  the *amounts* are recomputed on the current data every month.
-* **No deletion of settlements**, and no delete button anywhere on the sheet.
-* **Inactive teachers** keep their history and their payroll rows disappear from
-  the monthly summary (which lists active teachers only); the group form only
-  offers active teachers.
-* Everything is audited under `entity_type = 'teacher'`: `CREATE`, `UPDATE`,
-  `STATUS_CHANGE`, `SET_COMPENSATION`, `ACTIVITY`, `SETTLEMENT` — the settlement
-  entry carries the month, the amount, the resulting status and the new total.
-
-### Commands
-
-| Command | Notes |
-| --- | --- |
-| `cmd_create_teacher(input)` | name required (`Le nom complet est obligatoire`), phone/email formats, inserts `teacher_subjects`, audits `CREATE` |
-| `cmd_update_teacher(id, input)` | one transaction, rewrites `teacher_subjects`, bumps `updated_at`, audits `UPDATE` with a field diff |
-| `cmd_get_teachers(status?)` | `GROUP_CONCAT` of the subjects, active group count, compensation mode/value/bonus, ordered by name |
-| `cmd_get_teacher_detail(id)` | teacher + `subject_ids` + groups (with `enrolled_count`) + `compensation_config` |
-| `cmd_set_teacher_status(id, status)` | `actif` / `inactif`, audits `STATUS_CHANGE` |
-| `cmd_set_compensation(teacher_id, mode, value_cents, bonus_pct)` | validates the mode, the value (> 0, ≤ 100 % for the percentage) and the bonus range, audits `SET_COMPENSATION` with `from`/`to` |
-| `cmd_calculate_compensation(teacher_id, month, year)` | the payroll detail of the month; `Compensation non configurée` when the teacher has no configuration |
-| `cmd_record_settlement(teacher_id, month, year, amount_cents, method, notes)` | amount > 0, teacher configured, audits `SETTLEMENT` |
-| `cmd_get_teacher_settlements(teacher_id, month?, year?)` | newest first |
-| `cmd_get_all_teacher_compensation_summary(month, year)` | active teachers only, `not_configured` rows carry zero amounts |
-| `cmd_record_activity(teacher_id, activity_date, activity_type, hours?, sessions?, notes?)` | at least one of hours/sessions, audits `ACTIVITY` |
-| `cmd_get_activities(teacher_id, month?, year?)` | date descending |
-| `cmd_get_teacher_options()` | active teachers for the group form (kept from Phase 4, re-implemented on top of Phase 6) |
-
+Tauri commands: `cmd_set_compensation`, `cmd_create_teacher_payment`,
+`cmd_list_teacher_payments`, and `cmd_list_unattributed_teacher_payments`.
+The dev backend mirrors these commands; old activity data and settlement rows
+are not removed by this change.
 
 ---
 
@@ -869,7 +738,7 @@ modes read them, but they are recorded for every teacher.
 
 The home screen (`/`, `pages/DashboardPage.tsx`) answers one question in one
 glance: *where is this month going?* Five numbers on top, then what has to be
-chased, what has just come in, and what the teachers are owed. Every card is a
+chased, what has just come in, and what has been paid to teachers. Every card is a
 shortcut to the screen that owns the data — an échéance opens the student sheet,
 a payroll row opens the teacher sheet.
 
@@ -936,14 +805,11 @@ badge (`Espèces` / `Chèque` / `Virement` / `Autre`) and the amount in green.
 This list is **not** filtered by the selected period: it answers "what came in
 recently", which is what the owner wants after a day at the desk.
 
-### Compensation des enseignants — payroll of the period
+### Paiements enseignants
 
-The full-width table is the Phase 6 payroll summary for the selected month:
-teacher, mode (`Fixe`, `Horaire`, `Par séance`, `Pourcentage`), total due, total
-settled, remaining and the status badge (`Réglé` / `Partiel` / `Non réglé`).
-Only teachers **with a configuration** are counted in the badge
-(`2 enseignants configurés`), a teacher without one cannot be settled and stays
-off the card. A row opens `/teachers/:id`, where the settlement is recorded.
+The table shows teachers in the active school year and their actual payments
+in the selected month. Select a row to open the teacher profile. The net KPI
+also deducts actual payments, not the indicative compensation configuration.
 
 ### Period, loading, empty and error states
 
@@ -955,7 +821,7 @@ off the card. A row opens `/teachers/:id`, where the settlement is recorded.
 * Changing the period **keeps the previous figures on screen** until the new
   ones arrive — no skeleton flash, no layout jump.
 * An empty centre gets a real empty state per card (`Aucune échéance cette
-  semaine 🎉`, `Aucun paiement récent`, `Aucun enseignant configuré`) and zeros
+  semaine 🎉`, `Aucun paiement récent`, `Aucun enseignant`) and zeros
   in the KPIs, with `0.0 %` in red and a `—` trend.
 * The four commands run through `Promise.allSettled`: one failure shows a single
   toast (`Impossible de charger le tableau de bord — …`) and the cards that did
@@ -2081,7 +1947,7 @@ Four defects were found by these passes and fixed:
 | Payroll card for the period | ✅ `1 enseignant configuré` / `2 enseignants configurés` badges, modes, totals, `Réglé` / `Partiel` / `Non réglé`; teachers without a configuration are excluded |
 | Period switch | ✅ month `Octobre` → `550.00 DH`, `61.1 %`, hint `550.00 DH / 900.00 DH`, échéances unchanged (they are always "now"); back to `Novembre` → `1000.00 DH` |
 | Skeletons, no flash | ✅ five `dashboard-kpi-skeleton` (plus the three list skeletons) on first load; switching the period keeps the previous figures until the new ones arrive |
-| Empty centre | ✅ zeros, `0.0 %` red, `—` trend, `Aucune échéance cette semaine 🎉`, `Aucun paiement récent`, `Aucun enseignant configuré` |
+| Empty centre | ✅ zeros, `0.0 %` red, `—` trend, `Aucune échéance cette semaine 🎉`, `Aucun paiement récent`, `Aucun enseignant` |
 | Responsive | ✅ 5 columns + 60 / 40 at 1440 px (677 / 445 px), 3 + 2 at 820 px, 2 × 2 + 1 at 390 px with no horizontal overflow |
 | Arabic / RTL parity | ✅ greeting, KPI labels, `83.3 %`, `+50 %`, `الاستحقاقات`, `متأخر بـ 3 أيام`, `غداً`, `آخر الأداءات`, `أجور الأساتذة`, `جزئي`; the trend sign and the rate keep their order (`dir="ltr"` isolates) |
 | Read-only backend, no side effects | ✅ the three commands only read; `dashboard.rs` has no write path, and re-running the dashboard after a payment reflects the new state without touching anything |

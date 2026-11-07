@@ -15,9 +15,11 @@ export default function BranchModal({ levels, zIndex = 60, onCreated, onClose }:
   const [name, setName] = useState('');
   const [levelId, setLevelId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!name.trim() || !levelId || saving) return;
+    if (saving) return;
+    if (!name.trim() || !levelId) { setShowErrors(true); return; }
     setSaving(true);
     try {
       const id = await levelsApi.createBranch(name.trim(), Number(levelId));
@@ -29,11 +31,13 @@ export default function BranchModal({ levels, zIndex = 60, onCreated, onClose }:
   };
   return <EntityModalShell open zIndex={zIndex} onClose={onClose} saving={saving}
     title={t('settings.levels.addBranch')} formId="branch-form" testId="branch-modal"
-    canSubmit={Boolean(name.trim() && levelId)}>
-    <form id="branch-form" onSubmit={event => void submit(event)} className="space-y-4">
+    >
+    <form id="branch-form" noValidate onSubmit={event => void submit(event)} className="space-y-4">
       <Input autoFocus required label={t('settings.levels.addBranch')} placeholder={t('settings.levels.branchPlaceholder')}
+        error={showErrors && !name.trim() ? t('common.required') : undefined}
         value={name} onChange={event => setName(event.target.value)} data-testid="branch-name" />
       <Select required label={t('students.level')} placeholder={t('students.selectLevel')}
+        error={showErrors && !levelId ? t('common.required') : undefined}
         value={levelId} onChange={event => setLevelId(event.target.value)}
         options={levels.filter(level => level.category === 'lycee').map(level => ({ value: level.id, label: `${level.name} (${level.category})` }))}
         data-testid="branch-level" />

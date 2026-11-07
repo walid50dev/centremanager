@@ -1,20 +1,16 @@
 import { api, isTauri } from './api';
 import { devInvoke } from './settingsDevBackend';
 import type {
-  Activity,
-  ActivityInput,
-  CompensationDetail,
   CompensationMode,
-  Settlement,
   Teacher,
-  TeacherCompSummary,
   TeacherDetail,
   TeacherInput,
+  TeacherPayment,
 } from '../types';
 
 /**
  * Typed wrappers for the Phase 6 commands (`commands/teachers.rs`,
- * `compensation.rs`, `activities.rs`).
+ * `compensation.rs`, `teacher_payments.rs`).
  *
  * Teachers and settlements are never deleted: there is deliberately no
  * `remove` in this API.
@@ -59,93 +55,13 @@ export const compensationApi = {
       valueCents: input.valueCents,
       bonusPct: input.bonusPct,
     }),
-
-  calculate: (teacherId: number, month: number, year: number) =>
-    call<CompensationDetail>('cmd_calculate_compensation', { teacherId, month, year }),
-
-  recordSettlement: (input: {
-    teacherId: number;
-    month: number;
-    year: number;
-    amountCents: number;
-    method: string;
-    notes?: string | null;
-  }) =>
-    call<number>('cmd_record_settlement', {
-      teacherId: input.teacherId,
-      month: input.month,
-      year: input.year,
-      amountCents: input.amountCents,
-      method: input.method,
-      notes: input.notes ?? null,
-    }),
-
-  settlements: (teacherId: number, month: number | null, year: number | null) =>
-    call<Settlement[]>('cmd_get_teacher_settlements', { teacherId, month, year }),
-
-  summary: (month: number, year: number) =>
-    call<TeacherCompSummary[]>('cmd_get_all_teacher_compensation_summary', { month, year }),
 };
 
-export const activitiesApi = {
-  list: (teacherId: number, month: number | null, year: number | null) =>
-    call<Activity[]>('cmd_get_activities', { teacherId, month, year }),
-
-  record: (input: ActivityInput) =>
-    call<number>('cmd_record_activity', {
-      teacherId: input.teacher_id,
-      activityDate: input.activity_date,
-      activityType: input.activity_type,
-      hours: input.hours,
-      sessions: input.sessions,
-      notes: input.notes,
-    }),
+export const teacherPaymentsApi = {
+  list: (teacherId: number) => call<TeacherPayment[]>('cmd_list_teacher_payments', { teacherId }),
+  unattributed: (teacherId: number) => call<TeacherPayment[]>('cmd_list_unattributed_teacher_payments', { teacherId }),
+  create: (input: { teacherId: number; amountCents: number; paymentDate: string; method: string; notes: string | null }) =>
+    call<number>('cmd_create_teacher_payment', input),
 };
-
-/** Badge tone of a payroll status. */
-export function compensationStatusVariant(
-  status: string,
-): 'success' | 'warning' | 'destructive' | 'muted' {
-  switch (status) {
-    case 'settled':
-      return 'success';
-    case 'partial':
-      return 'warning';
-    case 'pending':
-      return 'destructive';
-    default:
-      return 'muted';
-  }
-}
-
-/** i18n key of a payroll status label. */
-export function compensationStatusKey(status: string): string {
-  switch (status) {
-    case 'settled':
-      return 'teachers.status.settled';
-    case 'partial':
-      return 'teachers.status.partial';
-    case 'pending':
-      return 'teachers.status.pending';
-    default:
-      return 'teachers.status.notConfigured';
-  }
-}
-
-/** i18n key of a compensation mode label. */
-export function modeKey(mode: string | null | undefined): string {
-  switch (mode) {
-    case 'fixed_monthly':
-      return 'teachers.fixed';
-    case 'hourly':
-      return 'teachers.hourly';
-    case 'per_session':
-      return 'teachers.perSession';
-    case 'percentage':
-      return 'teachers.percentage';
-    default:
-      return 'teachers.notConfigured';
-  }
-}
 
 export default teachersApi;
