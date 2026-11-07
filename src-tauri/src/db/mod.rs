@@ -137,6 +137,11 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     // `schema.sql` only runs its `CREATE TABLE IF NOT EXISTS` statements on a
     // fresh database, so columns added by a later phase are patched in here.
     upgrade_phase6_columns(conn)?;
+    for (column, kind) in [("payment_date", "TEXT"), ("school_year_id", "INTEGER REFERENCES school_years(id)")] {
+        if !column_exists(conn, "teacher_settlements", column)? {
+            conn.execute_batch(&format!("ALTER TABLE teacher_settlements ADD COLUMN {column} {kind};"))?;
+        }
+    }
     upgrade_student_columns(conn)?;
     for table in ["students", "teachers", "groups", "monthly_expenses"] {
         if !column_exists(conn, table, "deleted_at")? {

@@ -39,8 +39,11 @@ pub struct CreateGroupInput {
     pub school_year_id: i64,
     /// Legacy single slot: still sent by older callers, and by the form as the
     /// first schedule (kept in sync by the backend).
+    #[serde(default)]
     pub day_of_week: String,
+    #[serde(default)]
     pub start_time: String,
+    #[serde(default)]
     pub end_time: String,
     /// Phase 13 — the whole week. When present it wins over the single slot.
     #[serde(default)]
@@ -112,20 +115,6 @@ fn active_enrollment_count(conn: &Connection, group_id: i64) -> rusqlite::Result
     )
 }
 
-/// Validate the week and return it with its first slot.
-///
-/// The first slot (school-week order) is what the legacy `groups` columns mirror.
-fn split_week(
-    payload: &[super::schedules::ScheduleInput],
-) -> Result<(Vec<GroupSchedule>, GroupSchedule), String> {
-    let schedules = clean_schedules(payload)?;
-    let first = schedules
-        .first()
-        .cloned()
-        .ok_or_else(|| "Au moins un jour de cours est requis".to_string())?;
-    Ok((schedules, first))
-}
-
 fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup, String> {
     if !id_exists(conn, "subjects", data.subject_id)
         .map_err(|err| db_err("Vérification de la matière", err))?
@@ -174,11 +163,12 @@ fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup,
         &data.start_time,
         &data.end_time,
     );
-    let (schedules, first) = split_week(&payload)?;
-    let day_of_week = normalise_day(&first.day_of_week)
-        .ok_or_else(|| "Jour de la semaine invalide".to_string())?;
-    let start = first.start_time.clone();
-    let end = first.end_time.clone();
+    let schedules = clean_schedules(&payload)?;
+    // Empty strings keep legacy readers compatible and cannot be mistaken for a slot.
+    let (day_of_week, start, end) = match schedules.first() {
+        Some(first) => (first.day_of_week.clone(), first.start_time.clone(), first.end_time.clone()),
+        None => (String::new(), String::new(), String::new()),
+    };
 
     if data.monthly_fee_cents <= 0 {
         return Err("Le tarif doit être supérieur à 0".to_string());
@@ -193,7 +183,7 @@ fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup,
         branch_id: data.branch_id,
         teacher_id: data.teacher_id,
         school_year_id: data.school_year_id,
-        day_of_week: day_of_week.to_string(),
+        day_of_week,
         start_time: start,
         end_time: end,
         schedules,

@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { cn } from '../../utils/format';
 
-export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
+export type ModalSize = 'sm' | 'md' | 'lg' | 'wide' | 'xl';
 
 export interface ModalProps {
   open: boolean;
@@ -30,6 +30,7 @@ const sizeClasses: Record<ModalSize, string> = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  wide: 'max-w-3xl',
   xl: 'max-w-4xl',
 };
 

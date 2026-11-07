@@ -99,7 +99,7 @@ export function Sidebar() {
           onChange={event => { const id = Number(event.target.value); if (id && id !== activeYear?.id) setPendingYear(id); }}
           disabled={switching || !activeYear} className="w-full rounded border border-border bg-white px-1 py-2 text-[12px] font-semibold text-foreground">
           {!activeYear && <option value="">{t('settings.schoolYear.none')}</option>}
-          {years.map(year => <option key={year.id} value={year.id}>{year.is_active ? '🟢 ' : ''}{year.label}</option>)}
+          {years.map(year => <option key={year.id} value={year.id}>{year.label}</option>)}
         </select>
         {activeYear && sidebarOpen && <span className="mt-1 hidden items-center gap-1 text-[10px] font-medium text-emerald-700 lg:flex"><span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />{t('settings.schoolYear.active')}</span>}
       </div>

@@ -50,7 +50,8 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
   const [quickLevel, setQuickLevel] = useState(false);
   const [quickBranch, setQuickBranch] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  useEffect(() => { if (open) { setForm(toForm(student)); setSubmitting(false); } else { setQuickLevel(false); setQuickBranch(false); } }, [open, student]);
+  const [showErrors, setShowErrors] = useState(false);
+  useEffect(() => { if (open) { setForm(toForm(student)); setSubmitting(false); setShowErrors(false); } else { setQuickLevel(false); setQuickBranch(false); } }, [open, student]);
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -68,7 +69,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
   const relations = useMemo(() => ['father', 'mother', 'guardian', 'brother', 'sister', 'other'].map(value => ({ value, label: t(`students.relation_${value}`) })), [t]);
   const update = (key: keyof Form, value: string) => setForm(previous => ({ ...previous, [key]: value, ...(key === 'level' && value !== previous.level ? { branch: '' } : {}) }));
   const save = async () => {
-    if (!valid) return;
+    if (!valid) { setShowErrors(true); return; }
     const phone = stripPhone(form.phone);
     const data: StudentInput = {
       full_name: `${form.first.trim()} ${form.last.trim()}`, first_name: form.first.trim(), last_name: form.last.trim(),
@@ -91,24 +92,24 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
   };
   return <>
     <Modal open={open} onClose={onClose} size="lg" zIndex={zIndex} title={<span className="flex items-center gap-2"><UserRound className="h-4 w-4 text-primary" />{t(student ? 'students.editTitle' : 'students.new')}</span>}
-      footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button><Button data-testid="student-save" onClick={() => void save()} loading={submitting} disabled={!valid}>{t('students.save')}</Button></>}>
-      <form className="space-y-6" onSubmit={event => { event.preventDefault(); void save(); }}>
+      footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button><Button data-testid="student-save" onClick={() => void save()} loading={submitting} disabled={submitting}>{t('students.save')}</Button></>}>
+      <form noValidate className="space-y-6" onSubmit={event => { event.preventDefault(); void save(); }}>
         <DuplicateWarnings open={open} type="student" id={student?.id} first={form.first} last={form.last} phone={form.phone} />
         <fieldset data-testid="student-section-identity" className="grid gap-4 sm:grid-cols-2"><legend className="mb-3 text-base font-semibold">{t('students.section_identity')}</legend>
-          <Input label={t('students.last_name')} data-testid="student-last-name" required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
-          <Input label={t('students.first_name')} data-testid="student-first-name" required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />
-          <CreatableEntitySelect testId="student-level" required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} disableCreate={zIndex >= 70} searchable />
+          <Input label={t('students.last_name')} data-testid="student-last-name" error={showErrors && !form.last.trim() ? t('common.required') : undefined} required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
+          <Input label={t('students.first_name')} data-testid="student-first-name" error={showErrors && !form.first.trim() ? t('common.required') : undefined} required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />
+          <CreatableEntitySelect testId="student-level" error={showErrors && !form.level ? t('common.required') : undefined} required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} disableCreate={zIndex >= 70} searchable />
           <CreatableEntitySelect testId="student-branch" label={t('students.branch')} placeholder={t('students.selectBranch')}
             options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
             onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}
             getOptionValue={branch => branch.id} clearable onCreate={() => setQuickBranch(true)} disableCreate={zIndex >= 70} />
           <Input label={t('students.school_name')} data-testid="student-school-name" placeholder="Lycée Moulay Youssef" value={form.school} onChange={e => update('school', e.target.value)} />
           <Input type="date" label={t('students.birth_date')} data-testid="student-birth-date" value={form.birth} onChange={e => update('birth', e.target.value)} />
-          <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
+          <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
         </fieldset>
         <fieldset data-testid="student-section-guardian" className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2"><legend className="text-base font-semibold">{t('students.section_guardian')}</legend>
-          <Input label={t('students.guardian_name')} data-testid="student-guardian-name" required placeholder="Rachid El Mansouri" value={form.guardian} onChange={e => update('guardian', e.target.value)} />
-          <Input type="tel" dir="ltr" label={t('students.guardian_phone')} data-testid="student-guardian-phone" required placeholder="06 61 23 45 67" value={form.phone} onChange={e => update('phone', e.target.value)} onBlur={() => { if (isValidPhone(form.phone)) update('phone', formatPhone(form.phone)); }} error={form.phone && !isValidPhone(form.phone) ? t('students.validation.phoneFormat') : undefined} />
+          <Input label={t('students.guardian_name')} data-testid="student-guardian-name" error={showErrors && !form.guardian.trim() ? t('common.required') : undefined} required placeholder="Rachid El Mansouri" value={form.guardian} onChange={e => update('guardian', e.target.value)} />
+          <Input type="tel" dir="ltr" label={t('students.guardian_phone')} data-testid="student-guardian-phone" required placeholder="06 61 23 45 67" value={form.phone} onChange={e => update('phone', e.target.value)} onBlur={() => { if (isValidPhone(form.phone)) update('phone', formatPhone(form.phone)); }} error={showErrors && !form.phone.trim() ? t('common.required') : form.phone && !isValidPhone(form.phone) ? t('students.validation.phoneFormat') : undefined} />
           <Select label={t('students.guardian_relation')} data-testid="student-guardian-relation" placeholder="—" options={relations} value={form.relation} onChange={e => update('relation', e.target.value)} />
           <Input label={t('students.secondary_contact')} data-testid="student-secondary-name" value={form.secondary} onChange={e => update('secondary', e.target.value)} />
           <Input type="tel" dir="ltr" label={t('students.secondary_phone')} data-testid="student-secondary-phone" placeholder="06 61 23 45 67" value={form.secondaryPhone} onChange={e => update('secondaryPhone', e.target.value)} onBlur={() => { if (isValidPhone(form.secondaryPhone)) update('secondaryPhone', formatPhone(form.secondaryPhone)); }} error={form.secondaryPhone && !isValidPhone(form.secondaryPhone) ? t('students.validation.phoneFormat') : undefined} />

@@ -335,9 +335,23 @@
   }
 }
 
-/* Lane details disappear only when the actual event width is below 100px. */
-@container (width < 100px) {
+/* Keep the time range, even when overlapping events use compact lanes. */
+@container (width < 145px) {
   .timetable-lane-details {
     display: none;
   }
+}
+
+/* Short events keep their true minute-based height: prioritise the time line. */
+@container (height < 78px) {
+  .timetable-lane-details { display: none; }
+}
+@container (height < 34px) {
+  .timetable-lane-name { display: none; }
+  .timetable-card { padding-top: 0; padding-bottom: 0; justify-content: center; }
+}
+@container (height < 14px) {
+  /* Sub-quarter-hour events cannot contain a text line at this scale. */
+  .timetable-card { overflow: visible; justify-content: flex-start; }
+  .timetable-lane-time { position: relative; z-index: 1; }
 }

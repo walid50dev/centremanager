@@ -46,7 +46,8 @@ function SetupForm() {
     const next: typeof errors = {};
     if (!centerName.trim()) next.centerName = t('setup.centerRequired');
     if (password.length < 4) next.password = t('setup.passwordTooShort');
-    if (confirmPassword !== password) next.confirmPassword = t('setup.passwordMismatch');
+    if (!confirmPassword) next.confirmPassword = t('common.required');
+    else if (confirmPassword !== password) next.confirmPassword = t('setup.passwordMismatch');
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -82,6 +83,7 @@ function SetupForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         <Input
           label={t('setup.centerName')}
+          required
           placeholder={t('setup.centerNamePlaceholder')}
           autoFocus
           autoComplete="organization"
@@ -97,6 +99,7 @@ function SetupForm() {
         <Input
           type="password"
           label={t('setup.password')}
+          required
           hint={t('setup.passwordHint')}
           placeholder="••••••••"
           autoComplete="new-password"
@@ -112,6 +115,7 @@ function SetupForm() {
         <Input
           type="password"
           label={t('setup.confirmPassword')}
+          required
           placeholder="••••••••"
           autoComplete="new-password"
           value={confirmPassword}
@@ -169,6 +173,7 @@ function LoginForm() {
           <Input
             type="password"
             label={t('login.password')}
+          required
             placeholder={t('login.placeholder')}
             autoFocus
             autoComplete="current-password"

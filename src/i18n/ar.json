@@ -23,7 +23,6 @@
     "add": "إضافة",
     "edit": "تعديل",
     "search": "بحث",
-    "confirm": "تأكيد",
     "close": "إغلاق",
     "loading": "جارٍ التحميل…",
     "actions": "الإجراءات",
@@ -48,7 +47,6 @@
     "refresh": "تحديث",
     "suffix": {
       "percent": "%",
-      "hours": "س",
       "students": "تلاميذ"
     },
     "createNew": "+ جديد…",
@@ -136,7 +134,7 @@
     "welcome": "مرحباً بك في CentreManager",
     "subtitle": "الإعداد الأولي",
     "centerName": "اسم المركز",
-    "centerNamePlaceholder": "مثال: مركز التفوق بالدار البيضاء",
+    "centerNamePlaceholder": "مثال: مركز التفوق",
     "password": "كلمة المرور",
     "passwordHint": "4 أحرف على الأقل",
     "confirmPassword": "تأكيد كلمة المرور",
@@ -311,7 +309,7 @@
     "editTitle": "تعديل التلميذ",
     "createDescription": "أدخل معلومات التلميذ. الاسم والهاتف فقط إلزاميان.",
     "editDescription": "عدّل المعلومات ثم احفظ.",
-    "search": "الاسم أو ولي الأمر أو الهاتف...",
+    "search": "الاسم، ولي الأمر، الهاتف",
     "allLevels": "جميع المستويات",
     "allStatuses": "جميع الحالات",
     "filterActive": "النشطون",
@@ -470,7 +468,6 @@
       "schoolYearRequired": "السنة الدراسية مطلوبة",
       "feePositive": "يجب أن يكون الثمن أكبر من 0",
       "capacityPositive": "يجب أن تكون الطاقة الاستيعابية 1 على الأقل",
-      "atLeastOneDay": "حدّد يومًا واحدًا على الأقل",
       "scheduleIncomplete": "التوقيت غير مكتمل ليوم {{day}}",
       "endAfterStartDay": "يجب أن يكون وقت النهاية بعد وقت البداية ({{day}})"
     },
@@ -499,7 +496,7 @@
     },
     "untitled": "مجموعة بدون عنوان",
     "schedules": "أيام الحصص",
-    "schedulesHint": "حدّد أيام الحصص ثم اضبط التوقيت."
+    "schedulesHint": "اختياري: حدّد أيام الحصص واضبط التوقيت، أو أضفها لاحقاً."
   },
   "timetable": {
     "title": "جدول الحصص",
@@ -617,8 +614,6 @@
     "generateSuccess_many": "تم توليد {{count}} فاتورة ✓",
     "generateSuccess_other": "تم توليد {{count}} فاتورة ✓",
     "generateNone": "لا توجد فواتير لتوليدها لهذه الفترة",
-    "month": "الشهر",
-    "year": "السنة",
     "late": "متأخرون",
     "upcoming": "قريبو الاستحقاق",
     "current": "مسدَّدون",
@@ -665,15 +660,7 @@
     "summary_many": "{{count}} تلميذاً معنياً في هذه الفترة",
     "summary_other": "{{count}} تلميذ معني في هذه الفترة",
     "teacherSummary": {
-      "teacher": "الأستاذ",
-      "mode": "النمط",
-      "due": "إجمالي المستحق",
-      "settled": "إجمالي المؤدى",
-      "remaining": "الباقي",
-      "status": "الحالة",
-      "period": "الفترة : {{period}}",
-      "empty": "لا أساتذة مُهيّؤون",
-      "emptyHint": "هيّئ أجر أستاذ ليظهر هنا."
+      "teacher": "الأستاذ"
     },
     "newPayment": "تسجيل دفعة"
   },
@@ -693,7 +680,7 @@
     "categoryPlaceholder": "اختر فئة",
     "allCategories": "كل الفئات",
     "label": "البيان",
-    "labelPlaceholder": "مثال: كراء المحل الرئيسي، فاتورة ويفي",
+    "labelPlaceholder": "مثال: كراء، فاتورة ويفي",
     "amount": "المبلغ",
     "notes": "ملاحظات",
     "notesPlaceholder": "ملاحظات داخلية (اختياري)",
@@ -864,16 +851,14 @@
     "perSession": "بالحصة",
     "percentage": "بالنسبة المئوية",
     "notConfigured": "غير مُهيّأ",
-    "configureComp": "تهيئة الأجر",
     "badgeFixed": "ثابت : {{amount}}/شهر",
     "badgeHourly": "بالساعة : {{amount}}/س",
     "badgeSession": "بالحصة : {{amount}}",
     "badgePercentage": "{{pct}}% من النظري",
     "tabInfo": "المعلومات",
     "tabGroups": "المجموعات",
-    "tabActivities": "الأنشطة",
-    "tabCompensation": "الأجر",
-    "compConfig": "تهيئة الأجر",
+    "tabCompensation": "المدفوعات",
+    "compConfig": "تقدير أجر الأستاذ",
     "mainMode": "النمط الأساسي",
     "valueFixed": "المبلغ الشهري (درهم)",
     "valueHourly": "سعر الساعة (درهم)",
@@ -882,7 +867,7 @@
     "bonus": "منحة الاستقطاب",
     "bonusPct": "نسبة المنحة (%)",
     "bonusHint": "تُحتسب على الرقم النظري الإجمالي للمجموعات.",
-    "compRuntimeNote": "يُحتسب الأجر كل شهر انطلاقاً من المعطيات الحالية.",
+    "compRuntimeNote": "تقدير استرشادي فقط؛ يُدخل الدفع الفعلي يدوياً.",
     "saveComp": "حفظ الأجر",
     "estimate": "تقدير حسب المجموعات الحالية :",
     "estimateGroups_zero": "لا مجموعات · {{theoretical}} نظري",
@@ -892,7 +877,6 @@
     "estimateGroups_many": "{{count}} مجموعة · {{theoretical}} نظري",
     "estimateGroups_other": "{{count}} مجموعة · {{theoretical}} نظري",
     "estimateBonus": "منها منحة {{bonus}}",
-    "estimateNeedsActivities": "يعتمد المبلغ على الساعات والحصص المسجلة في تبويب الأنشطة.",
     "noGroups": "لا مجموعات مُسندة",
     "noGroupsHint": "أسند المجموعات من صفحة المجموعات.",
     "summaryLine_zero": "لا أساتذة",
@@ -914,83 +898,18 @@
       "students": "إجمالي التلاميذ",
       "theoretical": "الإجمالي النظري الشهري"
     },
-    "activity": {
-      "add": "إضافة نشاط",
-      "description": "سجّل ساعات أو حصص اليوم.",
-      "date": "التاريخ",
-      "type": "النوع",
-      "hours": "الساعات",
-      "sessions": "الحصص",
-      "notes": "ملاحظات",
-      "notesPlaceholder": "المحتوى، القاعة…",
-      "optional": "اختياري",
-      "hint": "أدخل على الأقل الساعات أو الحصص.",
-      "empty": "لا أنشطة هذا الشهر",
-      "emptyHint": "الأنشطة المسجلة تُغذي نمطي الساعة والحصة.",
-      "totals": "المجموع — {{period}}",
-      "toast": "تم تسجيل النشاط ✓",
-      "cours": "درس",
-      "rattrapage": "دعم",
-      "examen": "امتحان",
-      "autre": "أخرى"
-    },
-    "comp": {
-      "detail": "تفصيل الحساب",
-      "theoretical": "الإجمالي النظري",
-      "base": "المبلغ الأساسي",
-      "bonusAmount": "المنحة",
-      "total": "الإجمالي",
-      "settlements": "الأداءات",
-      "settled": "إجمالي المؤدى",
-      "remaining": "الباقي",
-      "settle": "الأداء",
-      "notConfigured": "الأجر غير مُهيّأ",
-      "notConfiguredHint": "اختر نمطاً وقيمة من تبويب المعلومات.",
-      "noSettlements": "لا أداءات هذا الشهر",
-      "noSettlementsHint": "ستظهر الأداءات المسجلة هنا.",
-      "theoreticalNote": "يُحتسب على الأثمان × عدد المسجلين، وليس على التحصيلات.",
-      "groupLabel": "{{subject}} — {{level}}",
-      "groupWithBranch": "{{subject}} — {{level}} · {{branch}}",
-      "lineFixed": "مبلغ ثابت : {{amount}}",
-      "lineHours": "{{hours}} ساعة × {{rate}} / ساعة = {{amount}}",
-      "lineTheoretical": "الإجمالي النظري : {{total}}",
-      "lineBase": "المبلغ الأساسي ({{pct}}%) : {{amount}}",
-      "lineBonus": "منحة الاستقطاب : {{theoretical}} × {{pct}}% = {{bonus}}",
-      "lineGroup_zero": "{{group}} : {{fee}} = {{total}}",
-      "lineGroup_one": "{{group}} : تلميذ واحد × {{fee}} = {{total}}",
-      "lineGroup_two": "{{group}} : تلميذان × {{fee}} = {{total}}",
-      "lineGroup_few": "{{group}} : {{count}} تلاميذ × {{fee}} = {{total}}",
-      "lineGroup_many": "{{group}} : {{count}} تلميذاً × {{fee}} = {{total}}",
-      "lineGroup_other": "{{group}} : {{count}} تلميذ × {{fee}} = {{total}}",
-      "lineSessions_zero": "{{rate}} / حصة = {{amount}}",
-      "lineSessions_one": "حصة واحدة × {{rate}} = {{amount}}",
-      "lineSessions_two": "حصتان × {{rate}} = {{amount}}",
-      "lineSessions_few": "{{count}} حصص × {{rate}} = {{amount}}",
-      "lineSessions_many": "{{count}} حصة × {{rate}} = {{amount}}",
-      "lineSessions_other": "{{count}} حصة × {{rate}} = {{amount}}"
-    },
     "settlement": {
       "date": "التاريخ",
       "amount": "المبلغ",
       "method": "طريقة الدفع",
       "notes": "ملاحظات",
-      "toast": "تم تسجيل الأداء ✓",
-      "overpay": "هذا المبلغ يتجاوز الباقي بـ {{amount}}.",
-      "hint": "يمكن تسجيل عدة أداءات لنفس الشهر؛ لا يمكن حذف أي منها."
-    },
-    "status": {
-      "pending": "غير مؤدى",
-      "partial": "جزئي",
-      "settled": "مؤدى",
-      "notConfigured": "غير مُهيّأ"
+      "toast": "تم تسجيل الأداء ✓"
     },
     "validation": {
       "nameRequired": "الاسم الكامل مطلوب",
       "nameTooShort": "الاسم الكامل قصير جداً",
       "phoneFormat": "صيغة غير صحيحة (06XXXXXXXX أو 07XXXXXXXX أو ‎+212…)",
       "emailFormat": "صيغة البريد الإلكتروني غير صحيحة",
-      "dateRequired": "التاريخ مطلوب",
-      "hoursOrSessions": "أدخل على الأقل الساعات أو الحصص",
       "pctRange": "يجب أن تكون النسبة بين 0 و 100"
     },
     "toast": {
@@ -1001,10 +920,27 @@
       "deactivated": "تم تعطيل الأستاذ ✓",
       "error": "تعذّر الحفظ :"
     },
-    "newSubject": "مادة جديدة"
+    "newSubject": "مادة جديدة",
+    "payment": {
+      "record": "تسجيل دفعة",
+      "selectMethod": "اختر طريقة الدفع",
+      "history": "سجل المدفوعات",
+      "activeYear": "مدفوعات السنة الدراسية النشطة",
+      "total": "إجمالي المدفوع",
+      "empty": "لا توجد مدفوعات مسجلة",
+      "emptyHint": "ستظهر المدفوعات المسجلة هنا.",
+      "rateOnly": "السعر استرشادي فقط؛ يُدخل المبلغ يدوياً.",
+      "unattributed_zero": "لا مدفوعات قديمة بلا سنة",
+      "unattributed_one": "دفعة قديمة واحدة بلا سنة محددة",
+      "unattributed_two": "دفعتان قديمتان بلا سنة محددة",
+      "unattributed_few": "{{count}} مدفوعات قديمة بلا سنة محددة",
+      "unattributed_many": "{{count}} دفعة قديمة بلا سنة محددة",
+      "unattributed_other": "{{count}} دفعة قديمة بلا سنة محددة",
+      "unattributedHint": "تُحفظ هذه المدفوعات لكنها لا تدخل في مجموع أي سنة."
+    }
   },
   "dashboard": {
-    "greeting": "مرحبا 👋",
+    "greeting": "مرحبًا",
     "period": "الفترة",
     "seeAll": "عرض الكل",
     "loadError": "تعذّر تحميل بعض بيانات لوحة التحكم.",
@@ -1015,7 +951,7 @@
       "groups": "المجموعات النشطة",
       "teachers": "الأساتذة",
       "netIncome": "صافي الدخل",
-      "netTooltip": "المداخيل: {{revenue}} — المصاريف: {{expenses}} — الأجور: {{compensation}}",
+      "netTooltip": "المداخيل: {{revenue}} — المصاريف: {{expenses}} — مدفوعات الأساتذة: {{compensation}}",
       "netPositive": "ربح الشهر",
       "netNegative": "خسارة الشهر",
       "netZero": "التوازن"
@@ -1053,16 +989,8 @@
       "emptyHint": "ستظهر عمليات التحصيل هنا بعد أول أداء."
     },
     "teachers": {
-      "title": "أجور الأساتذة",
-      "subtitle": "أجور الشهر المحدد",
-      "empty": "لا أساتذة مُهيّؤون",
-      "emptyHint": "هيّئ أجر أستاذ ليظهر هنا.",
-      "configured_zero": "لا أساتذة مُهيّؤون",
-      "configured_one": "أستاذ واحد مُهيّأ",
-      "configured_two": "أستاذان مُهيّآن",
-      "configured_few": "{{count}} أساتذة مُهيّؤون",
-      "configured_many": "{{count}} أستاذاً مُهيّأ",
-      "configured_other": "{{count}} أستاذ مُهيّأ"
+      "empty": "لا أساتذة",
+      "emptyHint": "أضف أستاذاً للبدء."
     }
   },
   "error": {
@@ -1102,7 +1030,7 @@
     "days_count_few": "{{count}} أيام",
     "days_count_many": "{{count}} يوماً",
     "empty_confirm": "حذف جميع العناصر الظاهرة لهذه السنة نهائياً؟ ستُحذف أيضاً تسجيلات وفواتير ومدفوعات وإيصالات كل تلميذ لجميع السنوات. لا يمكن التراجع عن هذا الإجراء.",
-    "teacher_confirm_permanent": "إزالة الأستاذ نهائياً من السنة النشطة؟ ستُفصل مجموعاته وتُحذف تسوياته وأنشطته المنسوبة إلى هذه السنة. تُحفظ السنوات الأخرى والفترات غير الواضحة.",
+    "teacher_confirm_permanent": "إزالة هذا الأستاذ نهائياً من السنة النشطة؟ ستُفصل مجموعاته وتُحذف مدفوعاته وبياناته التاريخية التابعة لهذه السنة، مع الحفاظ على السنوات الأخرى والفترات غير المحددة.",
     "confirm_student_delete": "نقل « {{name}} » إلى سلة المحذوفات؟ سيختفي التلميذ من جميع السنوات. بعد 30 يوماً سيُحذف نهائياً مع تسجيلاته وفواتيره ومدفوعاته وإيصالاته لجميع السنوات.",
     "confirm_student_purge": "حذف « {{name}} » نهائياً؟ ستُحذف جميع تسجيلاته وفواتيره ومدفوعاته وإيصالاته لكل السنوات. لا يمكن التراجع عن هذا الإجراء."
   },

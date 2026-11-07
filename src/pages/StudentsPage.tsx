@@ -142,10 +142,10 @@ export function StudentsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <Input
           ref={searchRef}
-          containerClassName="sm:max-w-xs"
+          containerClassName="sm:w-80 sm:max-w-full sm:flex-none"
           data-testid="students-search"
           type="search"
           value={search}
@@ -158,7 +158,7 @@ export function StudentsPage() {
           leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
         />
         <Select
-          containerClassName="sm:max-w-[220px]"
+          containerClassName="sm:w-[220px] sm:max-w-full sm:flex-none"
           value={levelId}
           options={levelOptions}
           placeholder={t('students.allLevels')}
@@ -169,7 +169,7 @@ export function StudentsPage() {
           }}
         />
         <Select
-          containerClassName="sm:max-w-[180px]"
+          containerClassName="sm:w-[180px] sm:max-w-full sm:flex-none"
           value={status}
           options={statusOptions}
           aria-label={t('students.statusFilter')}

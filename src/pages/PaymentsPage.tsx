@@ -7,6 +7,8 @@ import {
   ChevronDown,
   ChevronRight,
   FilePlus2,
+  GraduationCap,
+  Wallet,
   RefreshCw,
   UserPlus,
 } from 'lucide-react';
@@ -131,12 +133,12 @@ export function PaymentsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-h1 text-foreground">
           {t('pages.payments.title')}
-          <span className="ms-2 rounded-full bg-primary/10 px-2 py-0.5 align-middle text-[13px] font-medium text-primary">
+          {tab === 'collections' && <span className="ms-2 rounded-full bg-primary/10 px-2 py-0.5 align-middle text-[13px] font-medium text-primary">
             {monthLabel(t, month)} {year}
-          </span>
+          </span>}
         </h1>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {tab === 'collections' && <div className="flex flex-wrap items-center gap-2">
           <MonthPicker value={period} onChange={setPeriod} label={t('dashboard.period')} testId="payments-period" />
           <Button
             variant="secondary"
@@ -165,16 +167,16 @@ export function PaymentsPage() {
           >
             {t('payments.generateInvoices')}
           </Button>
-        </div>
+        </div>}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border" role="tablist" aria-label={t('pages.payments.title')}>
         {(
           [
-            { key: 'collections', label: `💰 ${t('payments.tabCollections')}` },
-            { key: 'teachers', label: `👨‍🏫 ${t('payments.tabTeacherSettlements')}` },
-          ] as Array<{ key: TabKey; label: string }>
+            { key: 'collections', label: t('payments.tabCollections'), icon: Wallet },
+            { key: 'teachers', label: t('payments.tabTeacherSettlements'), icon: GraduationCap },
+          ] as Array<{ key: TabKey; label: string; icon: typeof Wallet }>
         ).map((entry) => (
           <button
             key={entry.key}
@@ -183,19 +185,20 @@ export function PaymentsPage() {
             aria-selected={tab === entry.key}
             onClick={() => setTab(entry.key)}
             className={cn(
-              '-mb-px border-b-2 px-3 py-2 text-btn font-medium transition-colors',
+              '-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-btn font-medium transition-colors',
               tab === entry.key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted hover:text-foreground',
             )}
           >
+            <entry.icon className="h-4 w-4" aria-hidden="true" />
             {entry.label}
           </button>
         ))}
       </div>
 
       {tab === 'teachers' ? (
-        <TeacherSettlementsTab month={month} year={year} />
+        <TeacherSettlementsTab />
       ) : loading ? (
         <div className="space-y-3">
           {sections.map((section) => (

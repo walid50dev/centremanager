@@ -21,7 +21,7 @@ import EmptyState from '../components/ui/EmptyState';
 import KpiCard from '../components/dashboard/KpiCard';
 import { toast } from '../components/ui/Toast';
 import { dashboardApi } from '../services/dashboard';
-import { compensationApi } from '../services/teachers';
+import { teacherPaymentsApi, teachersApi } from '../services/teachers';
 import {
   computeTrend,
   currentPeriod,
@@ -34,9 +34,8 @@ import {
   SEVERITY_TEXT,
 } from '../utils/dashboard';
 import { methodLabel, monthLabel } from '../utils/billing';
-import { modeLabel, statusLabelKey, statusVariant } from '../utils/compensation';
 import { cn, formatCurrency, formatDate } from '../utils/format';
-import type { AlertItem, DashboardKPIs, RecentPayment, TeacherCompSummary } from '../types';
+import type { AlertItem, DashboardKPIs, RecentPayment, Teacher } from '../types';
 
 /**
  * Colours of the net-income card.
@@ -87,7 +86,7 @@ export function DashboardPage() {
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [payments, setPayments] = useState<RecentPayment[]>([]);
-  const [teachers, setTeachers] = useState<TeacherCompSummary[]>([]);
+  const [teachers, setTeachers] = useState<Array<{ teacher: Teacher; total: number }>>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -96,7 +95,12 @@ export function DashboardPage() {
       dashboardApi.kpis(period.month, period.year),
       dashboardApi.alerts(),
       dashboardApi.recentPayments(10),
-      compensationApi.summary(period.month, period.year),
+      teachersApi.list().then(async teachers => Promise.all(teachers.map(async teacher => ({
+        teacher,
+        total: (await teacherPaymentsApi.list(teacher.id))
+          .filter(payment => payment.payment_date.startsWith(`${period.year}-${String(period.month).padStart(2, '0')}`))
+          .reduce((sum, payment) => sum + payment.amount_cents, 0),
+      })))),
     ]);
 
     const [kpiResult, alertResult, paymentResult, teacherResult] = results;
@@ -120,7 +124,7 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  const configuredTeachers = teachers.filter((row) => row.status !== 'not_configured').length;
+
 
   return (
     <div className="flex flex-col gap-5">
@@ -408,15 +412,11 @@ export function DashboardPage() {
           title={
             <span className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4 text-amber-600" aria-hidden="true" />
-              {t('dashboard.teachers.title')}
-              {!loading && configuredTeachers > 0 && (
-                <Badge variant="muted" data-testid="dashboard-teachers-count">
-                  {t('dashboard.teachers.configured', { count: configuredTeachers })}
-                </Badge>
-              )}
+              {t('teachers.payment.history')}
+
             </span>
           }
-          description={`${t('dashboard.teachers.subtitle')} — ${monthLabel(t, period.month)} ${period.year}`}
+          description={`${t('teachers.payment.activeYear')} — ${monthLabel(t, period.month)} ${period.year}`}
           actions={
             <Button
               variant="ghost"
@@ -455,54 +455,15 @@ export function DashboardPage() {
                   <th className="px-5 py-2.5 text-start font-medium">
                     {t('payments.teacherSummary.teacher')}
                   </th>
-                  <th className="px-5 py-2.5 text-start font-medium">
-                    {t('payments.teacherSummary.mode')}
-                  </th>
-                  <th className="px-5 py-2.5 text-end font-medium">
-                    {t('payments.teacherSummary.due')}
-                  </th>
-                  <th className="px-5 py-2.5 text-end font-medium">
-                    {t('payments.teacherSummary.settled')}
-                  </th>
-                  <th className="px-5 py-2.5 text-end font-medium">
-                    {t('payments.teacherSummary.remaining')}
-                  </th>
-                  <th className="px-5 py-2.5 text-start font-medium">
-                    {t('payments.teacherSummary.status')}
-                  </th>
+                  <th className="px-5 py-2.5 text-end font-medium">{t('teachers.payment.total')}</th>
                 </tr>
               </thead>
               <tbody>
-                {teachers.map((row) => (
-                  <tr
-                    key={row.teacher_id}
-                    className="cursor-pointer border-t border-border hover:bg-background"
-                    onClick={() => navigate(`/teachers/${row.teacher_id}`)}
-                    data-testid={`dashboard-teacher-${row.teacher_id}`}
-                  >
-                    <td className="px-5 py-2.5 font-medium text-foreground">{row.teacher_name}</td>
-                    <td className="px-5 py-2.5 text-muted">
-                      {row.mode ? modeLabel(t, row.mode) : '—'}
-                    </td>
-                    <td className="px-5 py-2.5 text-end tabular-nums text-foreground">
-                      {formatCurrency(row.total_due_cents)}
-                    </td>
-                    <td className="px-5 py-2.5 text-end tabular-nums text-success">
-                      {formatCurrency(row.total_settled_cents)}
-                    </td>
-                    <td
-                      className={cn(
-                        'px-5 py-2.5 text-end tabular-nums',
-                        row.remaining_cents > 0 ? 'text-destructive' : 'text-muted',
-                      )}
-                    >
-                      {formatCurrency(row.remaining_cents)}
-                    </td>
-                    <td className="px-5 py-2.5">
-                      <Badge variant={statusVariant(row.status)}>
-                        {t(statusLabelKey(row.status))}
-                      </Badge>
-                    </td>
+                {teachers.map(({ teacher, total }) => (
+                  <tr key={teacher.id} className="cursor-pointer border-t border-border hover:bg-background"
+                    onClick={() => navigate(`/teachers/${teacher.id}`)} data-testid={`dashboard-teacher-${teacher.id}`}>
+                    <td className="px-5 py-2.5 font-medium text-foreground">{teacher.full_name}</td>
+                    <td className="px-5 py-2.5 text-end tabular-nums text-success">{formatCurrency(total)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -21,7 +21,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textare
       {label && (
         <label htmlFor={textareaId} className="mb-1.5 block text-label text-muted">
           {label}
-          {required && <span className="ms-0.5 text-destructive">*</span>}
+          {required && <span className="ms-0.5 text-red-500" aria-hidden="true">*</span>}
         </label>
       )}
       <textarea

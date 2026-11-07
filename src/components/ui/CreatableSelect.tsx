@@ -273,7 +273,7 @@ export function CreatableSelect<T>({
       {label && (
         <label htmlFor={triggerId} className="mb-1.5 block text-label text-muted">
           {label}
-          {required && <span className="ms-0.5 text-destructive">*</span>}
+          {required && <span className="ms-0.5 text-red-500" aria-hidden="true">*</span>}
         </label>
       )}
 
@@ -286,13 +286,15 @@ export function CreatableSelect<T>({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
+          aria-required={required || undefined}
           aria-invalid={!!error}
+          aria-describedby={error ? `${triggerId}-error` : hint ? `${triggerId}-hint` : undefined}
           disabled={disabled}
           onClick={() => (open ? close() : openPopup())}
           onKeyDown={onKeyDown}
           data-testid={testId ? `${testId}-trigger` : undefined}
           className={cn(
-            'flex h-9 w-full items-center gap-2 rounded-md border bg-white px-3 text-start text-body',
+            'flex min-h-9 w-full items-center gap-2 rounded-md border bg-white px-3 py-1.5 text-start text-body',
             'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20',
             'disabled:cursor-not-allowed disabled:bg-background disabled:text-muted',
             error ? 'border-destructive' : 'border-border',
@@ -300,7 +302,7 @@ export function CreatableSelect<T>({
           )}
         >
           <span
-            className={cn('min-w-0 flex-1 truncate', value === null ? 'text-muted' : 'text-foreground')}
+            className={cn('min-w-0 flex-1', value === null ? 'whitespace-normal break-words text-muted' : 'truncate text-foreground')}
             dir="auto"
           >
             {value === null ? (placeholder ?? '') : selectedLabel}
@@ -460,11 +462,11 @@ export function CreatableSelect<T>({
       </div>
 
       {error ? (
-        <p className="mt-1 text-[13px] text-destructive" data-testid={testId ? `${testId}-error` : undefined}>
+        <p id={`${triggerId}-error`} className="mt-1 text-[13px] text-destructive" data-testid={testId ? `${testId}-error` : undefined}>
           {error}
         </p>
       ) : hint ? (
-        <p className="mt-1 text-[13px] text-muted">{hint}</p>
+        <p id={`${triggerId}-hint`} className="mt-1 text-[13px] text-muted">{hint}</p>
       ) : null}
     </div>
   );

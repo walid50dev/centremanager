@@ -51,10 +51,11 @@ export function LockScreen() {
             <p className="mt-1 text-[13px] text-muted">{t('lock.subtitle')}</p>
           </div>
 
-          <form onSubmit={form.handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={form.handleSubmit} className="flex flex-col gap-4" noValidate>
             <Input
               type="password"
               label={t('login.password')}
+              required
               placeholder={t('login.placeholder')}
               autoFocus
               autoComplete="current-password"

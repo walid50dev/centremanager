@@ -19,29 +19,15 @@
 //!   `invoices.amount_cents` for that period. The collection rate is the ratio
 //!   of the two, so it never mixes the two calendars.
 //!
-//! The previous month is computed with an explicit year rollover
-//! (`January → December of the previous year`); the payroll summary of Phase 6
-//! is deliberately **not** duplicated here, the dashboard calls the existing
-//! `cmd_get_all_teacher_compensation_summary` from the frontend.
-//!
-//! **Phase 11 — net income.** `net_income_cents` is the number the director
-//! actually cares about:
-//!
-//! ```text
-//! net = revenue (received this month) - expenses (monthly_expenses) - payroll
-//! ```
-//!
-//! The payroll figure reuses [`crate::commands::compensation::compensation_summary`],
-//! so there is still exactly one implementation of "what a teacher costs this
-//! month" — the dashboard never re-derives a mode formula. Expenses come from
-//! `monthly_expenses`, and both are also computed for the previous month so the
-//! card can show a trend.
+//! Net income uses actual, manually recorded teacher payments (not estimated
+//! compensation), scoped to the active school year and paid date. Legacy rows
+//! are included only when their payroll period identifies one school year.
 
 use chrono::{Duration, Local, NaiveDate};
 use rusqlite::{params, Connection};
 use tauri::State;
 
-use super::compensation::compensation_summary;
+use super::teacher_payments::YEAR_MATCH;
 use super::db_err;
 use super::expenses::month_total as expenses_total;
 use super::invoices::parse_iso_date;
@@ -123,17 +109,10 @@ fn theoretical_of(conn: &Connection, month: i32, year: i32) -> Result<i64, Strin
     )
 }
 
-/// Payroll of a month: the sum of every configured teacher's total.
-///
-/// Teachers without a compensation configuration cost nothing and are skipped
-/// (their `total_due_cents` is zero anyway, this just avoids the extra read).
+/// Actual payments, not configured estimates; always scoped to the active school year.
 fn payroll_of(conn: &Connection, month: i32, year: i32) -> Result<i64, String> {
-    let summaries = compensation_summary(conn, month, year)?;
-    Ok(summaries
-        .iter()
-        .filter(|teacher| teacher.status != "not_configured")
-        .map(|teacher| teacher.total_due_cents)
-        .sum())
+    let sql = format!("SELECT COALESCE(SUM(ts.amount_cents),0) FROM teacher_settlements ts JOIN school_years y ON y.is_active=1 WHERE {} AND substr(COALESCE(ts.payment_date,ts.created_at),1,7)=printf('%04d-%02d',?2,?1)", YEAR_MATCH);
+    scalar(conn, &sql, params![month, year])
 }
 
 /// `revenue - expenses - payroll` for one month.
@@ -541,10 +520,9 @@ mod tests {
         // …an April expense that must not leak into March…
         expense(&conn, "Loyer avril", 50_000, "Loyer", 4);
 
-        // …and one teacher on a fixed 700 DH salary.
+        // …and 700 DH actually paid to a teacher during March.
         teacher(&conn, "Karim", "actif");
-        crate::commands::compensation::set_compensation(&conn, 1, "fixed_monthly", 70_000, None)
-            .unwrap();
+        conn.execute("INSERT INTO teacher_settlements(teacher_id,amount_cents,payment_date,school_year_id) VALUES(1,70000,'2026-03-12',1)", []).unwrap();
         // A second, unconfigured teacher costs nothing.
         teacher(&conn, "Zineb", "actif");
 
@@ -564,8 +542,7 @@ mod tests {
         payment(&conn, s, 30_000, "espèces", "2026-05-04 09:00:00");
         expense(&conn, "Loyer", 80_000, "Loyer", 5);
         teacher(&conn, "Karim", "actif");
-        crate::commands::compensation::set_compensation(&conn, 1, "fixed_monthly", 70_000, None)
-            .unwrap();
+        conn.execute("INSERT INTO teacher_settlements(teacher_id,amount_cents,payment_date,school_year_id) VALUES(1,70000,'2026-05-12',1)", []).unwrap();
 
         let kpis = dashboard_kpis(&conn, 5, 2026).unwrap();
         assert_eq!(kpis.net_income_cents, 30_000 - 80_000 - 70_000);
@@ -575,17 +552,17 @@ mod tests {
             kpis.net_income_cents
         );
 
-        // June has no expenses and no revenue: net is the payroll only.
+        // June has no expenses, payments or revenue.
         let june = dashboard_kpis(&conn, 6, 2026).unwrap();
         assert_eq!(june.total_expenses_cents, 0);
-        assert_eq!(june.net_income_cents, -70_000);
+        assert_eq!(june.net_income_cents, 0);
 
         // The trend compares with the month before, which is May here.
         assert_eq!(june.prev_month_net_income_cents, kpis.net_income_cents);
     }
 
     #[test]
-    fn payroll_uses_every_compensation_mode() {
+    fn payroll_counts_payments_not_estimates() {
         let conn = test_conn();
         let s1 = student(&conn, "Salma", "actif");
         let s2 = student(&conn, "Yassine", "actif");
@@ -606,11 +583,13 @@ mod tests {
         crate::commands::compensation::set_compensation(&conn, 2, "percentage", 1_000, None)
             .unwrap();
 
-        // Zineb's group holds two students at 300 DH → 600 DH × 10 % = 60 DH.
+        // Configurations are estimates, not payments.
         let kpis = dashboard_kpis(&conn, 2, 2026).unwrap();
-        assert_eq!(kpis.total_compensation_cents, 70_000 + 6_000);
+        assert_eq!(kpis.total_compensation_cents, 0);
         assert_eq!(kpis.monthly_revenue_cents, 0, "nothing collected yet");
-        assert_eq!(kpis.net_income_cents, -(70_000 + 6_000));
+        assert_eq!(kpis.net_income_cents, 0);
+        conn.execute("INSERT INTO teacher_settlements(teacher_id,amount_cents,payment_date,school_year_id) VALUES(2,6000,'2026-02-10',1)", []).unwrap();
+        assert_eq!(dashboard_kpis(&conn, 2, 2026).unwrap().net_income_cents, -6000);
     }
 
     #[test]

@@ -428,6 +428,8 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
           <div className="space-y-4">
             <MoneyInput
               label={t('payment.amount')}
+              required
+              error={error ?? undefined}
               valueCents={amountCents}
               onChange={setAmountCents}
               autoFocus

@@ -6,7 +6,6 @@ import {
   BookOpen,
   Calculator,
   Info,
-  NotebookPen,
   Pencil,
   ToggleLeft,
   ToggleRight,
@@ -19,23 +18,21 @@ import EmptyState from '../components/ui/EmptyState';
 import TeacherModal from '../components/teachers/TeacherModal';
 import TeacherInfoTab from '../components/teachers/TeacherInfoTab';
 import TeacherGroupsTab from '../components/teachers/TeacherGroupsTab';
-import TeacherActivitiesTab from '../components/teachers/TeacherActivitiesTab';
 import TeacherCompensationTab from '../components/teachers/TeacherCompensationTab';
 import { toast } from '../components/ui/Toast';
 import { teachersApi } from '../services/teachers';
 import { cn } from '../utils/format';
 import type { TeacherDetail } from '../types';
 
-type TabKey = 'info' | 'groups' | 'activities' | 'compensation';
+type TabKey = 'info' | 'groups' | 'compensation';
 
 const TABS: Array<{ key: TabKey; labelKey: string; icon: typeof Info }> = [
   { key: 'info', labelKey: 'teachers.tabInfo', icon: Info },
   { key: 'groups', labelKey: 'teachers.tabGroups', icon: BookOpen },
-  { key: 'activities', labelKey: 'teachers.tabActivities', icon: NotebookPen },
   { key: 'compensation', labelKey: 'teachers.tabCompensation', icon: Calculator },
 ];
 
-/** Teacher sheet — four tabs: identity & payroll config, groups, activities, payroll. */
+/** Teacher sheet — identity, groups, estimates and manual payments. */
 export function TeacherDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -203,13 +200,10 @@ export function TeacherDetailPage() {
 
       {tab === 'info' && <TeacherInfoTab detail={detail} onChanged={() => void load()} />}
       {tab === 'groups' && <TeacherGroupsTab groups={detail.groups} />}
-      {tab === 'activities' && <TeacherActivitiesTab teacherId={teacher.id} />}
       {tab === 'compensation' && (
         <TeacherCompensationTab
           teacherId={teacher.id}
           teacherName={teacher.full_name}
-          onConfigure={() => setTab('info')}
-          onChanged={() => void load()}
         />
       )}
 

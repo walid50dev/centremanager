@@ -343,6 +343,28 @@ pub fn payment_alerts_on(
     for student in students {
         let total_due = (student.total_amount_cents - student.total_paid_cents).max(0);
 
+        // Enrollment-fee invoices are not linked to a group. If no invoiced
+        // group was identified, show the student's active-year enrollments.
+        // Do not include deleted groups or groups from other school years.
+        let groups = if student.groups.is_empty() {
+            let mut group_stmt = conn.prepare_cached(
+                "SELECT DISTINCT TRIM(COALESCE(su.name,'') || ' ' || COALESCE(l.name,'')) AS label
+                 FROM enrollments e JOIN groups g ON g.id=e.group_id
+                 LEFT JOIN subjects su ON su.id=g.subject_id LEFT JOIN levels l ON l.id=g.level_id
+                 WHERE e.student_id=?1 AND e.status='actif' AND g.deleted_at IS NULL
+                   AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)
+                   AND TRIM(COALESCE(su.name,'') || ' ' || COALESCE(l.name,''))<>''
+                 ORDER BY label"
+            ).map_err(|err| db_err("Lecture des groupes", err))?;
+            let labels = group_stmt.query_map(params![student.student_id], |row| row.get::<_, String>(0))
+                .map_err(|err| db_err("Lecture des groupes", err))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|err| db_err("Lecture des groupes", err))?;
+            labels.join(", ")
+        } else {
+            student.groups.join(", ")
+        };
+
         let (last_payment_date, last_payment_method) =
             last_payment_of_month(conn, student.student_id, month, year)?;
 
@@ -361,7 +383,7 @@ pub fn payment_alerts_on(
             student_id: student.student_id,
             student_name: student.student_name,
             student_phone: student.student_phone,
-            groups: student.groups.join(", "),
+            groups,
             total_due_cents: total_due,
             total_paid_cents: student.total_paid_cents,
             due_date,
@@ -778,6 +800,20 @@ mod tests {
         )
         .unwrap();
         assert_eq!(late_payment_count_on(&conn, reference).unwrap(), 0);
+    }
+
+    #[test]
+    fn fee_only_alert_falls_back_to_active_year_groups() {
+        let conn = test_conn();
+        let g = group(&conn, 30_000);
+        let s = student(&conn, "Salma", "0612345678");
+        enroll_student(&conn, s, g, "2026-03-01").unwrap();
+        conn.execute("INSERT INTO invoices(period_month,period_year,amount_cents,due_date,type) VALUES(2,2026,10000,'2026-02-01','frais_inscription')", []).unwrap();
+        let invoice_id = conn.last_insert_rowid();
+        conn.execute("INSERT INTO enrollment_fees(student_id,school_year_id,amount,invoice_id) VALUES(?1,1,10000,?2)", params![s, invoice_id]).unwrap();
+        let alerts = payment_alerts_on(&conn, 2, 2026, NaiveDate::from_ymd_opt(2026, 3, 5).unwrap()).unwrap();
+        assert_eq!(alerts.late.len(), 1);
+        assert!(alerts.late[0].groups.contains("Mathématiques Tronc Commun"));
     }
 
     #[test]

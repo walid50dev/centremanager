@@ -6,9 +6,7 @@ import type { AlertItem, DashboardKPIs, RecentPayment } from '../types';
  * Typed wrappers for the Phase 7 read-only dashboard commands
  * (`commands/dashboard.rs`).
  *
- * The teacher payroll block is **not** wrapped here: the dashboard reuses
- * `compensationApi.summary(month, year)` from Phase 6 so there is exactly one
- * implementation of the payroll totals.
+ * Teacher payments and the net result reflect actual recorded payments.
  */
 const USE_DEV_BACKEND = import.meta.env.DEV && !isTauri();
 

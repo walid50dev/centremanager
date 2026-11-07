@@ -82,9 +82,9 @@ Sans cette option, le script capture l'ensemble du parcours 01–43. Les section
 | 28-modal-edit-group.png | Groupe Mathématiques → Modifier. |
 | 29-modal-add-teacher.png | Enseignants → Nouvel enseignant, nom saisi. |
 | 30-modal-edit-teacher.png | Fiche Prof. Amrani → Modifier. |
-| 31-modal-add-teacher-activity.png | Fiche enseignant → Activités → Ajouter activité. |
+| 31-teacher-payment-history.png | Fiche enseignant → Paiements, historique de l’année active. |
 | 32-modal-add-teacher-compensation.png | Fiche enseignant → Informations → Configuration de la compensation. |
-| 33-modal-add-teacher-settlement.png | Enregistrer une compensation fictive → Compensation → Régler. |
+| 33-modal-add-teacher-settlement.png | Fiche enseignant → Paiements → Enregistrer un paiement. |
 | 34-modal-add-payment.png | Paiements → Encaisser → choisir un élève et des factures → étape montant et mode. |
 | 35-modal-add-expense.png | Frais → Nouvelle dépense. |
 | 36-modal-edit-expense.png | Frais → Modifier une dépense existante. |
@@ -96,4 +96,4 @@ Sans cette option, le script capture l'ensemble du parcours 01–43. Les section
 | 42-modal-trash-empty-confirm.png | Corbeille → Vider la corbeille, sans confirmer. |
 | 43-modal-duplicate-warning.png | Nouvel élève → même nom et téléphone que Salma ; alerte de doublon visible. |
 
-**Particularités de l'interface actuelle :** la compensation (32) est un formulaire intégré à la fiche, pas une modale ; le formulaire groupe n'a pas de champ de nom libre (son nom est composé à partir de la matière et du niveau) ; la période d'une dépense est choisie sur la page plutôt que dans sa modale. Pour illustrer un import de groupe non vide (39), le script ajoute un groupe historique fictif dans son contexte jetable, après les captures des pages principales. Le script enregistre aussi une configuration de compensation fictive afin d'ouvrir le règlement (33), mais ne valide aucun règlement.
+**Particularités de l'interface actuelle :** la compensation (32) est un formulaire intégré à la fiche, pas une modale ; le formulaire groupe n'a pas de champ de nom libre (son nom est composé à partir de la matière et du niveau) ; la période d'une dépense est choisie sur la page plutôt que dans sa modale. Pour illustrer un import de groupe non vide (39), le script ajoute un groupe historique fictif dans son contexte jetable, après les captures des pages principales. Le script enregistre aussi une estimation fictive avant d'ouvrir le paiement (33), mais ne valide aucun paiement.

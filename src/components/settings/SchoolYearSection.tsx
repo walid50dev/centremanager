@@ -30,6 +30,7 @@ export function SchoolYearSection() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activatingId, setActivatingId] = useState<number | null>(null);
   const [exporting, setExporting] = useState<number | null>(null);
@@ -112,18 +113,8 @@ export function SchoolYearSection() {
 
   const handleCreate = async () => {
     setFormError(null);
-    if (!label.trim()) {
-      setFormError(t('settings.schoolYear.labelRequired'));
-      return;
-    }
-    if (!startDate || !endDate) {
-      setFormError(t('settings.schoolYear.datesRequired'));
-      return;
-    }
-    if (endDate <= startDate) {
-      setFormError(t('settings.schoolYear.invalidDates'));
-      return;
-    }
+    setShowFieldErrors(true);
+    if (!label.trim() || !startDate || !endDate || endDate <= startDate) return;
 
     setSubmitting(true);
     try {
@@ -132,6 +123,7 @@ export function SchoolYearSection() {
       setLabel('');
       setStartDate('');
       setEndDate('');
+      setShowFieldErrors(false);
       setFormOpen(false);
       await load();
       toast.success(t('settings.schoolYear.created'));
@@ -240,6 +232,8 @@ export function SchoolYearSection() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Input
                     label={t('settings.schoolYear.label')}
+                    required
+                    error={showFieldErrors && !label.trim() ? t('settings.schoolYear.labelRequired') : undefined}
                     placeholder={t('settings.schoolYear.labelPlaceholder')}
                     value={label}
                     onChange={(event) => setLabel(event.target.value)}
@@ -247,12 +241,16 @@ export function SchoolYearSection() {
                   <Input
                     type="date"
                     label={t('settings.schoolYear.startDate')}
+                    required
+                    error={showFieldErrors && !startDate ? t('settings.schoolYear.datesRequired') : undefined}
                     value={startDate}
                     onChange={(event) => setStartDate(event.target.value)}
                   />
                   <Input
                     type="date"
                     label={t('settings.schoolYear.endDate')}
+                    required
+                    error={showFieldErrors && !endDate ? t('settings.schoolYear.datesRequired') : showFieldErrors && startDate && endDate <= startDate ? t('settings.schoolYear.invalidDates') : undefined}
                     value={endDate}
                     onChange={(event) => setEndDate(event.target.value)}
                   />
@@ -272,6 +270,7 @@ export function SchoolYearSection() {
                     onClick={() => {
                       setFormOpen(false);
                       setFormError(null);
+                      setShowFieldErrors(false);
                     }}
                   >
                     {t('common.cancel')}

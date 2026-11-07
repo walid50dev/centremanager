@@ -31,7 +31,8 @@ const SUNDAY: WeekDay = WEEK_DAYS[6];
 
 /** One grid row is half an hour; this is its height in pixels. */
 const ROW_MINUTES = 30;
-const SLOT_PX = 20;
+// 60 pixels per hour leaves room for a legible range even in a 15-minute slot.
+const SLOT_PX = 30;
 
 const EMPTY_FILTERS: TimetableFilters = {
   level_id: null,
@@ -41,6 +42,15 @@ const EMPTY_FILTERS: TimetableFilters = {
 };
 
 type FilterKey = keyof TimetableFilters;
+
+/** Ignore incomplete legacy rows rather than rendering them at midnight. */
+function isScheduledEntry(entry: TimetableEntry): boolean {
+  const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  return WEEK_DAYS.some(day => day === entry.day_of_week)
+    && typeof entry.start_time === 'string' && time.test(entry.start_time)
+    && typeof entry.end_time === 'string' && (time.test(entry.end_time) || entry.end_time === '24:00')
+    && minutesOf(entry.end_time) > minutesOf(entry.start_time);
+}
 
 export interface TimetablePageProps {
   /** Rendered by the router; unused, but keeps the page testable in isolation. */
@@ -102,7 +112,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
       setLoading(true);
       try {
         const rows = await schedulesApi.timetable(filters);
-        if (active) setEntries(rows);
+        if (active) setEntries(rows.filter(isScheduledEntry));
       } catch (error) {
         if (active) toast.error(error instanceof Error ? error.message : String(error));
       } finally {
@@ -149,7 +159,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
 
   const refresh = useCallback(async () => {
     try {
-      setEntries(await schedulesApi.timetable(filters));
+      setEntries((await schedulesApi.timetable(filters)).filter(isScheduledEntry));
       setRooms(await schedulesApi.rooms());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -177,6 +187,10 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
     return map;
   }, [byDay]);
 
+  // Expand busy day columns to keep every overlap lane wide enough for a full
+  // time range. The week scrolls as a whole instead of clipping a day internally.
+  const dayMinWidths = days.map(day => Math.max(1, ...(lanesByDay.get(day) ?? []).map(lane => lane.laneCount)) * 112);
+  const gridMinWidth = Math.max(820, 56 + dayMinWidths.reduce((sum, width) => sum + width, 0) + days.length * 4);
   const totalClasses = entries.length;
 
   const filtersBar = (
@@ -257,9 +271,8 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
     ].join('\n');
     const top = (minutesOf(entry.start_time) - grid.startHour * 60) * SLOT_PX / ROW_MINUTES;
     const height = (minutesOf(entry.end_time) - minutesOf(entry.start_time)) * SLOT_PX / ROW_MINUTES;
-    // Each cluster has its own width. Above four lanes, keep each lane at
-    // least a quarter of the visible day column, allowing horizontal scroll.
-    const clusterWidth = `max(100%, ${laneCount * 80}px, ${laneCount * 25}%)`;
+    // The day column is wide enough for its busiest cluster.
+    const clusterWidth = '100%';
     return (
       <div
         key={`${entry.group_id}-${entry.day_of_week}-${entry.start_time}`}
@@ -268,7 +281,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
       >
         <div
           className="timetable-lane absolute"
-          style={{ top, height, left: `${laneIndex / laneCount * 100}%`, width: `${100 / laneCount}%`, containerType: 'inline-size' }}
+          style={{ top, height, left: `${laneIndex / laneCount * 100}%`, width: `${100 / laneCount}%`, containerType: 'size' }}
           data-lane-index={laneIndex}
           data-lane-count={laneCount}
         >
@@ -281,11 +294,12 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
             data-subject={entry.subject_name}
             style={{ backgroundColor: subjectTint(color), borderColor: color, color }}
             className={cn(
-              'pointer-events-auto flex h-full w-full flex-col gap-0.5 overflow-hidden rounded-md border border-s-4 p-1 text-start',
+              'timetable-card pointer-events-auto flex h-full w-full flex-col gap-0.5 overflow-hidden rounded-md border border-s-4 p-1 text-start',
               'transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40',
             )}
           >
-            <span className="w-full truncate text-[12px] font-semibold leading-tight" dir="auto">{groupName}</span>
+            <span className="timetable-lane-name w-full shrink-0 truncate text-[12px] font-semibold leading-tight" dir="auto">{groupName}</span>
+            <span className="timetable-lane-time shrink-0 whitespace-nowrap text-[11px] font-semibold leading-tight tabular-nums" dir="ltr" data-testid={`timetable-time-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}>{entry.start_time} – {entry.end_time}</span>
             <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-90" dir="auto">{entry.subject_name}</span>
             {entry.room ? <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-80" dir="auto">{entry.room}</span> : null}
             {entry.teacher_name ? <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-80" dir="auto">{entry.teacher_name}</span> : null}
@@ -326,14 +340,15 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
         ) : null}
 
         {/* Tablet and up: the full week. Below `lg` it scrolls horizontally. */}
-        <div className={cn('overflow-x-auto', loading && 'hidden')}>
+        <div dir="ltr" className={cn('overflow-x-auto', loading && 'hidden')}>
           {/* `dir="ltr"` on purpose: in Arabic the labels are mirrored but Lundi
               stays the left-most column, so the week reads the same both ways. */}
           <div
             dir="ltr"
-            className="relative grid min-w-[820px] gap-x-1"
+            className="relative grid gap-x-1"
             style={{
-              gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))`,
+              minWidth: gridMinWidth,
+              gridTemplateColumns: `56px ${dayMinWidths.map(width => `minmax(${width}px, 1fr)`).join(' ')}`,
               gridTemplateRows: `36px repeat(${grid.rows}, ${SLOT_PX}px) 12px`,
             }}
             data-testid="timetable-grid"
@@ -385,11 +400,11 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
               </div>
             ))}
 
-            {/* Each day scrolls independently when its overlap cluster is wide. */}
+            {/* Day widths grow with overlap; the week scrolls as a whole. */}
             {days.map((day, dayIndex) => (
               <div
                 key={`column-${day}`}
-                className="min-w-0 overflow-x-auto"
+                className="min-w-0"
                 style={{ gridColumn: dayIndex + 2, gridRow: `2 / span ${grid.rows + 1}` }}
                 data-testid={`timetable-day-column-${DAY_KEYS[day]}`}
               >
@@ -459,10 +474,10 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
                   className="flex w-full flex-col gap-0.5 rounded-md border border-s-4 p-2 text-start"
                   data-testid={`timetable-mobile-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}
                 >
-                  <span className="flex items-center justify-between text-[12px] font-semibold">
-                    <span dir="auto">{entry.subject_name}</span>
-                    <span className="font-normal opacity-80">
-                      {entry.start_time}–{entry.end_time}
+                  <span className="flex w-full min-w-0 items-center justify-between gap-2 text-[12px] font-semibold">
+                    <span className="min-w-0 truncate" dir="auto">{entry.subject_name}</span>
+                    <span className="shrink-0 whitespace-nowrap font-normal tabular-nums opacity-80" dir="ltr">
+                      {entry.start_time} – {entry.end_time}
                     </span>
                   </span>
                   <span className="text-[11px] opacity-90" dir="auto">

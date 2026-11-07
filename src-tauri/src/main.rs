@@ -126,13 +126,10 @@ fn main() {
             commands::teachers::cmd_set_teacher_status,
             // Compensation & settlements (Phase 6)
             commands::compensation::cmd_set_compensation,
-            commands::compensation::cmd_calculate_compensation,
-            commands::compensation::cmd_record_settlement,
-            commands::compensation::cmd_get_teacher_settlements,
-            commands::compensation::cmd_get_all_teacher_compensation_summary,
-            // Activities (Phase 6)
-            commands::activities::cmd_record_activity,
-            commands::activities::cmd_get_activities,
+            // Manual teacher payments
+            commands::teacher_payments::cmd_create_teacher_payment,
+            commands::teacher_payments::cmd_list_teacher_payments,
+            commands::teacher_payments::cmd_list_unattributed_teacher_payments,
             // Dashboard (Phase 7)
             commands::dashboard::cmd_get_dashboard_kpis,
             commands::dashboard::cmd_get_dashboard_alerts,
