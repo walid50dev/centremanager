@@ -8,11 +8,11 @@ import argparse, json, os, re, sqlite3, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
-def create(path):
+def create(path, input_json=None):
     # Exclusive creation is a hard guard against destroying real data.
     fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600); os.close(fd)
     try:
-        data=json.loads(subprocess.check_output(['node', str(ROOT/'scripts/export-load-test-json.mjs')],cwd=ROOT,text=True))
+        data=json.loads(Path(input_json).read_text() if input_json else subprocess.check_output(['node', str(ROOT/'scripts/export-load-test-json.mjs')],cwd=ROOT,text=True))
         conn=sqlite3.connect(path)
         try:
             conn.executescript((ROOT/'src-tauri/src/db/schema.sql').read_text())
@@ -67,7 +67,8 @@ def create(path):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',required=True,help='New SQLite file; existing files are never overwritten')
+    parser.add_argument('--input-json',help='Use an existing exported fixture so browser and SQLite data match')
     args=parser.parse_args()
-    try: create(args.output)
+    try: create(args.output, args.input_json)
     except (OSError,ValueError,sqlite3.Error,subprocess.CalledProcessError) as e:
         print(f'Failed: {e}',file=sys.stderr); sys.exit(1)

@@ -10,14 +10,14 @@ import { isTauri } from './services/api';
 useAppStore.getState().applyLanguage(useAppStore.getState().language);
 
 async function start() {
-  // Opt-in preview only: never touch an existing browser profile or Tauri DB.
-  if (import.meta.env.DEV && import.meta.env.VITE_LOAD_TEST_FIXTURE === '1' && !isTauri()) {
-    const { seedLoadTest } = await import('../scripts/load-test-fixture.mjs');
-    const seeded = await seedLoadTest();
-    if (seeded) {
-      const { authApi } = await import('./services/auth');
-      await authApi.setup('Centre Test Marrakech', 'test1234');
-    }
+  // A one-time replacement in browser development profiles. Existing auth is
+  // retained; previous browser data is saved before the test fixture is applied.
+  // Production builds and Tauri use their own database paths and skip this.
+  if (import.meta.env.DEV && import.meta.env.VITE_LOAD_TEST_FIXTURE !== '0' && !isTauri()) {
+    const { applyBundledLoadTest } = await import('../scripts/load-test-fixture.mjs');
+    await applyBundledLoadTest();
+    const { authApi } = await import('./services/auth');
+    if (!(await authApi.checkSetup())) await authApi.setup('Centre Test Marrakech', 'test1234');
   }
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
@@ -25,4 +25,7 @@ async function start() {
     </React.StrictMode>,
   );
 }
-void start();
+void start().catch((error: unknown) => {
+  const root = document.getElementById('root');
+  if (root) root.textContent = `Impossible de charger les données de test : ${error instanceof Error ? error.message : String(error)}. Relancez avec VITE_LOAD_TEST_FIXTURE=0 pour conserver le profil existant.`;
+});

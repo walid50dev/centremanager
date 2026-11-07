@@ -598,24 +598,58 @@ fn migrate_legacy_data_dir(app: &tauri::AppHandle, data_dir: &Path) -> Result<()
     Ok(())
 }
 
+/// Install the debug fixture once, without replacing an existing development DB.
+#[cfg(debug_assertions)]
+fn ensure_debug_fixture(fixture: &Path, target: &Path) -> Result<bool, String> {
+    match fs::OpenOptions::new().write(true).create_new(true).open(target) {
+        Ok(mut out) => {
+            let copy = (|| -> std::io::Result<()> {
+                let mut input = fs::File::open(fixture)?;
+                std::io::copy(&mut input, &mut out)?;
+                out.sync_all()
+            })();
+            if let Err(err) = copy {
+                drop(out);
+                let _ = fs::remove_file(target);
+                return Err(format!("Impossible de copier la base de test {} : {err}", fixture.display()));
+            }
+            Ok(true)
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(err) => Err(format!("Impossible de créer la base {} : {err}", target.display())),
+    }
+}
+
 /// Create/upgrade the database and hand back a ready-to-use connection.
 ///
 /// Called from the Tauri `setup` hook.
 pub fn init_db(app: &tauri::AppHandle) -> Result<Connection, String> {
+    #[cfg(not(debug_assertions))]
     use tauri::Manager;
 
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|err| format!("Impossible de résoudre le dossier de données : {err}"))?;
-
-    fs::create_dir_all(&data_dir)
-        .map_err(|err| format!("Impossible de créer {} : {err}", data_dir.display()))?;
-
-    // V1.0 → V1.1 upgrade: keep the existing centre, just move the file.
-    migrate_legacy_data_dir(app, &data_dir)?;
-
-    let path = data_dir.join(DB_FILE_NAME);
+    // Debug builds use a persistent project-local test database. Copy the
+    // supplied fixture only on first launch; never replace edits on restart or
+    // touch the production app-data directory (including its WAL/SHM files).
+    #[cfg(debug_assertions)]
+    let path = {
+        let _ = app;
+        let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("test-data");
+        fs::create_dir_all(&test_dir)
+            .map_err(|err| format!("Impossible de créer {} : {err}", test_dir.display()))?;
+        let fixture = test_dir.join("centremanager-charge.db");
+        let target = test_dir.join("centremanager-dev.db");
+        ensure_debug_fixture(&fixture, &target)?;
+        target
+    };
+    #[cfg(not(debug_assertions))]
+    let path = {
+        let data_dir = app.path().app_data_dir()
+            .map_err(|err| format!("Impossible de résoudre le dossier de données : {err}"))?;
+        fs::create_dir_all(&data_dir)
+            .map_err(|err| format!("Impossible de créer {} : {err}", data_dir.display()))?;
+        migrate_legacy_data_dir(app, &data_dir)?;
+        data_dir.join(DB_FILE_NAME)
+    };
     set_db_path(path.clone());
 
     let conn = open_connection_at(&path)
@@ -625,6 +659,13 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<Connection, String> {
 
     // Seed sensible defaults on first launch (idempotent).
     seed_defaults(&conn).map_err(|err| format!("Échec de l'initialisation des données : {err}"))?;
+
+    // The synthetic debug database has no credentials. Initialize only when
+    // missing, so a developer's changed test password survives restarts.
+    #[cfg(debug_assertions)]
+    if !crate::commands::auth::check_setup(&conn)? {
+        crate::commands::auth::setup(&conn, "Centre Test Marrakech", "test1234")?;
+    }
 
     println!("[CentreManager] base de données prête : {}", path.display());
     Ok(conn)
@@ -710,6 +751,26 @@ mod tests {
                 .unwrap(),
             1
         );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_fixture_is_copied_once_without_overwriting_changes() {
+        let dir = std::env::temp_dir().join(format!("cm-debug-fixture-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let fixture = dir.join("fixture.db");
+        let target = dir.join("dev.db");
+        fs::write(&fixture, b"fixture").unwrap();
+        assert!(ensure_debug_fixture(&fixture, &target).unwrap());
+        assert_eq!(fs::read(&target).unwrap(), b"fixture");
+        fs::write(&target, b"edited").unwrap();
+        assert!(!ensure_debug_fixture(&fixture, &target).unwrap());
+        assert_eq!(fs::read(&target).unwrap(), b"edited");
+        fs::remove_file(&target).unwrap();
+        fs::remove_file(&fixture).unwrap();
+        assert!(ensure_debug_fixture(&fixture, &target).is_err());
+        assert!(!target.exists());
+        fs::remove_dir(&dir).unwrap();
     }
 
     #[test]
