@@ -249,7 +249,8 @@ fn enroll_on(
         "SELECT school_year_id FROM groups WHERE id=?1 AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)",
         params![group_id], |r| r.get(0))
         .map_err(|_| "Groupe hors de l'année scolaire active".to_string())?;
-    let fee = super::settings::enrollment_fee(conn)?;
+    let fee: i64 = conn.query_row("SELECT enrollment_fee_cents FROM students WHERE id=?1", params![student_id], |r| r.get(0))
+        .map_err(|e| db_err("Lecture des frais de l'élève", e))?;
     // Persist even the zero-fee decision, so later groups cannot charge it
     // retroactively and deleting a group cannot reset the decision.
     let first_enrollment = conn.execute(
@@ -513,6 +514,7 @@ mod tests {
 
     fn group(conn: &Connection, fee: i64, capacity: i32, day: &str) -> i64 {
         let input = CreateGroupInput {
+            name: None,
             subject_id: 1,
             level_id: 10,
             branch_id: None,
@@ -562,6 +564,7 @@ mod tests {
         super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
         let g = group(&conn, 30_000, 10, "Lundi");
         let s = student(&conn, "Test Fee", "0612345678");
+        conn.execute("UPDATE students SET enrollment_fee_cents=20000 WHERE id=?1", params![s]).unwrap();
         let rows = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:s, group_id:g, start_date:"2026-09-01".into() }]).unwrap();
         let fee = rows[0].enrollment_fee_invoice_id.unwrap();
         assert_eq!(rows[0].enrollment_fee_amount_cents, Some(20_000));
@@ -590,6 +593,7 @@ mod tests {
         let conn = test_conn();
         super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
         let s = student(&conn, "Test Once", "0612345678");
+        conn.execute("UPDATE students SET enrollment_fee_cents=20000 WHERE id=?1", params![s]).unwrap();
         let a = group(&conn, 10_000, 10, "Lundi");
         let b = group(&conn, 10_000, 10, "Mardi");
         let inputs = [BatchEnrollmentInput { student_id:s, group_id:a, start_date:"2026-09-01".into() }, BatchEnrollmentInput { student_id:s, group_id:b, start_date:"2026-09-01".into() }];
@@ -613,6 +617,7 @@ mod tests {
         let conn = test_conn();
         super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
         let s = student(&conn, "Test Year", "0612345678");
+        conn.execute("UPDATE students SET enrollment_fee_cents=20000 WHERE id=?1", params![s]).unwrap();
         let a = group(&conn, 10_000, 10, "Lundi");
         enroll_student(&conn, s, a, "2026-09-01").unwrap();
         conn.execute("INSERT INTO school_years (label,start_date,end_date,is_active) VALUES ('2030-2031','2030-09-01','2031-06-30',0)", []).unwrap();
@@ -620,6 +625,7 @@ mod tests {
         conn.execute("UPDATE school_years SET is_active=(id=?1)", params![next]).unwrap();
         assert_eq!(super::super::settings::enrollment_fee(&conn).unwrap(), 0);
         super::super::settings::set_enrollment_fee(&conn, 30_000).unwrap();
+        conn.execute("UPDATE students SET enrollment_fee_cents=30000 WHERE id=?1", params![s]).unwrap();
         conn.execute("INSERT INTO groups(subject_id,level_id,school_year_id,monthly_fee_cents,capacity,status) VALUES (1,10,?1,10000,10,'actif')", params![next]).unwrap();
         let b = conn.last_insert_rowid();
         enroll_student(&conn, s, b, "2030-09-01").unwrap();

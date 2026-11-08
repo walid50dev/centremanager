@@ -90,7 +90,8 @@ try {
   await act(async () => { await wait(280); });
   await click(q('[data-testid="enrollment-create-group"]'));
   await act(async () => { await wait(250); });
-  assert.ok(q('[data-modal-z="60"] [data-testid="group-week"]'), 'real full group modal');
+  assert.ok(q('[data-modal-z="60"] [data-testid="group-name"]'), 'real full group modal');
+  assert.equal(document.querySelector('[data-modal-z="60"] [data-testid="group-week"]'), null);
   await click(q('[data-testid="group-teacher-trigger"]'));
   assert.equal(q('[data-testid="group-teacher-list"]').style.zIndex, '61');
   await click(q('[data-testid="group-teacher-create"]'));
@@ -109,6 +110,7 @@ try {
     const option = list.querySelector('button[data-testid*="-option-"]'); assert.ok(option);
     await click(option);
   }
+  await change(q('[data-testid="group-name"]'), 'Groupe Imbriqué');
   await change(q('[data-testid="group-fee"]'), '300');
   const groupForm = q('#group-form');
   await act(async () => { groupForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })); await wait(450); });

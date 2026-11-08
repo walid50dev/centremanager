@@ -20,11 +20,9 @@ try {
   const root = createRoot(query('#root'));
   await act(async () => { root.render(React.createElement(Settings)); }); await act(async () => { await wait(250); });
   await click(query('section button[aria-expanded]')); await act(async () => { await wait(100); });
-  const input = query('[data-testid="enrollment-fee-input"]');
-  await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(input, '200'); input.dispatchEvent(new dom.window.Event('input', { bubbles:true })); await wait(50); });
-  await click(query('[data-testid="enrollment-fee-save"]')); assert.equal(await call('cmd_get_enrollment_fee'), 20000);
+  assert.equal(document.querySelector('[data-testid="enrollment-fee-input"]'), null, 'global fee removed');
   const year = await call('cmd_get_active_school_year');
-  const student = await call('cmd_create_student', { data:{ full_name:'Nadia Alaoui', first_name:'Nadia', last_name:'Alaoui', phone:'0661234567', guardian_name:'Rachid Alaoui', guardian_phone:'0661234567', enrollment_date:'2026-09-01', level_id:1, status:'actif' } });
+  const student = await call('cmd_create_student', { data:{ full_name:'Nadia Alaoui', first_name:'Nadia', last_name:'Alaoui', phone:'0661234567', guardian_name:'Rachid Alaoui', guardian_phone:'0661234567', enrollment_date:'2026-09-01', level_id:1, status:'actif', enrollment_fee_cents:20000 } });
   await act(async () => { root.render(React.createElement(MemoryRouter, {initialEntries:[`/students/${student}`]}, React.createElement(Routes, null, React.createElement(Route, {path:'/students/:id', element:React.createElement(StudentDetail)})))); }); await act(async () => { await wait(400); });
   const button = text => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === text);
   await click(button('Inscriptions'));

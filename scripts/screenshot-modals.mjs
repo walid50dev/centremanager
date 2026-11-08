@@ -47,7 +47,7 @@ export async function captureModalScreens({ page, step, nav }) {
   await modalStep('24-modal-add-student-step3', async () => { await studentForm(); await scroll(tid('student-section-admin')); });
   await modalStep('25-modal-edit-student', async () => { await studentDetail(); await page.getByRole('button', { name: 'Modifier', exact: true }).click(); await tid('student-first-name').waitFor(); });
   await modalStep('26-modal-add-group', async () => { await groupForm(); });
-  await modalStep('27-modal-add-group-schedules', async () => { await groupForm(); await tid('group-day-Lundi-toggle').check(); await tid('group-day-Mercredi-toggle').check(); await scroll(tid('group-week')); });
+  await modalStep('27-modal-add-group-schedules', async () => { await nav('timetable'); await tid('timetable-manage').click(); await tid('timetable-group').selectOption('1'); await tid('timetable-slot').first().waitFor(); });
   await modalStep('28-modal-edit-group', async () => { await nav('groups'); await tid('group-card-1').click(); await page.getByRole('dialog').getByRole('button', { name: 'Modifier', exact: true }).click(); await tid('group-fee').waitFor(); });
   await modalStep('29-modal-add-teacher', async () => { await nav('teachers'); await tid('teacher-new').click(); await page.getByRole('dialog').getByLabel(/nom complet/i).fill('Prof. Alaoui'); });
   await modalStep('30-modal-edit-teacher', async () => { await teacherDetail(); await page.getByRole('button', { name: 'Modifier', exact: true }).click(); await page.getByRole('dialog').getByLabel(/nom complet/i).waitFor(); });

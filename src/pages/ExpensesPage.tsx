@@ -280,7 +280,7 @@ export function ExpensesPage() {
                       <ExpenseCategoryBadge category={expense.category} />
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className="font-medium text-foreground">{expense.label}</span>
+                      <span className="font-medium text-foreground">{expense.label || '—'}</span>
                       <span className="mt-0.5 block text-[11px] text-muted">
                         {t('expenses.createdAt')} {formatDateTime(expense.created_at)}
                       </span>
@@ -293,7 +293,7 @@ export function ExpensesPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
-                        <ViewButton name={expense.label} testId={`view-expense-${expense.id}`} onView={() => setViewing(expense)} />
+                        <ViewButton name={expense.label || categoryLabel(t, expense.category)} testId={`view-expense-${expense.id}`} onView={() => setViewing(expense)} />
                         <button
                           type="button"
                           onClick={() => openEdit(expense)}
@@ -348,7 +348,7 @@ export function ExpensesPage() {
         testId="expense-detail" footer={<Button variant="secondary" onClick={() => setViewing(null)}>{t('common.close')}</Button>}>
         {viewing && <dl className="space-y-4 text-[13px]">
           <div><dt className="text-muted">{t('expenses.category')}</dt><dd><ExpenseCategoryBadge category={viewing.category} /></dd></div>
-          <div><dt className="text-muted">{t('expenses.label')}</dt><dd dir="auto">{viewing.label}</dd></div>
+          <div><dt className="text-muted">{t('expenses.label')}</dt><dd dir="auto">{viewing.label || '—'}</dd></div>
           <div><dt className="text-muted">{t('expenses.amount')}</dt><dd>{formatCurrency(viewing.amount_cents)}</dd></div>
           <div><dt className="text-muted">{t('expenses.notes')}</dt><dd dir="auto" className="whitespace-pre-wrap break-words">{viewing.notes || '—'}</dd></div>
           <div><dt className="text-muted">{t('expenses.period')}</dt><dd>{monthLabel(t, viewing.month)} {viewing.year}</dd></div>

@@ -41,7 +41,7 @@ export async function seedScreenshots({ overwrite = false } = {}) {
     ['Hajar','Fassi',12,'0665050505','Hassan Fassi',[0]],
   ];
   for (const [first_name,last_name,level_id,phone,guardian_name,groupIndexes] of rows) {
-    const id = await call('cmd_create_student', { data: { first_name, last_name, level_id, guardian_name, guardian_phone: phone, address: 'Marrakech', enrollment_date: '2025-09-05', status: 'actif' } });
+    const id = await call('cmd_create_student', { data: { first_name, last_name, level_id, guardian_name, guardian_phone: phone, enrollment_fee_cents: 20000, address: 'Marrakech', enrollment_date: '2025-09-05', status: 'actif' } });
     students.push(id);
     for (const index of groupIndexes) await call('cmd_enroll_student', { studentId: id, groupId: groups[index], startDate: '2025-09-05' });
   }

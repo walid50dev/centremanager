@@ -233,7 +233,7 @@ pub fn dashboard_alerts_on(
                     COALESCE(l.name, ''),
                     i.amount_cents,
                     COALESCE(i.paid_amount_cents, 0),
-                    COALESCE(i.due_date, '')
+                    COALESCE(i.due_date, ''), COALESCE(g.name, '')
              FROM invoices i
              LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
              LEFT JOIN enrollments e ON e.id = i.enrollment_id
@@ -260,13 +260,14 @@ pub fn dashboard_alerts_on(
                 row.get::<_, i64>(4)?,
                 row.get::<_, i64>(5)?,
                 row.get::<_, String>(6)?,
+                row.get::<_, String>(7)?,
             ))
         })
         .map_err(|err| db_err("Lecture des échéances", err))?;
 
     let mut alerts = Vec::new();
     for row in rows {
-        let (student_id, student_name, subject, level, amount_cents, paid_cents, due_date) =
+        let (student_id, student_name, subject, level, amount_cents, paid_cents, due_date, custom_name) =
             row.map_err(|err| db_err("Lecture des échéances", err))?;
 
         let Some(due) = parse_iso_date(&due_date) else {
@@ -277,7 +278,7 @@ pub fn dashboard_alerts_on(
         alerts.push(AlertItem {
             student_id,
             student_name,
-            group_name: group_label(&subject, &level),
+            group_name: if custom_name.trim().is_empty() { group_label(&subject, &level) } else { custom_name },
             amount_cents: (amount_cents - paid_cents).max(0),
             due_date: iso(due),
             days_remaining,

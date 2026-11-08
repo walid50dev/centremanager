@@ -198,6 +198,7 @@ pub fn seed_demo_data(conn: &Connection) -> Result<String, String> {
         let group_id = create_group(
             conn,
             &CreateGroupInput {
+                name: None,
                 subject_id: subject_id(conn, subject)?,
                 level_id: *level_id,
                 branch_id: None,

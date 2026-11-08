@@ -238,7 +238,6 @@ function validateExpenseInput(raw: unknown): ExpenseInput {
   const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
   const label = text(input.label);
-  if (!label) throw new Error('Le libellé de la dépense est obligatoire');
   if (label.length > 120) throw new Error('Le libellé ne peut pas dépasser 120 caractères');
 
   const amount = typeof input.amount_cents === 'number' ? Math.round(input.amount_cents) : 0;
@@ -340,7 +339,7 @@ function seed(): DevStore {
       currency: 'DH',
       language: localStorage.getItem('centremanager.language') ?? 'fr',
       lock_timeout_minutes: '15',
-      receipt_format: 'a4',
+      receipt_format: 'thermal',
       // Phase 11 — the editable category list, as JSON like the Rust side.
       expense_categories: JSON.stringify(DEFAULT_EXPENSE_CATEGORIES),
     },
@@ -788,22 +787,27 @@ function validateStudentInput(store: DevStore, input: Record<string, unknown>): 
   for (const value of [input.birth_date, input.enrollment_date]) {
     if (text(value)) { const d = text(value); const parsed = new Date(`${d}T00:00:00Z`); if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== d) throw new Error('Date invalide'); }
   }
-  const phone = normaliseDevPhone(text(input.guardian_phone ?? input.phone));
-  if (!PHONE_PATTERN.test(phone)) throw new Error('Format de téléphone du tuteur invalide (06XXXXXXXX ou 07XXXXXXXX)');
+  const guardianPhone = normaliseDevPhone(text(input.guardian_phone ?? input.phone));
+  const phone = normaliseDevPhone(text(input.phone));
+  if (phone && !PHONE_PATTERN.test(phone)) throw new Error('Format de téléphone de l’élève invalide');
+  if (!PHONE_PATTERN.test(guardianPhone)) throw new Error('Format de téléphone du tuteur invalide (06XXXXXXXX ou 07XXXXXXXX)');
   const secondary_contact_phone = normaliseDevPhone(text(input.secondary_contact_phone)) || null;
   if (secondary_contact_phone && !PHONE_PATTERN.test(secondary_contact_phone)) throw new Error('Format de téléphone invalide');
   const level_id = typeof input.level_id === 'number' ? input.level_id : null;
   const branch_id = typeof input.branch_id === 'number' ? input.branch_id : null;
   if (level_id !== null && !store.levels.some((level) => level.id === level_id)) throw new Error('Niveau introuvable');
   if (branch_id !== null && !store.branches.some((branch) => branch.id === branch_id)) throw new Error('Branche introuvable');
+  const fee = input.enrollment_fee_cents === undefined ? undefined : Number(input.enrollment_fee_cents);
+  if (fee !== undefined && (!Number.isSafeInteger(fee) || fee < 0)) throw new Error("Les frais d'inscription doivent être positifs ou nuls");
   const status = text(input.status) || 'actif';
   if (status !== 'actif' && status !== 'inactif') throw new Error('Statut invalide');
   return { full_name, first_name: nullable(input.first_name), last_name: nullable(input.last_name),
-    birth_date: nullable(input.birth_date), phone, guardian_phone: phone,
+    birth_date: nullable(input.birth_date), phone, guardian_phone: guardianPhone,
     guardian_name: nullable(input.guardian_name), guardian_relation: nullable(input.guardian_relation),
     secondary_contact_name: nullable(input.secondary_contact_name), secondary_contact_phone,
     school_name: nullable(input.school_name), enrollment_date: text(input.enrollment_date) || new Date().toISOString().slice(0, 10),
-    level_id, branch_id, address: nullable(input.address), notes: nullable(input.notes), status };
+    level_id, branch_id, address: nullable(input.address), notes: nullable(input.notes), status,
+    ...(fee === undefined ? {} : { enrollment_fee_cents: fee }) };
 }
 
 function load(): DevStore {
@@ -811,10 +815,17 @@ function load(): DevStore {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DevStore;
+      const lastFees = new Map<number, {id: number; amount_cents: number}>();
+      for (const invoice of parsed.invoices ?? []) {
+        if (invoice.fee_student_id && (!lastFees.has(invoice.fee_student_id) || lastFees.get(invoice.fee_student_id)!.id < invoice.id)) {
+          lastFees.set(invoice.fee_student_id, invoice);
+        }
+      }
       parsed.students = (parsed.students ?? []).map((student) => {
         const old = student as unknown as Record<string, unknown>;
         const names = student.full_name.trim().split(/\s+/);
-        const migrated = { ...student, first_name: student.first_name ?? names[0] ?? '',
+        const lastFee = lastFees.get(student.id);
+        const migrated = { ...student, enrollment_fee_cents: student.enrollment_fee_cents ?? lastFee?.amount_cents ?? 0, first_name: student.first_name ?? names[0] ?? '',
           last_name: student.last_name ?? names.slice(1).join(' '),
           birth_date: student.birth_date ?? (old['date_of_birth'] as string | null) ?? null,
           guardian_name: student.guardian_name ?? (old['father_name'] as string | null) ?? null,
@@ -1014,7 +1025,7 @@ function cleanSchedules(raw: Array<Record<string, unknown>>): GroupSchedule[] {
         `Le jour ${day} est déjà programmé (${duplicate.start_time}–${duplicate.end_time})`,
       );
     }
-    cleaned.push({ id: 0, day_of_week: day, start_time, end_time });
+    cleaned.push({ id: 0, day_of_week: day, start_time, end_time, room: typeof entry.room === 'string' ? entry.room.trim() : null });
   });
 
   return cleaned.sort(
@@ -1073,6 +1084,7 @@ function validateGroupInput(store: DevStore, input: Record<string, unknown>): Gr
   }
 
   return {
+    name: text(input.name) || null,
     subject_id,
     level_id,
     branch_id,
@@ -1160,7 +1172,7 @@ function enrollOne(
   }
 
   const schoolYear = activeYearId(store)!;
-  const fee = Number(store.settings[`enrollment_fee:${schoolYear}`] ?? 0);
+  const fee = store.students.find(student => student.id === studentId)?.enrollment_fee_cents ?? 0;
   const decisionKey = `${studentId}:${schoolYear}`;
   const firstEnrollment = !store.feeHandledYears![decisionKey];
   store.feeHandledYears![decisionKey] = true;
@@ -1236,7 +1248,7 @@ function invoiceStatus(paid: number, amount: number): string {
 }
 
 function devGroupName(store: DevStore, group: Group): string {
-  return [store.subjects.find(subject => subject.id === group.subject_id)?.name,
+  return group.name?.trim() || [store.subjects.find(subject => subject.id === group.subject_id)?.name,
     store.levels.find(level => level.id === group.level_id)?.name].filter(Boolean).join(' ');
 }
 
@@ -1535,7 +1547,7 @@ function devReceiptItems(store: DevStore, session: DevPayment[]): ReceiptItem[] 
     const row = group ? groupRow(store, group) : null;
     return {
       subject: row?.subject_name && row.subject_name !== '—' ? row.subject_name : '',
-      group_name: [row?.level_name, row?.branch_name].filter(v => v && v !== '—').join(' · '),
+      group_name: row?.name?.trim() || [row?.level_name, row?.branch_name].filter(v => v && v !== '—').join(' · '),
       month: invoice?.fee_student_id ? store.schoolYears.find(y => y.id === invoice.fee_school_year_id)?.label ?? '' : invoice ? `${MONTH_NAMES_FR[invoice.period_month - 1] ?? ''} ${invoice.period_year}`.trim() : '',
       amount: payment.amount_cents,
       kind: invoice?.fee_student_id ? 'enrollment_fee' : payment.invoice_id === null ? 'advance' : 'invoice',
@@ -1897,7 +1909,7 @@ function devDashboardAlerts(store: DevStore): AlertItem[] {
       return {
         student_id: student?.id ?? 0,
         student_name: student?.full_name ?? '—',
-        group_name: group ? `${group.subject_name} ${group.level_name}`.trim() : '',
+        group_name: group ? (group.name?.trim() || `${group.subject_name} ${group.level_name}`.trim()) : '',
         amount_cents: Math.max(invoice.amount_cents - invoice.paid_amount_cents, 0),
         due_date: invoice.due_date,
         days_remaining: daysRemaining,
@@ -2390,7 +2402,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       let rows: Array<Record<string, unknown>>;
       switch (section) {
         case 'students': rows = students.map(s => ({ id:s.id,first_name:s.first_name,last_name:s.last_name,full_name:s.full_name,phone:s.phone,level:s.level_name,branch:s.branch_name,guardian_name:s.guardian_name,school_name:s.school_name,status:s.status })); break;
-        case 'groups': rows = groups.filter(g => !g.deleted_at).map(g => { const r = groupRow(store,g); return { id:r.id,subject:r.subject_name,level:r.level_name,branch:r.branch_name,teacher:r.teacher_name,day_of_week:r.day_of_week,start_time:r.start_time,end_time:r.end_time,schedules:r.schedules.map(s => `${s.day_of_week} ${s.start_time}-${s.end_time}`).join(', '),room:r.room,monthly_fee_cents:r.monthly_fee_cents,capacity:r.capacity,status:r.status }; }); break;
+        case 'groups': rows = groups.filter(g => !g.deleted_at).map(g => { const r = groupRow(store,g); return { id:r.id,name:r.name ?? '',subject:r.subject_name,level:r.level_name,branch:r.branch_name,teacher:r.teacher_name,day_of_week:r.day_of_week,start_time:r.start_time,end_time:r.end_time,schedules:r.schedules.map(s => `${s.day_of_week} ${s.start_time}-${s.end_time}`).join(', '),room:r.room,monthly_fee_cents:r.monthly_fee_cents,capacity:r.capacity,status:r.status }; }); break;
         case 'teachers': rows = teachers.map(t => ({id:t.id,full_name:t.full_name,phone:t.phone,email:t.email,status:t.status})); break;
         case 'payments': rows = payments.map(p => ({id:p.id,student:store.students.find(s => s.id === p.student_id)?.full_name,invoice_id:p.invoice_id,invoice_kind:store.invoices.find(i => i.id === p.invoice_id)?.fee_student_id ? 'enrollment_fee' : p.invoice_id === null ? 'advance' : 'invoice',amount_cents:p.amount_cents,payment_method:p.payment_method,notes:p.notes,created_at:p.created_at})); break;
         case 'expenses': rows = expenses.map(e => ({id:e.id,label:e.label,amount_cents:e.amount_cents,category:e.category,month:e.month,year:e.year,notes:e.notes,created_at:e.created_at})); break;
@@ -2666,11 +2678,12 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         if (raw.deleted_at || (raw.status ?? 'actif') !== 'actif' || raw.id === groupId || raw.school_year_id !== yearId) continue;
         const group = groupRow(store, raw);
         const slots = group.schedules.length ? group.schedules : (raw.day_of_week && raw.start_time && raw.end_time ? [raw] : []);
-        const roomMatch = Boolean(room && room === (raw.room ?? '').trim().toLowerCase());
         const teacherMatch = teacherId !== null && teacherId === raw.teacher_id;
-        if (!roomMatch && !teacherMatch) continue;
         const groupName = [group.subject_name, group.level_name].filter(v => v && v !== '—').join(' — ');
         for (const slot of [...slots].sort((a, b) => a.day_of_week.localeCompare(b.day_of_week) || a.start_time.localeCompare(b.start_time))) {
+          const slotRoom = slot.room ?? raw.room ?? '';
+          const roomMatch = Boolean(room && room === slotRoom.trim().toLowerCase());
+          if (!roomMatch && !teacherMatch) continue;
           const start = minutes(slot.start_time), end = minutes(slot.end_time);
           if (start === null || end === null || start >= end) continue;
           for (const input of schedules) {
@@ -2679,7 +2692,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
             if (inputStart === null || inputEnd === null || inputStart >= inputEnd || day.trim().toLowerCase() !== slot.day_of_week.trim().toLowerCase() || inputStart >= end || start >= inputEnd) continue;
             for (const type of ['room', 'teacher'] as const) {
               if ((type === 'room' && roomMatch) || (type === 'teacher' && teacherMatch)) {
-                conflicts.push({ conflict_type: type, group_name: groupName, day: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time, teacher_name: group.teacher_name ?? '', room: raw.room ?? '' });
+                conflicts.push({ conflict_type: type, group_name: groupName, day: slot.day_of_week, start_time: slot.start_time, end_time: slot.end_time, teacher_name: group.teacher_name ?? '', room: slotRoom });
               }
             }
           }
@@ -2858,17 +2871,18 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         .filter((group) => (levelId === null ? true : group.level_id === levelId))
         .filter((group) => (subjectId === null ? true : group.subject_id === subjectId))
         .filter((group) => (teacherId === null ? true : group.teacher_id === teacherId))
-        .filter((group) => (room === null ? true : group.room === room))
         .forEach((group) => {
           const row = groupRow(store, group);
           row.schedules.forEach((slot) => {
+            if (room !== null && (slot.room ?? row.room) !== room) return;
             entries.push({
               group_id: row.id,
+              name: row.name ?? null,
               subject_name: row.subject_name,
               level_name: row.level_name,
               branch_name: row.branch_name,
               teacher_name: row.teacher_name,
-              room: row.room,
+              room: slot.room ?? row.room,
               day_of_week: slot.day_of_week,
               start_time: slot.start_time,
               end_time: slot.end_time,
@@ -2893,7 +2907,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         new Set(
           store.groups
             .filter((group) => !group.deleted_at && group.school_year_id === activeYearId(store) && (group.status ?? 'actif') === 'actif')
-            .map((group) => (group.room ?? '').trim())
+            .flatMap((group) => group.schedules.map(slot => (slot.room ?? group.room ?? '').trim()))
             .filter(Boolean),
         ),
       );

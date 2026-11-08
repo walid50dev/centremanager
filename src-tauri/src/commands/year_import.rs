@@ -96,13 +96,13 @@ pub fn import_groups(conn: &Connection, ids: &[i64], target: i64) -> Result<usiz
         let imported: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM group_year_imports WHERE source_group_id=?1 AND target_school_year_id=?2)", params![id,target], |r| r.get(0))
             .map_err(|e| db_err("Vérification de l'import", e))?;
         if imported { continue; }
-        let inserted = tx.execute("INSERT INTO groups (subject_id,level_id,branch_id,teacher_id,school_year_id,day_of_week,start_time,end_time,room,monthly_fee_cents,capacity,status)
-            SELECT subject_id,level_id,branch_id,teacher_id,?2,day_of_week,start_time,end_time,room,monthly_fee_cents,capacity,status
+        let inserted = tx.execute("INSERT INTO groups (subject_id,level_id,branch_id,teacher_id,school_year_id,day_of_week,start_time,end_time,room,monthly_fee_cents,capacity,status,name)
+            SELECT subject_id,level_id,branch_id,teacher_id,?2,day_of_week,start_time,end_time,room,monthly_fee_cents,capacity,status,name
             FROM groups WHERE id=?1 AND deleted_at IS NULL AND school_year_id IS NOT NULL AND school_year_id<>?2", params![id,target])
             .map_err(|e| db_err("Import groupe", e))?;
         if inserted == 0 { return Err("Groupe source introuvable ou année invalide".into()); }
         let new_id = tx.last_insert_rowid();
-        tx.execute("INSERT INTO group_schedules (group_id,day_of_week,start_time,end_time) SELECT ?2,day_of_week,start_time,end_time FROM group_schedules WHERE group_id=?1", params![id,new_id])
+        tx.execute("INSERT INTO group_schedules (group_id,day_of_week,start_time,end_time,room) SELECT ?2,day_of_week,start_time,end_time,room FROM group_schedules WHERE group_id=?1", params![id,new_id])
             .map_err(|e| db_err("Import horaires", e))?;
         tx.execute("INSERT INTO group_year_imports (source_group_id,target_school_year_id,imported_group_id) VALUES (?1,?2,?3)", params![id,target,new_id])
             .map_err(|e| db_err("Suivi de l'import", e))?;

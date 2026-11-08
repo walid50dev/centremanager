@@ -196,7 +196,7 @@ export function StudentsPage() {
                   {t('students.guardian_column')}
                 </th>
                 <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.school_name')}
+                  {t('students.student_phone')}
                 </th>
                 <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
                   {t('students.columns.status')}
@@ -291,8 +291,8 @@ export function StudentsPage() {
                         '—'
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted">{student.guardian_name ?? '—'}<span className="block tabular-nums" dir="ltr">{formatPhone(student.phone)}</span></td>
-                    <td className="px-4 py-3 text-muted">{student.school_name ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted">{student.guardian_name ?? '—'}<span className="block tabular-nums" dir="ltr">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span></td>
+                    <td className="px-4 py-3 text-muted">{student.phone ? formatPhone(student.phone) : '—'}</td>
                     <td className="px-4 py-3">
                       <Badge variant={student.status === 'actif' ? 'success' : 'destructive'}>
                         {student.status === 'actif' ? t('students.active') : t('students.inactive')}

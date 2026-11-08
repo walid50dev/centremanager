@@ -31,7 +31,7 @@ session_sql = re.search(r'conn\.prepare\("(SELECT p\.id FROM payments p JOIN pay
 assert conn.execute(session_sql, (1, 1, '2025-11-01 12:00:00')).fetchall() == [(1,)]
 assert conn.execute(session_sql, (2, 1, '2025-11-01 12:00:00')).fetchall() == [(2,)]
 items_sql = re.search(r'"(SELECT p\.amount_cents, p\.invoice_id, COALESCE\(s\.name,\x27\x27\).*?WHERE p\.id=\?1)"', source, re.S).group(1)
-assert conn.execute(items_sql, (1,)).fetchone() == (10000, 1, 'Maths', '2Bac', '', 11, 2025, None)
+assert conn.execute(items_sql, (1,)).fetchone() == (10000, 1, 'Maths', '2Bac', '', 11, 2025, None, '')
 conn.execute("UPDATE groups SET deleted_at='2026-01-01' WHERE id=1")
 assert conn.execute(items_sql, (1,)).fetchone()[2] == 'Maths', 'financial history survives trash'
 assert conn.execute('PRAGMA foreign_key_check').fetchall() == []

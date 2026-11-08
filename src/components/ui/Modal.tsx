@@ -14,7 +14,6 @@ export interface ModalProps {
   children?: ReactNode;
   footer?: ReactNode;
   size?: ModalSize;
-  closeOnBackdrop?: boolean;
   className?: string;
   /**
    * Stacking level. Pages use the default 50; a quick-create modal opened on top
@@ -42,7 +41,6 @@ export function Modal({
   children,
   footer,
   size = 'md',
-  closeOnBackdrop = true,
   className,
   zIndex = 50,
   testId,
@@ -51,9 +49,8 @@ export function Modal({
   const registerModal = useAppStore((state) => state.registerModal);
   const unregisterModal = useAppStore((state) => state.unregisterModal);
 
-  // Escape is handled globally (useKeyboardShortcuts) so that a single press
-  // only closes the modal on top of the stack. The dialog registers its own
-  // closer here; the ref keeps the latest `onClose` without re-registering.
+  // Track stacked dialogs for other UI state; dismissal is explicit only.
+  // The ref keeps the latest `onClose` without re-registering.
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -109,7 +106,6 @@ export function Modal({
         style={{
           backgroundColor: `rgba(15, 23, 42, ${Math.min(0.75, 0.4 + Math.max(0, zIndex - 50) * 0.012)})`,
         }}
-        onClick={closeOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />
       <div

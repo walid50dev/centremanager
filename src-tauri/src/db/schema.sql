@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS students (
     secondary_contact_phone TEXT,
     school_name TEXT,
     enrollment_date TEXT NOT NULL DEFAULT (date('now')),
+    enrollment_fee_cents INTEGER NOT NULL DEFAULT 0 CHECK(enrollment_fee_cents >= 0),
     level_id INTEGER REFERENCES levels(id) ON DELETE SET NULL,
     branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
     address TEXT,
@@ -99,6 +100,7 @@ CREATE TABLE IF NOT EXISTS teacher_subjects (
 -- 9. groups — a scheduled class
 CREATE TABLE IF NOT EXISTS groups (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT,
     subject_id        INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
     level_id          INTEGER REFERENCES levels(id) ON DELETE SET NULL,
     branch_id         INTEGER REFERENCES branches(id) ON DELETE SET NULL,
@@ -267,6 +269,7 @@ CREATE TABLE IF NOT EXISTS group_schedules (
     day_of_week TEXT NOT NULL,
     start_time  TEXT NOT NULL,
     end_time    TEXT NOT NULL,
+    room        TEXT,
     UNIQUE (group_id, day_of_week)
 );
 

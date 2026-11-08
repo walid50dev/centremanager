@@ -350,17 +350,17 @@ fn receipt_session(conn: &Connection, payment_id: i64) -> Result<Vec<i64>, Strin
 fn receipt_items(conn: &Connection, ids: &[i64]) -> Result<Vec<ReceiptItem>, String> {
     let mut items = Vec::new();
     for id in ids {
-        let row: (i64, Option<i64>, String, String, String, Option<i32>, Option<i32>, Option<String>) = conn.query_row(
-            "SELECT p.amount_cents, p.invoice_id, COALESCE(s.name,''), COALESCE(l.name,''), COALESCE(b.name,''), i.period_month, i.period_year, CASE WHEN f.id IS NOT NULL THEN COALESCE(y.label,'') ELSE NULL END
+        let row: (i64, Option<i64>, String, String, String, Option<i32>, Option<i32>, Option<String>, String) = conn.query_row(
+            "SELECT p.amount_cents, p.invoice_id, COALESCE(s.name,''), COALESCE(l.name,''), COALESCE(b.name,''), i.period_month, i.period_year, CASE WHEN f.id IS NOT NULL THEN COALESCE(y.label,'') ELSE NULL END, COALESCE(g.name,'')
              FROM payments p LEFT JOIN invoices i ON i.id=p.invoice_id
              LEFT JOIN enrollment_fees f ON f.invoice_id=i.id LEFT JOIN school_years y ON y.id=f.school_year_id
              LEFT JOIN enrollments e ON e.id=i.enrollment_id LEFT JOIN groups g ON g.id=e.group_id
              LEFT JOIN subjects s ON s.id=g.subject_id LEFT JOIN levels l ON l.id=g.level_id
              LEFT JOIN branches b ON b.id=g.branch_id WHERE p.id=?1", params![id],
-            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?)))
+            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?)))
             .map_err(|e| db_err("Lecture des détails du reçu", e))?;
-        let (amount, invoice, subject, level, branch, month, year, school_year) = row;
-        let group_name = [level.as_str(), branch.as_str()].into_iter().filter(|v| !v.trim().is_empty()).collect::<Vec<_>>().join(" · ");
+        let (amount, invoice, subject, level, branch, month, year, school_year, custom_name) = row;
+        let group_name = if custom_name.trim().is_empty() { [level.as_str(), branch.as_str()].into_iter().filter(|v| !v.trim().is_empty()).collect::<Vec<_>>().join(" · ") } else { custom_name };
         items.push(ReceiptItem { subject, group_name, month: school_year.clone().unwrap_or_else(|| match (month, year) { (Some(m), Some(y)) => format!("{} {}", french_month_name(m), y), _ => String::new() }), amount,
             kind: if school_year.is_some() { "enrollment_fee" } else if invoice.is_none() { "advance" } else { "invoice" }.to_string() });
     }
@@ -774,6 +774,7 @@ mod tests {
         create_group(
             conn,
             &CreateGroupInput {
+                name: None,
                 subject_id,
                 level_id,
                 branch_id: None,

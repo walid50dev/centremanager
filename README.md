@@ -902,11 +902,11 @@ lines overlap and that nothing is drawn below the MediaBox.
 | Element | Behaviour |
 | --- | --- |
 | `PDFViewer` | inline, `width: 100%`, `height: 400 px` (`PDF_HEIGHT`), wrapped in an error boundary + suspense; `receipt-loading` while the document renders, `receipt-error` with `Imprimer` / `Télécharger` still available |
-| Toggle | `A4` \| `Thermique 80 mm` (`receipt-template-a4` / `receipt-template-thermal`), applied without re-fetching the receipt |
-| Default template | `cmd_get_setting('receipt_format')` — `a4` unless the setting is exactly `thermal`; the user can still switch, and the choice is local to the session |
+| Toggle | 80 mm, 58 mm, A5 ou A4, appliqué sans recharger le reçu |
+| Default template | 80 mm pour une nouvelle installation ; le format existant est conservé. Le choix peut être modifié dans Paramètres ou à l'ouverture du reçu. |
 | `Télécharger PDF` | `downloadReceiptPdf()` → `recu_REC-20261101-0001.pdf` |
 | `Imprimer` | `printReceiptPdf()` opens the blob in its own window (`window.open(url, '_blank')`, **no** `noopener` — the handle is needed for `print()`), with a hidden-iframe fallback |
-| `Fermer` | also closes on `Escape` (top of the modal stack) |
+| `Fermer` | fermeture explicite par le bouton ou la croix ; ni clic extérieur ni Échap |
 | `receipt-summary` | `REC-… · 700.00 DH` in the header, plus the periods in the footer |
 | Data | **frozen at issuance**: the PDF is built from the `receipts` row, so renaming the student afterwards leaves the old receipt untouched |
 
@@ -960,7 +960,7 @@ stops a caught error from poisoning every later page. `/__error` (dev only,
 | --- | --- |
 | `Ctrl/Cmd + K` | dispatches `focus-search`; the students page focuses `students-search` (and selects the text) |
 | `Ctrl/Cmd + L` | `authStore.lock()` with `preventDefault()` (the browser's address bar never wins) |
-| `Escape` | pops the **topmost** modal from the `appStore.modalStack`; `Modal` registers/unregisters itself, so stacked modals close one at a time |
+| `Escape` | ne ferme pas les fenêtres modales ; utiliser Annuler ou la croix |
 
 Shortcuts are ignored while a `Ctrl`/`Cmd` combination targets an input in a
 native text field, except the two above.
@@ -1038,11 +1038,25 @@ Test ids added for automated checks: `payment-collect` (Encaisser),
 
 ---
 
+## Groupes et emploi du temps
+
+La création d'un groupe demande son nom, sa matière, son niveau, son tarif et
+éventuellement son professeur. La capacité des nouveaux groupes est fixée à
+200 élèves ; celle des groupes existants est conservée. Les horaires se gèrent uniquement depuis
+**Emploi du temps → Gérer les horaires** : choisissez un groupe, ajoutez ou
+supprimez ses créneaux et indiquez la salle de chaque créneau. La structure
+actuelle accepte un créneau par groupe et par jour. Les anciens groupes sans
+nom conservent leur libellé matière/niveau.
+
+Les reçus proposent les tickets 80 mm et 58 mm (hauteur automatique), A5 et A4.
+Les fenêtres modales ne se ferment ni par clic extérieur ni par Échap.
+
 ## Frais d'inscription annuels
 
-Dans Paramètres → Année scolaire, le montant est enregistré en centimes pour
-l'année active (une nouvelle année commence à 0). Un montant de 0 désactive la
-génération ; modifier le tarif ne modifie pas les factures déjà créées. À la
+Le montant est défini dans la fiche de chaque élève, en DH (0 par défaut).
+Il est conservé pour les inscriptions futures, y compris lors d'un changement
+d'année. Modifier le montant ne modifie pas les factures déjà émises ; une
+décision à 0 lors de la première inscription reste valable pour cette année. À la
 première inscription dans un groupe, une facture indépendante du groupe est
 créée une seule fois pour l'élève et l'année. Elle peut être réglée en totalité
 ou partiellement avec les autres factures ; elle apparaît séparément sur la

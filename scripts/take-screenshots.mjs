@@ -30,7 +30,7 @@ async function step(name, action) {
   catch (error) { await rm(path.join(output, name + '.png'), { force: true }); failures.push(name); console.error('ÉCHEC', name, error.message); }
 }
 async function nav(name) { await page.getByTestId(`nav-${name}`).click(); }
-async function closeDialog() { await page.keyboard.press('Escape'); await page.waitForTimeout(250); }
+async function closeDialog() { await page.getByRole('dialog').last().getByRole('button', { name: 'Fermer', exact: true }).first().click(); await page.waitForTimeout(250); }
 try {
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.evaluate(async () => { const { seedScreenshots } = await import('/scripts/screenshot-fixture.mjs'); await seedScreenshots({ overwrite: true }); });

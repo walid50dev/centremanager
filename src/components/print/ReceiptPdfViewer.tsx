@@ -27,10 +27,10 @@ export function ReceiptPdfViewer({ template, data, labels, height = 400 }: Recei
       style={{ border: 0 }}
       data-testid="receipt-pdf-viewer"
     >
-      {template === 'a4' ? (
-        <ReceiptA4Document data={data} labels={labels} />
+      {template === 'a4' || template === 'a5' ? (
+        <ReceiptA4Document data={data} labels={labels} template={template} />
       ) : (
-        <ReceiptThermalDocument data={data} labels={labels} />
+        <ReceiptThermalDocument data={data} labels={labels} template={template} />
       )}
     </PDFViewer>
   );

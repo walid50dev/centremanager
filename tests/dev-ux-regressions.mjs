@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'vite';
+const values = new Map();
+globalThis.localStorage = {getItem: k => values.get(k) ?? null, setItem: (k,v) => values.set(k, String(v)), removeItem: k => values.delete(k)};
+globalThis.window = {setTimeout};
+const server = await createServer({optimizeDeps:{noDiscovery:true},server:{middlewareMode:true,hmr:false},appType:'custom'});
+try {
+  const {devInvoke: call} = await server.ssrLoadModule('/src/services/settingsDevBackend.ts');
+  const group = (await call('cmd_get_groups'))[0];
+  const data = {name:'Groupe Atlas', subject_id:group.subject_id, level_id:group.level_id, branch_id:null, teacher_id:null, school_year_id:group.school_year_id, day_of_week:'',start_time:'',end_time:'',schedules:[],room:null,monthly_fee_cents:25000,capacity:200};
+  const groupId = await call('cmd_create_group',{data});
+  assert.equal((await call('cmd_get_group_detail',{id:groupId})).group.name,'Groupe Atlas');
+  assert.equal((await call('cmd_get_timetable',{filters:{}})).some(e=>e.group_id===groupId),false);
+  const slots=[{id:0,day_of_week:'Lundi',start_time:'13:15',end_time:'14:45',room:'Salle A'},{id:0,day_of_week:'Mardi',start_time:'15:30',end_time:'16:30',room:'Salle B'}];
+  await call('cmd_update_group',{id:groupId,data:{...data,schedules:slots}});
+  let entries=(await call('cmd_get_timetable',{filters:{}})).filter(e=>e.group_id===groupId);
+  assert.deepEqual(entries.map(e=>e.room),['Salle A','Salle B']);
+  assert.equal((await call('cmd_get_timetable',{filters:{room:'Salle B'}})).filter(e=>e.group_id===groupId).length,1);
+  assert.ok((await call('cmd_get_timetable_rooms')).includes('Salle B'));
+  await call('cmd_update_group',{id:groupId,data:{...data,name:'Atlas modifié',schedules:[slots[1]]}});
+  entries=(await call('cmd_get_timetable',{filters:{}})).filter(e=>e.group_id===groupId);
+  assert.equal(entries.length,1); assert.equal(entries[0].room,'Salle B'); assert.equal(entries[0].name,'Atlas modifié');
+  const studentInput={first_name:'Salma',last_name:'Test',phone:'0712345678',guardian_phone:'0612345678',guardian_name:'Parent',level_id:group.level_id,enrollment_date:'2026-09-01',status:'actif',enrollment_fee_cents:12300};
+  const studentId=await call('cmd_create_student',{data:studentInput});
+  const student=(await call('cmd_get_student_detail',{id:studentId})).student;
+  assert.equal(student.phone,'0712345678'); assert.equal(student.guardian_phone,'0612345678'); assert.equal(student.enrollment_fee_cents,12300);
+  const enrolled=await call('cmd_enroll_student',{studentId,groupId,startDate:'2026-09-01'});
+  assert.equal(enrolled.enrollment_fee_amount_cents,12300);
+  await call('cmd_update_student',{id:studentId,data:{...studentInput,enrollment_fee_cents:23000}});
+  assert.equal((await call('cmd_get_student_invoices',{studentId})).find(i=>i.kind==='enrollment_fee').amount_cents,12300,'issued invoices remain unchanged');
+  await assert.rejects(call('cmd_create_student',{data:{...studentInput,enrollment_fee_cents:-1}}));
+  await call('cmd_create_expense',{data:{label:'',category:'Loyer',amount_cents:10000,month:11,year:2026,notes:null}});
+  console.log('Group name, timetable slots/rooms, per-student fees, separate phones and optional expense label passed.');
+} finally { await server.close(); }

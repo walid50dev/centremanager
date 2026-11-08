@@ -11,6 +11,7 @@ const page = await context.newPage();
 const testId = id => page.getByTestId(id);
 try {
   await page.goto(process.env.SCREENSHOT_BASE_URL || 'http://localhost:1420');
+  await page.locator('input[type=password]').first().waitFor();
   await page.evaluate(async () => {
     const { authApi } = await import('/src/services/auth.ts');
     await authApi.setup('Centre test', 'admin123');

@@ -118,6 +118,7 @@ export function groupSchedule(t: TFunction, group: ScheduleLike): string {
 export default groupSchedule;
 
 export interface GroupLabels {
+  name?: string | null;
   subject_name: string;
   level_name: string;
 }
@@ -128,6 +129,7 @@ export interface GroupLabels {
  * a stray em dash.
  */
 export function groupTitle(t: TFunction, group: GroupLabels): string {
+  if (group.name?.trim()) return group.name.trim();
   const clean = (value: string) => (value && value !== '—' ? value : '');
   const parts = [clean(group.subject_name), clean(group.level_name)].filter(Boolean);
   return parts.length > 0 ? parts.join(' — ') : t('groups.untitled');
