@@ -32,6 +32,8 @@ pub const DAY_NAMES: [&str; 7] = [
 /// Payload for `cmd_create_group` / `cmd_update_group`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateGroupInput {
+    #[serde(default)]
+    pub name: Option<String>,
     pub subject_id: i64,
     pub level_id: i64,
     pub branch_id: Option<i64>,
@@ -59,6 +61,7 @@ pub type UpdateGroupInput = CreateGroupInput;
 /// Clean, validated values ready for SQL.
 #[derive(Debug, Clone)]
 struct CleanGroup {
+    name: Option<String>,
     subject_id: i64,
     level_id: i64,
     branch_id: Option<i64>,
@@ -178,6 +181,7 @@ fn clean_input(conn: &Connection, data: &CreateGroupInput) -> Result<CleanGroup,
     }
 
     Ok(CleanGroup {
+        name: optional_text(&data.name),
         subject_id: data.subject_id,
         level_id: data.level_id,
         branch_id: data.branch_id,
@@ -220,9 +224,9 @@ fn insert_schedules(
 ) -> Result<(), String> {
     for slot in schedules {
         conn.execute(
-            "INSERT INTO group_schedules (group_id, day_of_week, start_time, end_time)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![group_id, slot.day_of_week, slot.start_time, slot.end_time],
+            "INSERT INTO group_schedules (group_id, day_of_week, start_time, end_time, room)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![group_id, slot.day_of_week, slot.start_time, slot.end_time, slot.room],
         )
         .map_err(|err| db_err("Enregistrement d'un horaire", err))?;
     }
@@ -231,6 +235,7 @@ fn insert_schedules(
 
 fn input_json(clean: &CleanGroup) -> Map<String, Value> {
     let mut map = Map::new();
+    map.insert("name".into(), json!(clean.name));
     map.insert("subject_id".into(), json!(clean.subject_id));
     map.insert("level_id".into(), json!(clean.level_id));
     map.insert("branch_id".into(), json!(clean.branch_id));
@@ -253,6 +258,7 @@ fn input_json(clean: &CleanGroup) -> Map<String, Value> {
                         "day_of_week": slot.day_of_week,
                         "start_time": slot.start_time,
                         "end_time": slot.end_time,
+                        "room": slot.room,
                     })
                 })
                 .collect(),
@@ -321,6 +327,8 @@ fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, St
     };
 
     let mut map = Map::new();
+    let name: Option<String> = conn.query_row("SELECT name FROM groups WHERE id=?1", params![id], |r| r.get(0)).map_err(|err| db_err("Lecture du nom du groupe", err))?;
+    map.insert("name".into(), json!(name));
     map.insert("subject_id".into(), json!(subject_id));
     map.insert("level_id".into(), json!(level_id));
     map.insert("branch_id".into(), json!(branch_id));
@@ -343,6 +351,7 @@ fn snapshot(conn: &Connection, id: i64) -> Result<Option<Map<String, Value>>, St
                         "day_of_week": slot.day_of_week,
                         "start_time": slot.start_time,
                         "end_time": slot.end_time,
+                        "room": slot.room,
                     })
                 })
                 .collect(),
@@ -382,7 +391,7 @@ pub(crate) const SELECT_GROUP: &str = "SELECT g.id,
             g.room, g.monthly_fee_cents, g.capacity,
             (SELECT COUNT(*) FROM enrollments e
               WHERE e.group_id = g.id AND COALESCE(e.status, 'actif') = 'actif' AND EXISTS (SELECT 1 FROM students st WHERE st.id=e.student_id AND st.deleted_at IS NULL)) AS enrolled_count,
-            COALESCE(g.status, 'actif') AS status
+            COALESCE(g.status, 'actif') AS status, g.name
      FROM groups g
      LEFT JOIN subjects s ON s.id = g.subject_id
      LEFT JOIN levels l ON l.id = g.level_id
@@ -399,6 +408,7 @@ pub(crate) const GROUP_ORDER: &str = "ORDER BY
 
 pub(crate) fn map_group(row: &Row<'_>) -> rusqlite::Result<GroupRow> {
     Ok(GroupRow {
+        name: row.get(18)?,
         id: row.get(0)?,
         subject_id: row.get(1)?,
         subject_name: row.get(2)?,
@@ -646,8 +656,8 @@ pub fn create_group(conn: &Connection, data: &CreateGroupInput) -> Result<i64, S
     conn.execute(
         "INSERT INTO groups
             (subject_id, level_id, branch_id, teacher_id, school_year_id,
-             day_of_week, start_time, end_time, room, monthly_fee_cents, capacity, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'actif')",
+             day_of_week, start_time, end_time, room, monthly_fee_cents, capacity, status, name)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'actif', ?12)",
         params![
             clean.subject_id,
             clean.level_id,
@@ -660,6 +670,7 @@ pub fn create_group(conn: &Connection, data: &CreateGroupInput) -> Result<i64, S
             clean.room,
             clean.monthly_fee_cents,
             clean.capacity,
+            clean.name,
         ],
     )
     .map_err(|err| db_err("Création du groupe", err))?;
@@ -693,7 +704,7 @@ pub fn update_group(conn: &Connection, id: i64, data: &UpdateGroupInput) -> Resu
         "UPDATE groups SET
             subject_id = ?1, level_id = ?2, branch_id = ?3, teacher_id = ?4,
             school_year_id = ?5, day_of_week = ?6, start_time = ?7, end_time = ?8,
-            room = ?9, monthly_fee_cents = ?10, capacity = ?11
+            room = ?9, monthly_fee_cents = ?10, capacity = ?11, name = ?13
          WHERE id = ?12",
         params![
             clean.subject_id,
@@ -708,6 +719,7 @@ pub fn update_group(conn: &Connection, id: i64, data: &UpdateGroupInput) -> Resu
             clean.monthly_fee_cents,
             clean.capacity,
             id,
+            clean.name,
         ],
     )
     .map_err(|err| db_err("Mise à jour du groupe", err))?;
@@ -786,6 +798,7 @@ mod tests {
 
     pub(crate) fn sample(subject_id: i64, level_id: i64) -> CreateGroupInput {
         CreateGroupInput {
+            name: None,
             subject_id,
             level_id,
             branch_id: None,

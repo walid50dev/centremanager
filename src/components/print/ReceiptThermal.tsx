@@ -9,10 +9,6 @@ import type { ReceiptDocumentData, ReceiptLabels } from './receiptLabels';
  * Courier everywhere: it matches the dot-matrix look of a till receipt and
  * every character takes the same width, so the dashed rules line up.
  */
-// 226 pt - 16 pt of padding - 46 pt of label, Courier advance = 0.6 em.
-const VALUE_CHARS = Math.floor((226 - 16 - 46) / (0.6 * 7)); // 39 at 7 pt
-const VALUE_WIDE_CHARS = Math.floor((226 - 16 - 46) / (0.6 * 8)); // 34 at 8 pt
-
 const COLORS = {
   foreground: '#0F172A',
   muted: '#64748B',
@@ -20,7 +16,6 @@ const COLORS = {
 
 const styles = StyleSheet.create({
   page: {
-    width: 226,
     paddingTop: 9,
     paddingBottom: 9,
     paddingHorizontal: 8,
@@ -111,9 +106,14 @@ function Field({
 export interface ReceiptThermalProps {
   data: ReceiptDocumentData;
   labels: ReceiptLabels;
+  template?: string;
 }
 
-export function ReceiptThermalDocument({ data, labels }: ReceiptThermalProps) {
+export function ReceiptThermalDocument({ data, labels, template = 'thermal' }: ReceiptThermalProps) {
+  const width = (template === 'thermal58' ? 58 : 80) * 72 / 25.4;
+  const valueChars = Math.floor((width - 16 - 46) / (0.6 * 7));
+  const valueWideChars = Math.floor((width - 16 - 46) / (0.6 * 8));
+  const itemChars = Math.floor((width - 16) / (0.6 * 7));
   return (
     <Document
       title={`${labels.shortHeading} ${data.receiptNumber}`}
@@ -121,7 +121,7 @@ export function ReceiptThermalDocument({ data, labels }: ReceiptThermalProps) {
       subject={`${labels.student}: ${data.studentName}`}
       creator="CentreManager"
     >
-      <Page size={{ width: 226, height: 'auto' }} style={styles.page} wrap={false}>
+      <Page size={{ width, height: 'auto' }} style={styles.page} wrap={false}>
         <View style={styles.center}>
           <Text style={styles.centerName}>{data.centerName}</Text>
           {data.centerPhone ? <Text style={styles.meta}>{data.centerPhone}</Text> : null}
@@ -132,12 +132,12 @@ export function ReceiptThermalDocument({ data, labels }: ReceiptThermalProps) {
 
         <View style={styles.rule} />
 
-        <Field label={labels.student} value={data.studentName} maxChars={VALUE_WIDE_CHARS} wide />
-        <Field label={labels.level} value={data.studentLevel} maxChars={VALUE_CHARS} />
+        <Field label={labels.student} value={data.studentName} maxChars={valueWideChars} wide />
+        <Field label={labels.level} value={data.studentLevel} maxChars={valueChars} />
         <View style={styles.rule} />
         <Text style={styles.shortHeading}>{labels.paymentDetails}</Text>
         {data.items.map((item, index) => <View key={index} style={{ marginBottom: 3 }}>
-          {wrapValue(`${item.subject} | ${item.group} | ${item.month} | ${item.amount}`, 48).map((line, lineIndex) => (
+          {wrapValue(`${item.subject} | ${item.group} | ${item.month} | ${item.amount}`, itemChars).map((line, lineIndex) => (
             <Text key={lineIndex}>{line}</Text>
           ))}
         </View>)}

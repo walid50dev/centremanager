@@ -10,7 +10,7 @@ try {
   assert.equal(await call('cmd_get_enrollment_fee'), 0);
   await assert.rejects(call('cmd_set_enrollment_fee', { amount:-1 }), /invalide/i);
   await call('cmd_set_enrollment_fee', { amount:20000 });
-  const id = await call('cmd_create_student', { data:{ full_name:'Salma Mansouri', first_name:'Salma', last_name:'Mansouri', phone:'0661234567', guardian_name:'Rachid Mansouri', guardian_phone:'0661234567', enrollment_date:'2026-09-01', level_id:1, status:'actif' } });
+  const id = await call('cmd_create_student', { data:{ full_name:'Salma Mansouri', first_name:'Salma', last_name:'Mansouri', phone:'0661234567', guardian_name:'Rachid Mansouri', guardian_phone:'0661234567', enrollment_date:'2026-09-01', level_id:1, status:'actif', enrollment_fee_cents:20000 } });
   const groups = await call('cmd_get_groups');
   await assert.rejects(call('cmd_enroll_student_batch', { enrollments:[
     { student_id:id, group_id:groups[0].id, start_date:'2026-09-01' },
@@ -43,7 +43,8 @@ try {
   await call('cmd_import_students', { studentIds:[id], targetYearId:next });
   await call('cmd_import_groups', { groupIds:[groups[0].id,groups[1].id], targetYearId:next });
   const newGroups = await call('cmd_get_groups');
-  await call('cmd_set_enrollment_fee', { amount:30000 });
+  const studentRow = (await call('cmd_get_student_detail', { id })).student;
+  await call('cmd_update_student', { id, data: { ...studentRow, enrollment_fee_cents: 30000 } });
   const result = await call('cmd_enroll_student', { studentId:id, groupId:newGroups[0].id, startDate:'2030-09-01' });
   assert.equal(result.enrollment_fee_amount_cents, 30000);
   invoices = await call('cmd_get_student_invoices', { studentId:id });

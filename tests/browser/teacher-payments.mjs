@@ -11,9 +11,10 @@ const id = name => page.getByTestId(name);
 const call = (cmd,args={}) => page.evaluate(async ({cmd,args}) => (await import('/src/services/settingsDevBackend.ts')).devInvoke(cmd,args), {cmd,args});
 try {
   await page.goto(process.env.SCREENSHOT_BASE_URL || 'http://localhost:1420');
+  await page.locator('input[type=password]').first().waitFor();
   await page.evaluate(async () => { const {authApi} = await import('/src/services/auth.ts'); await authApi.setup('Centre test','admin123'); });
   const teacherId = await call('cmd_create_teacher', {data:{full_name:'Prof Sans Config',phone:null,email:null,notes:null,subject_ids:[]}});
-  const secondYear = await call('cmd_create_school_year', {label:'2025-2026',startDate:'2025-09-01',endDate:'2026-06-30'});
+  const secondYear = await call('cmd_create_school_year', {label:'2030-2031',startDate:'2030-09-01',endDate:'2031-06-30'});
   await page.evaluate(({teacherId,secondYear}) => {
     const key='centremanager.dev.settings_store_v1'; const store=JSON.parse(localStorage.getItem(key));
     store.teacherYears[teacherId].push(secondYear);

@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useAppStore } from '../stores/appStore';
 import { useAuthStore } from '../stores/authStore';
 
 /** Event the Students page listens for to focus its search field. */
@@ -11,13 +10,11 @@ export const FOCUS_SEARCH_EVENT = 'focus-search';
  * - `Ctrl/⌘ + K` → focus the students search (the page listens for the event).
  * - `Ctrl/⌘ + L` → lock the session. The browser would focus the address bar,
  *   which is useless inside a desktop window, so the default is prevented.
- * - `Escape` → close the modal on top of the stack (see `appStore.modalStack`).
  *
  * Registered once, from `App.tsx`.
  */
 export function useKeyboardShortcuts(): void {
   const lock = useAuthStore((state) => state.lock);
-  const closeTopModal = useAppStore((state) => state.closeTopModal);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -36,15 +33,12 @@ export function useKeyboardShortcuts(): void {
         return;
       }
 
-      if (event.key === 'Escape') {
-        // Only swallow the key when a modal was actually closed.
-        if (closeTopModal()) event.preventDefault();
-      }
+
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lock, closeTopModal]);
+  }, [lock]);
 }
 
 export default useKeyboardShortcuts;

@@ -4,6 +4,7 @@ import { UserRound } from 'lucide-react';
 import Button from '../ui/Button';
 import DuplicateWarnings from '../duplicates/DuplicateWarnings';
 import Input from '../ui/Input';
+import MoneyInput from '../ui/MoneyInput';
 import Modal from '../ui/Modal';
 import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import Select from '../ui/Select';
@@ -27,7 +28,7 @@ export interface StudentModalProps {
 
 type Form = { first: string; last: string; level: string; branch: string; school: string; birth: string;
   enrollment: string; guardian: string; phone: string; relation: string; secondary: string;
-  secondaryPhone: string; status: 'actif' | 'inactif'; address: string; notes: string };
+  secondaryPhone: string; studentPhone: string; fee: number; status: 'actif' | 'inactif'; address: string; notes: string };
 const today = () => new Date().toISOString().split('T')[0];
 function toForm(student?: Student | null): Form {
   const names = (student?.full_name ?? '').trim().split(/\s+/);
@@ -35,7 +36,8 @@ function toForm(student?: Student | null): Form {
     first: student?.first_name ?? names[0] ?? '', last: student?.last_name ?? names.slice(1).join(' '),
     level: student?.level_id ? String(student.level_id) : '', branch: student?.branch_id ? String(student.branch_id) : '',
     school: student?.school_name ?? '', birth: student?.birth_date ?? '', enrollment: student?.enrollment_date || today(),
-    guardian: student?.guardian_name ?? '', phone: student?.phone ? formatPhone(student.phone) : '',
+    guardian: student?.guardian_name ?? '', phone: student?.guardian_phone ? formatPhone(student.guardian_phone) : (student?.phone ? formatPhone(student.phone) : ''),
+    studentPhone: student?.phone ? formatPhone(student.phone) : '', fee: student?.enrollment_fee_cents ?? 0,
     relation: student?.guardian_relation ?? '', secondary: student?.secondary_contact_name ?? '',
     secondaryPhone: student?.secondary_contact_phone ? formatPhone(student.secondary_contact_phone) : '',
     status: student?.status ?? 'actif', address: student?.address ?? '', notes: student?.notes ?? '',
@@ -65,15 +67,15 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
     return () => { active = false; };
   }, [open, form.level]);
   const valid = form.first.trim() && form.last.trim() && form.level && form.enrollment && form.guardian.trim() &&
-    isValidPhone(form.phone) && (!form.secondaryPhone.trim() || isValidPhone(form.secondaryPhone));
+    isValidPhone(form.phone) && (!form.studentPhone.trim() || isValidPhone(form.studentPhone)) && Number.isFinite(form.fee) && form.fee >= 0 && (!form.secondaryPhone.trim() || isValidPhone(form.secondaryPhone));
   const relations = useMemo(() => ['father', 'mother', 'guardian', 'brother', 'sister', 'other'].map(value => ({ value, label: t(`students.relation_${value}`) })), [t]);
-  const update = (key: keyof Form, value: string) => setForm(previous => ({ ...previous, [key]: value, ...(key === 'level' && value !== previous.level ? { branch: '' } : {}) }));
+  const update = (key: keyof Form, value: string | number) => setForm(previous => ({ ...previous, [key]: value, ...(key === 'level' && value !== previous.level ? { branch: '' } : {}) }));
   const save = async () => {
     if (!valid) { setShowErrors(true); return; }
     const phone = stripPhone(form.phone);
     const data: StudentInput = {
       full_name: `${form.first.trim()} ${form.last.trim()}`, first_name: form.first.trim(), last_name: form.last.trim(),
-      birth_date: form.birth || null, phone, guardian_phone: phone, guardian_name: form.guardian.trim(),
+      birth_date: form.birth || null, phone: stripPhone(form.studentPhone), guardian_phone: phone, enrollment_fee_cents: form.fee, guardian_name: form.guardian.trim(),
       guardian_relation: form.relation || null, secondary_contact_name: form.secondary.trim() || null,
       secondary_contact_phone: stripPhone(form.secondaryPhone) || null, school_name: form.school.trim() || null,
       enrollment_date: form.enrollment, level_id: Number(form.level), branch_id: form.branch ? Number(form.branch) : null,
@@ -103,6 +105,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
             options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
             onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}
             getOptionValue={branch => branch.id} clearable onCreate={() => setQuickBranch(true)} disableCreate={zIndex >= 70} />
+          <Input type="tel" dir="ltr" label={t('students.student_phone')} data-testid="student-phone" value={form.studentPhone} onChange={e => update('studentPhone', e.target.value)} error={form.studentPhone && !isValidPhone(form.studentPhone) ? t('students.validation.phoneFormat') : undefined} />
           <Input label={t('students.school_name')} data-testid="student-school-name" placeholder="Lycée Moulay Youssef" value={form.school} onChange={e => update('school', e.target.value)} />
           <Input type="date" label={t('students.birth_date')} data-testid="student-birth-date" value={form.birth} onChange={e => update('birth', e.target.value)} />
           <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
@@ -115,6 +118,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
           <Input type="tel" dir="ltr" label={t('students.secondary_phone')} data-testid="student-secondary-phone" placeholder="06 61 23 45 67" value={form.secondaryPhone} onChange={e => update('secondaryPhone', e.target.value)} onBlur={() => { if (isValidPhone(form.secondaryPhone)) update('secondaryPhone', formatPhone(form.secondaryPhone)); }} error={form.secondaryPhone && !isValidPhone(form.secondaryPhone) ? t('students.validation.phoneFormat') : undefined} />
         </fieldset>
         <fieldset data-testid="student-section-admin" className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2"><legend className="text-base font-semibold">{t('students.section_admin')}</legend>
+          <MoneyInput label={t('students.enrollment_fee_dh')} hint={t('students.enrollment_fee_future')} data-testid="student-enrollment-fee" valueCents={form.fee} onChange={value => update('fee', value)} />
           <Select label={t('students.status')} data-testid="student-status" required value={form.status} options={[{ value: 'actif', label: t('students.active') }, { value: 'inactif', label: t('students.inactive') }]} onChange={e => update('status', e.target.value)} />
           <Input label={t('students.address')} data-testid="student-address" placeholder={t('students.address_placeholder')} value={form.address} onChange={e => update('address', e.target.value)} />
           <Textarea containerClassName="sm:col-span-2" label={t('students.notes')} data-testid="student-notes" placeholder={t('students.notes_placeholder')} value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />

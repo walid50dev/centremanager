@@ -79,6 +79,7 @@ pub struct DbInfo {
 /// Shape returned by the student list/detail commands (joined names, non-optional phone).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StudentRow {
+    pub enrollment_fee_cents: i64,
     pub id: i64,
     pub full_name: String,
     pub first_name: Option<String>,
@@ -145,6 +146,8 @@ pub struct StudentDetail {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GroupSchedule {
     #[serde(default)]
+    pub room: Option<String>,
+    #[serde(default)]
     pub id: i64,
     pub day_of_week: String,
     pub start_time: String,
@@ -154,6 +157,7 @@ pub struct GroupSchedule {
 /// A group row enriched with every joined label the UI needs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupRow {
+    pub name: Option<String>,
     pub id: i64,
     pub subject_id: Option<i64>,
     pub subject_name: String,

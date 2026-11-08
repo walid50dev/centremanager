@@ -51,6 +51,8 @@ fn short_day(day: &str) -> &str {
 /// One slot coming from the form.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ScheduleInput {
+    #[serde(default)]
+    pub room: Option<String>,
     pub day_of_week: String,
     pub start_time: String,
     pub end_time: String,
@@ -68,6 +70,7 @@ pub struct TimetableFilters {
 /// One block of the weekly grid: a schedule row plus everything needed to draw it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimetableEntry {
+    pub name: Option<String>,
     pub group_id: i64,
     pub subject_name: String,
     pub level_name: String,
@@ -134,6 +137,7 @@ pub fn clean_schedules(schedules: &[ScheduleInput]) -> Result<Vec<GroupSchedule>
             ));
         }
         cleaned.push(GroupSchedule {
+            room: input.room.as_ref().map(|value| value.trim().to_string()),
             id: 0,
             day_of_week: day.to_string(),
             start_time: start.to_string(),
@@ -184,7 +188,7 @@ pub fn schedule_text(schedules: &[GroupSchedule]) -> String {
 /// The slots of one group, in week order.
 pub fn group_schedules(conn: &Connection, group_id: i64) -> Result<Vec<GroupSchedule>, String> {
     let sql = format!(
-        "SELECT id, day_of_week, start_time, end_time
+        "SELECT id, day_of_week, start_time, end_time, room
          FROM group_schedules WHERE group_id = ?1
          ORDER BY {}, start_time",
         DAY_ORDER_SQL.replace("{column}", "day_of_week")
@@ -195,6 +199,7 @@ pub fn group_schedules(conn: &Connection, group_id: i64) -> Result<Vec<GroupSche
     let rows = stmt
         .query_map(params![group_id], |row| {
             Ok(GroupSchedule {
+                room: row.get(4)?,
                 id: row.get(0)?,
                 day_of_week: row.get(1)?,
                 start_time: row.get(2)?,
@@ -224,7 +229,7 @@ pub fn attach_schedules(
     }
 
     let sql = format!(
-        "SELECT group_id, id, day_of_week, start_time, end_time
+        "SELECT group_id, id, day_of_week, start_time, end_time, room
          FROM group_schedules
          ORDER BY {}, start_time",
         DAY_ORDER_SQL.replace("{column}", "day_of_week")
@@ -237,6 +242,7 @@ pub fn attach_schedules(
             Ok((
                 row.get::<_, i64>(0)?,
                 GroupSchedule {
+                    room: row.get(5)?,
                     id: row.get(1)?,
                     day_of_week: row.get(2)?,
                     start_time: row.get(3)?,
@@ -288,17 +294,17 @@ pub fn timetable(
             .map(str::trim)
             .filter(|value| !value.is_empty())
         {
-            clauses.push("g.room = ?".to_string());
+            clauses.push("COALESCE(gs.room, g.room) = ?".to_string());
             values.push(Box::new(room.to_string()));
         }
     }
 
     let sql = format!(
         "SELECT g.id, COALESCE(s.name, '—'), COALESCE(l.name, '—'), b.name, t.full_name,
-                g.room, gs.day_of_week, gs.start_time, gs.end_time,
+                COALESCE(gs.room, g.room), gs.day_of_week, gs.start_time, gs.end_time,
                 (SELECT COUNT(*) FROM enrollments e
                   WHERE e.group_id = g.id AND COALESCE(e.status, 'actif') = 'actif' AND EXISTS (SELECT 1 FROM students st WHERE st.id=e.student_id AND st.deleted_at IS NULL)),
-                g.capacity, g.monthly_fee_cents
+                g.capacity, g.monthly_fee_cents, g.name
          FROM group_schedules gs
          JOIN groups g ON g.id = gs.group_id
          LEFT JOIN subjects s ON s.id = g.subject_id
@@ -318,6 +324,7 @@ pub fn timetable(
     let rows = stmt
         .query_map(refs.as_slice(), |row| {
             Ok(TimetableEntry {
+                name: row.get(12)?,
                 group_id: row.get(0)?,
                 subject_name: row.get(1)?,
                 level_name: row.get(2)?,
@@ -345,9 +352,9 @@ pub fn timetable(
 pub fn timetable_rooms(conn: &Connection) -> Result<Vec<String>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT DISTINCT room FROM groups
-             WHERE deleted_at IS NULL AND school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND room IS NOT NULL AND TRIM(room) <> ''
-               AND COALESCE(status, 'actif') = 'actif'
+            "SELECT DISTINCT COALESCE(gs.room,g.room) AS room FROM groups g JOIN group_schedules gs ON gs.group_id=g.id
+             WHERE g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND COALESCE(gs.room,g.room) IS NOT NULL AND TRIM(COALESCE(gs.room,g.room)) <> ''
+               AND COALESCE(g.status, 'actif') = 'actif'
              ORDER BY room COLLATE NOCASE",
         )
         .map_err(|err| db_err("Préparation des salles", err))?;
@@ -418,9 +425,9 @@ pub fn set_group_schedules(
 
     for slot in &clean {
         conn.execute(
-            "INSERT INTO group_schedules (group_id, day_of_week, start_time, end_time)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![group_id, slot.day_of_week, slot.start_time, slot.end_time],
+            "INSERT INTO group_schedules (group_id, day_of_week, start_time, end_time, room)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![group_id, slot.day_of_week, slot.start_time, slot.end_time, slot.room],
         )
         .map_err(|err| db_err("Enregistrement d'un horaire", err))?;
     }
@@ -443,6 +450,7 @@ pub fn schedules_from_payload(
         Some(list) => list.to_vec(),
         None if day_of_week.trim().is_empty() && start_time.trim().is_empty() && end_time.trim().is_empty() => vec![],
         None => vec![ScheduleInput {
+            room: None,
             day_of_week: day_of_week.to_string(),
             start_time: start_time.to_string(),
             end_time: end_time.to_string(),
@@ -505,6 +513,7 @@ mod tests {
 
     fn group_input(day: &str, start: &str, end: &str) -> CreateGroupInput {
         CreateGroupInput {
+            name: None,
             subject_id: 1,
             level_id: 10,
             branch_id: None,
@@ -524,6 +533,7 @@ mod tests {
         entries
             .iter()
             .map(|(day, start, end)| ScheduleInput {
+                room: None,
                 day_of_week: (*day).to_string(),
                 start_time: (*start).to_string(),
                 end_time: (*end).to_string(),
@@ -817,6 +827,7 @@ mod tests {
         assert_eq!(
             payload,
             vec![ScheduleInput {
+                room: None,
                 day_of_week: "Lundi".to_string(),
                 start_time: "16:00".to_string(),
                 end_time: "18:00".to_string(),

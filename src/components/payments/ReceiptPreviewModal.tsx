@@ -33,22 +33,21 @@ const ARABIC_CHAR = /[\u0600-\u06FF]/;
 function TemplateToggle({
   value,
   onChange,
-  labelA4,
-  labelThermal,
 }: {
   value: ReceiptTemplate;
   onChange: (template: ReceiptTemplate) => void;
-  labelA4: string;
-  labelThermal: string;
 }) {
+  const { t } = useTranslation();
   const options: Array<{ value: ReceiptTemplate; label: string }> = [
-    { value: 'a4', label: labelA4 },
-    { value: 'thermal', label: labelThermal },
+    { value: 'thermal', label: t('receipt.thermal80') },
+    { value: 'thermal58', label: t('receipt.thermal58') },
+    { value: 'a5', label: 'A5 · 148 × 210 mm' },
+    { value: 'a4', label: 'A4 · 210 × 297 mm' },
   ];
 
   return (
     <div
-      className="inline-flex rounded-md border border-border bg-background p-0.5"
+      className="inline-flex flex-wrap rounded-md border border-border bg-background p-0.5"
       role="tablist"
       aria-label="Format"
     >
@@ -90,7 +89,7 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
   const [data, setData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [template, setTemplate] = useState<ReceiptTemplate>('a4');
+  const [template, setTemplate] = useState<ReceiptTemplate>('thermal');
   const [busy, setBusy] = useState<'download' | 'print' | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
@@ -211,8 +210,6 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
           <TemplateToggle
             value={template}
             onChange={setTemplate}
-            labelA4={t('receipt.templateA4')}
-            labelThermal={t('receipt.templateThermal')}
           />
           <span className="text-[12px] text-muted" data-testid="receipt-summary">
             {data ? `${data.receipt_number} · ${formatCurrency(data.amount_cents)}` : t('receipt.loading')}

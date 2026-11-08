@@ -7,9 +7,9 @@ import type { ReceiptDocumentData, ReceiptLabels } from './receiptLabels';
  * receipt is opened, so every entry point here uses a **dynamic import**: the
  * library lands in its own Vite chunk and the app shell stays small.
  */
-export type ReceiptTemplate = 'a4' | 'thermal';
+export type ReceiptTemplate = 'a4' | 'a5' | 'thermal' | 'thermal58';
 
-export const RECEIPT_TEMPLATES: ReceiptTemplate[] = ['a4', 'thermal'];
+export const RECEIPT_TEMPLATES: ReceiptTemplate[] = ['thermal', 'thermal58', 'a5', 'a4'];
 
 export interface ReceiptPdfInput {
   template: ReceiptTemplate;
@@ -17,18 +17,18 @@ export interface ReceiptPdfInput {
   labels: ReceiptLabels;
 }
 
-/** `a4` unless the settings say otherwise (or something unexpected arrives). */
+/** Preserve legacy saved formats; default new profiles to 80 mm thermal. */
 export function normaliseTemplate(value: string | null | undefined): ReceiptTemplate {
-  return value === 'thermal' ? 'thermal' : 'a4';
+  return RECEIPT_TEMPLATES.includes(value as ReceiptTemplate) ? value as ReceiptTemplate : 'thermal';
 }
 
 async function renderDocument({ template, data, labels }: ReceiptPdfInput) {
   const [{ pdf }, templateModule] = await Promise.all([
     import('@react-pdf/renderer'),
-    template === 'a4' ? import('./ReceiptA4') : import('./ReceiptThermal'),
+    template === 'a4' || template === 'a5' ? import('./ReceiptA4') : import('./ReceiptThermal'),
   ]);
   const Document = templateModule.default;
-  return pdf(<Document data={data} labels={labels} />);
+  return pdf(<Document data={data} labels={labels} template={template} />);
 }
 
 /** Render the selected template and return the PDF bytes. */

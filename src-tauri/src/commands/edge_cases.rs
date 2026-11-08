@@ -42,6 +42,7 @@ fn group(conn: &Connection, fee_cents: i64, capacity: i32) -> i64 {
     create_group(
         conn,
         &CreateGroupInput {
+            name: None,
             subject_id: 1,
             level_id: 10,
             branch_id: None,
@@ -506,6 +507,7 @@ fn deactivating_a_teacher_keeps_the_groups_readable() {
     let group_id = create_group(
         &conn,
         &CreateGroupInput {
+            name: None,
             subject_id: 1,
             level_id: 10,
             branch_id: None,

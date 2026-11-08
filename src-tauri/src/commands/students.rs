@@ -31,6 +31,7 @@ const HISTORY_LIMIT: i64 = 50;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct CreateStudentInput {
+    pub enrollment_fee_cents: Option<i64>,
     pub full_name: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
@@ -56,6 +57,7 @@ pub type UpdateStudentInput = CreateStudentInput;
 /// Clean, validated values ready for SQL.
 #[derive(Debug, Clone)]
 struct CleanInput {
+    enrollment_fee_cents: Option<i64>,
     full_name: String,
     first_name: Option<String>,
     last_name: Option<String>,
@@ -166,7 +168,9 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
         return Err("Le nom de l'élève doit contenir au moins 2 caractères".to_string());
     }
 
-    let phone = validate_phone(data.guardian_phone.as_deref().unwrap_or(&data.phone), "téléphone du tuteur")?;
+    let guardian_phone = validate_phone(data.guardian_phone.as_deref().unwrap_or(&data.phone), "téléphone du tuteur")?;
+    let phone = if data.phone.trim().is_empty() { String::new() } else { validate_phone(&data.phone, "téléphone de l'élève")? };
+    if data.enrollment_fee_cents.unwrap_or(0) < 0 { return Err("Les frais d'inscription doivent être positifs ou nuls".to_string()); }
 
     let secondary_contact_phone = match optional_text(&data.secondary_contact_phone) {
         None => None,
@@ -192,9 +196,10 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
     };
     let status = validate_status(data.status.as_deref().unwrap_or(STATUS_ACTIVE))?;
     Ok(CleanInput {
+        enrollment_fee_cents: data.enrollment_fee_cents,
         first_name: optional_text(&data.first_name),
         last_name: optional_text(&data.last_name),
-        guardian_phone: Some(phone.clone()),
+        guardian_phone: Some(guardian_phone),
         guardian_relation: optional_text(&data.guardian_relation),
         secondary_contact_name: optional_text(&data.secondary_contact_name),
         school_name: optional_text(&data.school_name),
@@ -271,6 +276,7 @@ fn diff(before: &Map<String, Value>, after: &Map<String, Value>) -> Map<String, 
 
 fn input_json(clean: &CleanInput) -> Value {
     json!({
+        "enrollment_fee_cents": clean.enrollment_fee_cents,
         "full_name": clean.full_name,
         "first_name": clean.first_name,
         "last_name": clean.last_name,
@@ -300,13 +306,14 @@ const SELECT_STUDENT: &str = "SELECT s.id, s.full_name, s.birth_date, s.phone, s
             s.branch_id, b.name AS branch_name,
             s.address, s.notes, s.status, s.created_at, s.updated_at,
             s.first_name, s.last_name, s.guardian_phone, s.guardian_relation,
-            s.secondary_contact_name, s.school_name, s.enrollment_date
+            s.secondary_contact_name, s.school_name, s.enrollment_date, s.enrollment_fee_cents
      FROM students s
      LEFT JOIN levels l ON l.id = s.level_id
      LEFT JOIN branches b ON b.id = s.branch_id";
 
 fn map_student(row: &Row<'_>) -> rusqlite::Result<StudentRow> {
     Ok(StudentRow {
+        enrollment_fee_cents: row.get(22)?,
         id: row.get(0)?,
         full_name: row.get(1)?,
         first_name: row.get(15)?,
@@ -489,12 +496,12 @@ pub fn create_student(conn: &Connection, data: &CreateStudentInput) -> Result<i6
     conn.execute(
         "INSERT INTO students (full_name, birth_date, phone, secondary_contact_phone, guardian_name,
          level_id, branch_id, address, notes, status, first_name, last_name, guardian_phone,
-         guardian_relation, secondary_contact_name, school_name, enrollment_date)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+         guardian_relation, secondary_contact_name, school_name, enrollment_date, enrollment_fee_cents)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,COALESCE(?18,0))",
         params![clean.full_name, clean.birth_date, clean.phone, clean.secondary_contact_phone,
             clean.guardian_name, clean.level_id, clean.branch_id, clean.address, clean.notes,
             clean.status, clean.first_name, clean.last_name, clean.guardian_phone, clean.guardian_relation,
-            clean.secondary_contact_name, clean.school_name, clean.enrollment_date],
+            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, clean.enrollment_fee_cents],
     )
     .map_err(|err| db_err("Création de l'élève", err))?;
 
@@ -512,17 +519,18 @@ pub fn update_student(conn: &Connection, id: i64, data: &UpdateStudentInput) -> 
         "UPDATE students SET full_name=?1, birth_date=?2, phone=?3, secondary_contact_phone=?4,
          guardian_name=?5, level_id=?6, branch_id=?7, address=?8, notes=?9, status=?10,
          first_name=?11, last_name=?12, guardian_phone=?13, guardian_relation=?14,
-         secondary_contact_name=?15, school_name=?16, enrollment_date=?17, updated_at=CURRENT_TIMESTAMP
+         secondary_contact_name=?15, school_name=?16, enrollment_date=?17, enrollment_fee_cents=COALESCE(?19,enrollment_fee_cents), updated_at=CURRENT_TIMESTAMP
          WHERE id=?18",
         params![clean.full_name, clean.birth_date, clean.phone, clean.secondary_contact_phone,
             clean.guardian_name, clean.level_id, clean.branch_id, clean.address, clean.notes,
             clean.status, clean.first_name, clean.last_name, clean.guardian_phone, clean.guardian_relation,
-            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, id],
+            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, id, clean.enrollment_fee_cents],
     )
     .map_err(|err| db_err("Mise à jour de l'élève", err))?;
 
     let after = json!(input_json(&clean));
-    let after_map = after.as_object().cloned().unwrap_or_default();
+    let mut after_map = after.as_object().cloned().unwrap_or_default();
+    if clean.enrollment_fee_cents.is_none() { after_map.remove("enrollment_fee_cents"); }
     let changes = diff(&before, &after_map);
 
     // Nothing changed -> no audit noise.

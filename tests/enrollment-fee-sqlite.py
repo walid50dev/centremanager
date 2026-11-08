@@ -54,7 +54,7 @@ class EnrollmentFeeSqlTests(base.YearImportTests):
         db.execute("INSERT INTO payments(student_id, invoice_id, amount_cents) VALUES (1,?,5000)", (fee_invoice,))
         self.assertEqual(db.execute('SELECT school_year_id FROM payments').fetchone()[0], 1)
         items = literal('payments.rs', "SELECT p.amount_cents, p.invoice_id, COALESCE(s.name,'')")
-        self.assertEqual(db.execute(items, (1,)).fetchone(), (5000, fee_invoice, '', '', '', 9, 2024, '2024-2025'))
+        self.assertEqual(db.execute(items, (1,)).fetchone(), (5000, fee_invoice, '', '', '', 9, 2024, '2024-2025', ''))
         export = literal('year_export.rs', 'AS invoice_kind')
         self.assertEqual(db.execute(export, (1,)).fetchone()[3], 'enrollment_fee')
         theoretical = literal('dashboard.rs', 'SELECT COALESCE(SUM(i.amount_cents), 0) FROM invoices i LEFT JOIN')

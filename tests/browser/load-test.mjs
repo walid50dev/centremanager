@@ -28,7 +28,7 @@ try {
   await id('nav-students').click(); await page.getByText(/1.*20.*200/).waitFor();
   t=performance.now(); await id('nav-groups').click(); await id('group-card-1').waitFor(); timings.groups=performance.now()-t;
   await id('group-card-1').click(); await page.getByRole('dialog').waitFor();
-  await page.getByRole('dialog').getByText(/Mathématiques/).first().waitFor(); assert.match(await page.getByRole('dialog').innerText(),/Mathématiques/); await page.keyboard.press('Escape');
+  await page.getByRole('dialog').getByText(/Mathématiques/).first().waitFor(); assert.match(await page.getByRole('dialog').innerText(),/Mathématiques/); await page.getByRole('dialog').getByRole('button',{name:'Fermer',exact:true}).first().click();
   await page.getByRole('dialog').waitFor({state:'hidden'});
   t=performance.now(); await id('nav-payments').click(); await id('section-late').getByText('60 élèves').waitFor(); timings.payments=performance.now()-t;
   assert.match(await id('section-current').innerText(),/140 élèves/);

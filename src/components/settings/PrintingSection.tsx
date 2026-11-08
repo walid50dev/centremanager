@@ -5,7 +5,7 @@ import { toast } from '../ui/Toast';
 import { settingsApi } from '../../services/settings';
 import { cn } from '../../utils/format';
 
-type ReceiptFormat = 'a4' | 'thermal';
+import { normaliseTemplate, type ReceiptTemplate as ReceiptFormat } from '../print/receiptPdf';
 
 export interface PrintingSectionProps {
   settings: Record<string, string>;
@@ -15,7 +15,7 @@ export interface PrintingSectionProps {
 /** Section 6 — receipt paper format (A4 or 80 mm thermal). */
 export function PrintingSection({ settings, updateLocal }: PrintingSectionProps) {
   const { t } = useTranslation();
-  const current: ReceiptFormat = settings.receipt_format === 'thermal' ? 'thermal' : 'a4';
+  const current: ReceiptFormat = normaliseTemplate(settings.receipt_format);
 
   const handleSelect = async (format: ReceiptFormat) => {
     if (format === current) return;
@@ -36,11 +36,13 @@ export function PrintingSection({ settings, updateLocal }: PrintingSectionProps)
     >
       <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t('settings.section.printing')}>
         {([
-          { value: 'a4' as const, labelKey: 'settings.printing.a4', hintKey: 'settings.printing.a4Hint' },
           { value: 'thermal' as const, labelKey: 'settings.printing.thermal', hintKey: 'settings.printing.thermalHint' },
+          { value: 'thermal58' as const, labelKey: 'settings.printing.thermal58', hintKey: 'settings.printing.thermal58Hint' },
+          { value: 'a5' as const, labelKey: 'settings.printing.a5', hintKey: 'settings.printing.a5Hint' },
+          { value: 'a4' as const, labelKey: 'settings.printing.a4', hintKey: 'settings.printing.a4Hint' },
         ]).map((option) => {
           const selected = current === option.value;
-          const isA4 = option.value === 'a4';
+          const isA4 = option.value === 'a4' || option.value === 'a5';
           return (
             <button
               key={option.value}

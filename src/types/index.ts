@@ -41,6 +41,7 @@ export interface Subject {
 
 /** One weekly slot of a group (Phase 13). */
 export interface GroupSchedule {
+  room?: string | null;
   id: number;
   day_of_week: string;
   start_time: string;
@@ -65,6 +66,7 @@ export interface ScheduleConflict {
 
 /** Joined group labels and computed active-enrollment count. */
 export interface Group {
+  name?: string | null;
   deleted_at?: string | null;
   id: number;
   subject_id: number | null;
@@ -94,6 +96,7 @@ export interface Group {
 
 /** Payload for `cmd_create_group` / `cmd_update_group`. */
 export interface GroupInput {
+  name?: string | null;
   subject_id: number;
   level_id: number;
   branch_id: number | null;
@@ -189,6 +192,7 @@ export interface DbInfo {
 
 /** A student as returned by `cmd_get_students` / `cmd_get_student_detail`. */
 export interface Student {
+  enrollment_fee_cents?: number;
   deleted_at?: string | null;
   id: number;
   full_name: string;
@@ -242,6 +246,7 @@ export interface StudentDetail {
 
 /** Payload for `cmd_create_student` / `cmd_update_student`. */
 export interface StudentInput {
+  enrollment_fee_cents?: number;
   full_name: string;
   first_name: string | null;
   last_name: string | null;
@@ -536,6 +541,7 @@ export interface RecentPayment {
 
 /** One block of the weekly timetable (Phase 13). */
 export interface TimetableEntry {
+  name?: string | null;
   group_id: number;
   subject_name: string;
   level_name: string;

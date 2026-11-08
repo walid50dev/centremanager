@@ -38,6 +38,7 @@ async function checkPlaceholders(where) {
 async function closeDialog(){const dialog=page.getByRole('dialog').last(); await page.evaluate(() => document.activeElement?.blur()); await page.waitForTimeout(100); await dialog.getByRole('button',{name:/^(Fermer|إغلاق)$/}).first().click(); await dialog.waitFor({state:'hidden'});}
 try {
   await page.goto(process.env.SCREENSHOT_BASE_URL || 'http://localhost:1420');
+  await page.locator('input[type=password]').first().waitFor();
   await page.evaluate(async()=>{const {authApi}=await import('/src/services/auth.ts'); await authApi.setup('Centre test','admin123');});
   const student=await call('cmd_create_student',{data:{full_name:'Test Groupe',first_name:'Test',last_name:'Groupe',phone:'0661234567',guardian_name:'Parent',guardian_phone:'0661234567',enrollment_date:'2024-09-01',level_id:1,status:'actif'}});
   const group=await call('cmd_create_group',{data:{subject_id:1,level_id:1,branch_id:null,teacher_id:null,school_year_id:1,room:null,monthly_fee_cents:10000,capacity:10,schedules:[]}});

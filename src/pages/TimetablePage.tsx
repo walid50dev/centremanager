@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Select from '../components/ui/Select';
 import GroupDetailModal from '../components/groups/GroupDetailModal';
+import TimetableEditor from '../components/groups/TimetableEditor';
 import { toast } from '../components/ui/Toast';
 import { schedulesApi } from '../services/schedules';
 import { levelsApi, subjectsApi } from '../services/settings';
@@ -71,6 +72,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
   const [filters, setFilters] = useState<TimetableFilters>({ ...EMPTY_FILTERS, ...initialFilters });
   const [loading, setLoading] = useState(true);
   const [showSunday, setShowSunday] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [activeDay, setActiveDay] = useState<WeekDay>('Lundi');
 
@@ -326,6 +328,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
           </h1>
           <p className="mt-0.5 text-[13px] text-muted">{t('timetable.description')}</p>
         </div>
+        <Button onClick={() => setEditorOpen(true)} data-testid="timetable-manage">{t('timetable.manage')}</Button>
       </div>
 
       {filtersBar}
@@ -475,7 +478,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
                   data-testid={`timetable-mobile-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}
                 >
                   <span className="flex w-full min-w-0 items-center justify-between gap-2 text-[12px] font-semibold">
-                    <span className="min-w-0 truncate" dir="auto">{entry.subject_name}</span>
+                    <span className="min-w-0 truncate" dir="auto">{groupTitle(t, entry)}</span>
                     <span className="shrink-0 whitespace-nowrap font-normal tabular-nums opacity-80" dir="ltr">
                       {entry.start_time} – {entry.end_time}
                     </span>
@@ -505,6 +508,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
         </div>
       </div>
 
+      {editorOpen && <TimetableEditor onClose={() => setEditorOpen(false)} onSaved={loadGroups} />}
       <GroupDetailModal
         open={detailId !== null}
         groupId={detailId}

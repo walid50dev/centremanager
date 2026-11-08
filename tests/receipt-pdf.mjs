@@ -16,15 +16,20 @@ try {
     { subject: 'Physique', group: '2Bac PC', month: 'Novembre 2025', amount: '350.00 DH' },
     { subject: 'Chimie', group: '2Bac PC', month: 'Novembre 2025', amount: '50.00 DH' },
   ] };
-  const render = async Component => {
-    const stream = await pdf(React.createElement(Component, { data, labels })).toBuffer();
+  const render = async (Component, template) => {
+    const stream = await pdf(React.createElement(Component, { data, labels, template })).toBuffer();
     const buffers = []; for await (const part of stream) buffers.push(part);
     return Buffer.concat(buffers);
   };
-  for (const [name, component] of [['A4', A4], ['thermal', Thermal]]) {
-    const buffer = await render(component);
+  for (const [name, component, template, width, height] of [['A4', A4, 'a4', 595.28, 841.89], ['A5', A4, 'a5', 419.53, 595.28], ['thermal80', Thermal, 'thermal', 80*72/25.4, null], ['thermal58', Thermal, 'thermal58', 58*72/25.4, null]]) {
+    const buffer = await render(component, template);
     assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
     assert.ok(buffer.length > 1000, `${name} PDF generated`);
+    const media = buffer.toString('latin1').match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/);
+    assert.ok(media, `${name} MediaBox exists`);
+    assert.ok(Math.abs(Number(media[1]) - width) < 0.1, `${name} width: ${media[1]}`);
+    if (height) assert.ok(Math.abs(Number(media[2]) - height) < 0.1, `${name} height: ${media[2]}`);
+    else assert.ok(Number(media[2]) > 0 && Number(media[2]) < 841, `${name} auto height: ${media[2]}`);
     // Confirm the PDF contains drawing commands, including compressed streams.
     let decodedStreams = 0;
     let decoded = '';
@@ -35,7 +40,7 @@ try {
     assert.ok(decodedStreams > 0, `${name} has content streams`);
     const text = [...decoded.matchAll(/BT([\s\S]*?)ET/g)].map(part => [...part[1].matchAll(/<([0-9a-f]+)>/gi)].map(hex => Buffer.from(hex[1], 'hex').toString('latin1')).join('')).join(' ').replace(/\s+/g, ' ');
     for (const value of ['Maths', 'Physique', 'Chimie', 'Novembre 2025', '400.00 DH', '350.00 DH', '50.00 DH', '800.00 DH', 'Salma']) assert.ok(text.includes(value), `${name}: missing ${value} in ${text}`);
-    assert.equal(decoded.includes('/I1 Do'), name === 'A4', 'only A4 embeds the logo');
+    assert.equal(decoded.includes('/I1 Do'), name === 'A4' || name === 'A5', 'sheet formats embed the logo');
   }
   data.logo = null;
   assert.ok((await render(A4)).length > 1000, 'A4 PDF renders without logo');

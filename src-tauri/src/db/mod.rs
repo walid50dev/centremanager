@@ -143,6 +143,16 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         }
     }
     upgrade_student_columns(conn)?;
+    if !column_exists(conn, "students", "enrollment_fee_cents")? {
+        conn.execute_batch("ALTER TABLE students ADD COLUMN enrollment_fee_cents INTEGER NOT NULL DEFAULT 0 CHECK(enrollment_fee_cents >= 0);
+            UPDATE students SET enrollment_fee_cents = COALESCE((SELECT amount FROM enrollment_fees f WHERE f.student_id=students.id ORDER BY f.id DESC LIMIT 1), 0);")?;
+    }
+    if !column_exists(conn, "group_schedules", "room")? {
+        conn.execute_batch("ALTER TABLE group_schedules ADD COLUMN room TEXT")?;
+    }
+    if !column_exists(conn, "groups", "name")? {
+        conn.execute_batch("ALTER TABLE groups ADD COLUMN name TEXT")?;
+    }
     for table in ["students", "teachers", "groups", "monthly_expenses"] {
         if !column_exists(conn, table, "deleted_at")? {
             conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN deleted_at TEXT;"))?;
@@ -680,7 +690,7 @@ fn seed_defaults(conn: &Connection) -> rusqlite::Result<()> {
             ('currency', 'DH'),
             ('language', 'fr'),
             ('lock_timeout_minutes', '15'),
-            ('receipt_format', 'a4'),
+            ('receipt_format', 'thermal'),
             ('db_version', '2'),
             -- Phase 11: the expense categories the director can edit in Settings.
             ('expense_categories', '[\"Loyer\",\"WiFi\",\"Électricité\",\"Eau\",\"Assistance\",\"Fournitures\",\"Autre\"]');",

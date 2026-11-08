@@ -81,7 +81,7 @@ class YearImportTests(unittest.TestCase):
         sql = sql_containing('INSERT INTO groups (subject_id,level_id,branch_id,teacher_id,school_year_id')
         cursor = db.execute(sql, (1, 2))
         copy = cursor.lastrowid
-        db.execute(sql_containing('INSERT INTO group_schedules (group_id,day_of_week,start_time,end_time) SELECT'), (1, copy))
+        db.execute(sql_containing('INSERT INTO group_schedules (group_id,day_of_week,start_time,end_time,room) SELECT'), (1, copy))
         db.execute(sql_containing('INSERT INTO group_year_imports (source_group_id,target_school_year_id,imported_group_id)'), (1, 2, copy))
         self.assertEqual(db.execute('SELECT count(*) FROM group_schedules WHERE group_id=?', (copy,)).fetchone()[0], 2)
         self.assertEqual(db.execute('SELECT count(*) FROM enrollments WHERE group_id=?', (copy,)).fetchone()[0], 0)

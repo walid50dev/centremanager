@@ -27,10 +27,10 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 38 },
   signature: { width: 160, textAlign: 'center', color: colors.muted, fontSize: 9 },
 });
-export interface ReceiptA4Props { data: ReceiptDocumentData; labels: ReceiptLabels }
-export function ReceiptA4Document({ data, labels }: ReceiptA4Props) {
+export interface ReceiptA4Props { data: ReceiptDocumentData; labels: ReceiptLabels; template?: string }
+export function ReceiptA4Document({ data, labels, template = 'a4' }: ReceiptA4Props) {
   return <Document title={`${labels.heading} ${data.receiptNumber}`} author={data.centerName} creator="CentreManager">
-    <Page size="A4" style={styles.page}>
+    <Page size={template === 'a5' ? 'A5' : 'A4'} style={[styles.page, template === 'a5' ? { padding: 24 } : {}]}>
       <View style={styles.header}>
         <View style={styles.identity}>
           {data.logo ? <Image style={styles.logo} src={data.logo} /> : null}

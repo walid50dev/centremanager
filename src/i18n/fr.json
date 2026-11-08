@@ -46,8 +46,7 @@
     },
     "refresh": "Actualiser",
     "suffix": {
-      "percent": "%",
-      "students": "élèves"
+      "percent": "%"
     },
     "createNew": "+ Nouveau…",
     "creating": "Création…",
@@ -244,10 +243,14 @@
     "printing": {
       "description": "Format papier utilisé pour les reçus.",
       "a4": "A4",
-      "a4Hint": "Reçu standard",
+      "a4Hint": "210 × 297 mm",
       "thermal": "Thermique 80mm",
-      "thermalHint": "Reçu compact",
-      "updated": "Format d'impression enregistré ✓"
+      "thermalHint": "80 × auto mm",
+      "updated": "Format d'impression enregistré ✓",
+      "thermal58": "Ticket thermique 58 mm",
+      "thermal58Hint": "58 × auto mm",
+      "a5": "A5",
+      "a5Hint": "148 × 210 mm"
     },
     "security": {
       "description": "Verrouillage automatique et mot de passe administrateur.",
@@ -298,10 +301,7 @@
     "centre_logo": "Logo du centre",
     "upload_logo": "Choisir un logo",
     "remove_logo": "Supprimer le logo",
-    "logo_preview": "Aperçu du logo",
-    "enrollment_fee_label": "Frais d'inscription (par élève, par an)",
-    "enrollment_fee_hint": "Montant par élève à la première inscription de l’année. 0 = pas de frais ; les modifications ne sont pas rétroactives.",
-    "enrollment_fee_saved": "Frais d’inscription enregistrés"
+    "logo_preview": "Aperçu du logo"
   },
   "students": {
     "new": "+ Nouvel élève",
@@ -419,27 +419,27 @@
     "enrollment_column": "Inscription",
     "delete_confirm": "Supprimer définitivement {{name}} ? Toutes ses données de toutes les années (inscriptions, paiements, reçus) seront perdues.",
     "deleted": "Élève supprimé définitivement",
-    "enrollment_fee": "Frais d'inscription"
+    "enrollment_fee": "Frais d'inscription",
+    "student_phone": "Tél Élève",
+    "enrollment_fee_dh": "Frais d'inscription (DH)",
+    "enrollment_fee_future": "Appliqué à la première inscription annuelle ; les factures déjà créées ne sont pas modifiées."
   },
   "groups": {
     "title": "Groupes",
     "new": "Nouveau groupe",
     "edit": "Modifier le groupe",
-    "formHint": "Un groupe réunit une matière, un niveau et un créneau hebdomadaire.",
+    "formHint": "Les horaires se configurent dans l’emploi du temps.",
     "noGroups": "Aucun groupe pour cette année scolaire",
     "noGroupsHint": "Créez un premier groupe pour commencer les inscriptions.",
     "subject": "Matière",
     "level": "Niveau",
-    "branch": "Branche",
     "teacher": "Enseignant",
     "noTeacher": "Non assigné",
     "noTeacherAvailable": "Aucun enseignant disponible",
-    "schoolYear": "Année scolaire",
     "day": "Jour",
     "startTime": "Heure début",
     "endTime": "Heure fin",
     "room": "Salle",
-    "roomPlaceholder": "Salle 3",
     "monthlyFee": "Tarif mensuel",
     "feeHint": "Montant en dirhams, facturé chaque mois.",
     "capacity": "Capacité",
@@ -450,9 +450,6 @@
     "summary": "{{groups}} groupe(s) · {{students}} élève(s) inscrit(s)",
     "selectSubject": "Choisir une matière",
     "selectLevel": "Choisir un niveau",
-    "selectBranch": "Choisir une branche",
-    "selectSchoolYear": "Choisir une année",
-    "noBranch": "Aucune branche",
     "dayNames": {
       "Lundi": "Lundi",
       "Mardi": "Mardi",
@@ -467,9 +464,7 @@
       "levelRequired": "Le niveau est obligatoire",
       "schoolYearRequired": "L'année scolaire est obligatoire",
       "feePositive": "Le tarif doit être supérieur à 0",
-      "capacityPositive": "La capacité doit être au moins 1",
-      "scheduleIncomplete": "Horaires incomplets pour {{day}}",
-      "endAfterStartDay": "L'heure de fin doit être après l'heure de début ({{day}})"
+      "capacityPositive": "La capacité doit être au moins 1"
     },
     "toast": {
       "created": "Groupe créé ✓",
@@ -491,8 +486,7 @@
       "breakdown_other": "{{count}} élèves × {{fee}}"
     },
     "untitled": "Groupe sans intitulé",
-    "schedules": "Jours de cours",
-    "schedulesHint": "Facultatif : cochez les jours de cours et ajustez les horaires, ou définissez-les plus tard."
+    "name": "Nom du groupe"
   },
   "timetable": {
     "title": "Emploi du temps",
@@ -519,7 +513,12 @@
     "emptyHint": "Ajoutez des jours de cours à vos groupes, ou élargissez les filtres.",
     "loading": "Chargement de l'emploi du temps…",
     "showSunday": "Afficher dimanche",
-    "tooltipGroup": "Groupe"
+    "tooltipGroup": "Groupe",
+    "manage": "Gérer les horaires",
+    "selectGroup": "Choisir un groupe",
+    "day": "Jour",
+    "addSlot": "Ajouter un créneau",
+    "invalidSlots": "Vérifiez les heures et utilisez un seul créneau par jour."
   },
   "enrollment": {
     "title": "Inscription",
@@ -685,7 +684,6 @@
       "share": "{{pct}} des frais"
     },
     "validation": {
-      "labelRequired": "Le libellé est obligatoire",
       "categoryRequired": "Choisissez une catégorie",
       "amountPositive": "Le montant doit être supérieur à zéro"
     },
@@ -769,8 +767,6 @@
     "printPdf": "Imprimer",
     "downloaded": "PDF téléchargé",
     "pdfError": "Impossible de générer le PDF",
-    "templateA4": "A4",
-    "templateThermal": "Thermique 80 mm",
     "arabicLimitation": "Le reçu est généré en français. Les caractères arabes des données peuvent ne pas être affichés correctement par le moteur PDF.",
     "amountPaid": "Montant payé",
     "total": "TOTAL",
@@ -784,7 +780,9 @@
     "paymentDetails": "Détails du paiement",
     "signature": "Signature / cachet",
     "unavailable": "Détails historiques indisponibles",
-    "enrollment_fee": "Frais d'inscription"
+    "enrollment_fee": "Frais d'inscription",
+    "thermal80": "Ticket 80 × auto mm",
+    "thermal58": "Ticket 58 × auto mm"
   },
   "teachers": {
     "title": "Enseignants",

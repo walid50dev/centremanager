@@ -135,9 +135,6 @@ fn trimmed(value: &Option<String>) -> Option<String> {
 impl CleanInput {
     fn from_input(input: &CreateExpenseInput) -> Result<Self, String> {
         let label = input.label.trim().to_string();
-        if label.is_empty() {
-            return Err("Le libellé de la dépense est obligatoire".to_string());
-        }
         if label.chars().count() > MAX_LABEL_LEN {
             return Err(format!(
                 "Le libellé ne peut pas dépasser {MAX_LABEL_LEN} caractères"
@@ -585,7 +582,7 @@ mod tests {
 
         let mut empty_label = input("   ", 1000, "Loyer");
         empty_label.notes = None;
-        assert!(create_expense(&conn, &empty_label).is_err());
+        assert!(create_expense(&conn, &empty_label).is_ok());
 
         let zero = input("Loyer", 0, "Loyer");
         assert!(create_expense(&conn, &zero).is_err());

@@ -252,7 +252,7 @@ pub fn payment_alerts_on(
                     i.amount_cents,
                     COALESCE(i.paid_amount_cents, 0),
                     COALESCE(i.status, 'impayé'),
-                    COALESCE(i.due_date, '')
+                    COALESCE(i.due_date, ''), COALESCE(g.name, '')
              FROM invoices i
              LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
              LEFT JOIN enrollments e ON e.id = i.enrollment_id
@@ -277,6 +277,7 @@ pub fn payment_alerts_on(
                 row.get::<_, i64>(6)?,
                 row.get::<_, String>(7)?,
                 row.get::<_, String>(8)?,
+                row.get::<_, String>(9)?,
             ))
         })
         .map_err(|err| db_err("Lecture des factures", err))?
@@ -286,7 +287,7 @@ pub fn payment_alerts_on(
     // Fold the flat rows into one accumulator per student, keeping the input
     // order (already sorted by student) so the buckets stay stable.
     let mut students: Vec<StudentMonth> = Vec::new();
-    for (student_id, name, phone, subject, level, amount, paid, status, due_date) in rows {
+    for (student_id, name, phone, subject, level, amount, paid, status, due_date, custom_name) in rows {
         let index = match students.iter().position(|s| s.student_id == student_id) {
             Some(index) => index,
             None => {
@@ -305,7 +306,7 @@ pub fn payment_alerts_on(
         };
 
         let student = &mut students[index];
-        let label = if level.is_empty() {
+        let label = if !custom_name.trim().is_empty() { custom_name } else if level.is_empty() {
             subject.clone()
         } else if subject.is_empty() {
             level.clone()
@@ -546,6 +547,7 @@ mod tests {
         create_group(
             conn,
             &CreateGroupInput {
+                name: None,
                 subject_id: 1,
                 level_id: 10,
                 branch_id: None,

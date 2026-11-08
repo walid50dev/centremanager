@@ -41,16 +41,16 @@ pub fn check_schedule_conflicts(
     if wanted_room.is_empty() && teacher_id.is_none() { return Ok(Vec::new()); }
     // Legacy rows without any group_schedules still participate, but never
     // duplicate a group that already has a multi-day schedule.
-    let sql = "SELECT g.id, g.teacher_id, COALESCE(g.room, ''), COALESCE(t.full_name, ''),
+    let sql = "SELECT g.id, g.teacher_id, COALESCE(slots.room, g.room, ''), COALESCE(t.full_name, ''),
                       COALESCE(s.name, ''), COALESCE(l.name, ''), slots.day, slots.start_time, slots.end_time
         FROM groups g
         LEFT JOIN teachers t ON t.id = g.teacher_id
         LEFT JOIN subjects s ON s.id = g.subject_id
         LEFT JOIN levels l ON l.id = g.level_id
         JOIN (
-          SELECT group_id, day_of_week AS day, start_time, end_time FROM group_schedules
+          SELECT group_id, day_of_week AS day, start_time, end_time, room FROM group_schedules
           UNION ALL
-          SELECT id, day_of_week, start_time, end_time FROM groups legacy
+          SELECT id, day_of_week, start_time, end_time, room FROM groups legacy
           WHERE NOT EXISTS (SELECT 1 FROM group_schedules gs WHERE gs.group_id = legacy.id)
             AND day_of_week IS NOT NULL AND start_time IS NOT NULL AND end_time IS NOT NULL
         ) slots ON slots.group_id = g.id

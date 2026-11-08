@@ -117,7 +117,6 @@ export function ExpenseModal({
   const validate = useCallback((): Errors => {
     const next: Errors = {};
     if (!form.category.trim()) next.category = t('expenses.validation.categoryRequired');
-    if (!form.label.trim()) next.label = t('expenses.validation.labelRequired');
     if (!Number.isFinite(form.amountCents) || form.amountCents <= 0) {
       next.amountCents = t('expenses.validation.amountPositive');
     }
@@ -211,7 +210,7 @@ export function ExpenseModal({
 
           <Input
             label={t('expenses.label')}
-            required
+            hint={t('students.optional')}
             value={form.label}
             onChange={(event) => set('label', event.target.value)}
             error={errors.label}

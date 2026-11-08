@@ -46,8 +46,7 @@
     },
     "refresh": "تحديث",
     "suffix": {
-      "percent": "%",
-      "students": "تلاميذ"
+      "percent": "%"
     },
     "createNew": "+ جديد…",
     "creating": "جاري الإنشاء…",
@@ -244,10 +243,14 @@
     "printing": {
       "description": "شكل الورق المستخدم في الوصولات.",
       "a4": "A4",
-      "a4Hint": "وصل عادي",
+      "a4Hint": "210 × 297 mm",
       "thermal": "حراري 80 ملم",
-      "thermalHint": "وصل مختصر",
-      "updated": "تم حفظ صيغة الطباعة ✓"
+      "thermalHint": "80 × auto mm",
+      "updated": "تم حفظ صيغة الطباعة ✓",
+      "thermal58": "وصل حراري 58 مم",
+      "thermal58Hint": "58 × auto mm",
+      "a5": "A5",
+      "a5Hint": "148 × 210 mm"
     },
     "security": {
       "description": "القفل التلقائي وكلمة مرور المدير.",
@@ -298,10 +301,7 @@
     "centre_logo": "شعار المركز",
     "upload_logo": "اختيار الشعار",
     "remove_logo": "حذف الشعار",
-    "logo_preview": "معاينة الشعار",
-    "enrollment_fee_label": "رسوم التسجيل (لكل تلميذ، سنوياً)",
-    "enrollment_fee_hint": "المبلغ لكل تلميذ عند أول تسجيل في السنة. 0 يعني دون رسوم؛ لا تسري التغييرات بأثر رجعي.",
-    "enrollment_fee_saved": "تم حفظ رسوم التسجيل"
+    "logo_preview": "معاينة الشعار"
   },
   "students": {
     "new": "+ تلميذ جديد",
@@ -419,27 +419,27 @@
     "enrollment_column": "التسجيل",
     "delete_confirm": "حذف {{name}} نهائياً؟ ستفقد جميع بياناته في كل السنوات، بما فيها التسجيلات والمدفوعات والإيصالات.",
     "deleted": "حُذف التلميذ نهائياً",
-    "enrollment_fee": "رسوم التسجيل"
+    "enrollment_fee": "رسوم التسجيل",
+    "student_phone": "هاتف التلميذ",
+    "enrollment_fee_dh": "رسوم التسجيل (درهم)",
+    "enrollment_fee_future": "تطبق عند أول تسجيل سنوي؛ لا تتغير الفواتير الصادرة سابقاً."
   },
   "groups": {
     "title": "المجموعات",
     "new": "مجموعة جديدة",
     "edit": "تعديل المجموعة",
-    "formHint": "تضم المجموعة مادة ومستوى وحصة أسبوعية.",
+    "formHint": "تُضبط المواعيد في جدول الحصص.",
     "noGroups": "لا توجد مجموعات لهذه السنة الدراسية",
     "noGroupsHint": "أنشئ مجموعة أولى لبدء التسجيل.",
     "subject": "المادة",
     "level": "المستوى",
-    "branch": "الشعبة",
     "teacher": "الأستاذ",
     "noTeacher": "غير محدد",
     "noTeacherAvailable": "لا يوجد أستاذ متاح",
-    "schoolYear": "السنة الدراسية",
     "day": "اليوم",
     "startTime": "وقت البداية",
     "endTime": "وقت النهاية",
     "room": "القاعة",
-    "roomPlaceholder": "القاعة 3",
     "monthlyFee": "الثمن الشهري",
     "feeHint": "المبلغ بالدرهم، يُفوتر كل شهر.",
     "capacity": "الطاقة الاستيعابية",
@@ -450,9 +450,6 @@
     "summary": "{{groups}} مجموعة · {{students}} تلميذ مسجل",
     "selectSubject": "اختر مادة",
     "selectLevel": "اختر مستوى",
-    "selectBranch": "اختر شعبة",
-    "selectSchoolYear": "اختر سنة",
-    "noBranch": "لا توجد شعبة",
     "dayNames": {
       "Lundi": "الاثنين",
       "Mardi": "الثلاثاء",
@@ -467,9 +464,7 @@
       "levelRequired": "المستوى مطلوب",
       "schoolYearRequired": "السنة الدراسية مطلوبة",
       "feePositive": "يجب أن يكون الثمن أكبر من 0",
-      "capacityPositive": "يجب أن تكون الطاقة الاستيعابية 1 على الأقل",
-      "scheduleIncomplete": "التوقيت غير مكتمل ليوم {{day}}",
-      "endAfterStartDay": "يجب أن يكون وقت النهاية بعد وقت البداية ({{day}})"
+      "capacityPositive": "يجب أن تكون الطاقة الاستيعابية 1 على الأقل"
     },
     "toast": {
       "created": "تم إنشاء المجموعة ✓",
@@ -495,8 +490,7 @@
       "breakdown_other": "{{count}} تلميذ × {{fee}}"
     },
     "untitled": "مجموعة بدون عنوان",
-    "schedules": "أيام الحصص",
-    "schedulesHint": "اختياري: حدّد أيام الحصص واضبط التوقيت، أو أضفها لاحقاً."
+    "name": "اسم المجموعة"
   },
   "timetable": {
     "title": "جدول الحصص",
@@ -523,7 +517,12 @@
     "emptyHint": "أضف أيام الحصص إلى مجموعاتك، أو وسّع عوامل التصفية.",
     "loading": "جارٍ تحميل جدول الحصص…",
     "showSunday": "إظهار الأحد",
-    "tooltipGroup": "المجموعة"
+    "tooltipGroup": "المجموعة",
+    "manage": "إدارة المواعيد",
+    "selectGroup": "اختر مجموعة",
+    "day": "اليوم",
+    "addSlot": "إضافة موعد",
+    "invalidSlots": "تحقق من الأوقات واستخدم موعداً واحداً في اليوم."
   },
   "enrollment": {
     "title": "التسجيل",
@@ -709,7 +708,6 @@
       "share": "{{pct}} من المصاريف"
     },
     "validation": {
-      "labelRequired": "البيان إلزامي",
       "categoryRequired": "اختر فئة",
       "amountPositive": "يجب أن يكون المبلغ أكبر من صفر"
     },
@@ -793,8 +791,6 @@
     "printPdf": "طباعة",
     "downloaded": "تم تحميل ملف PDF",
     "pdfError": "تعذر إنشاء ملف PDF",
-    "templateA4": "A4",
-    "templateThermal": "حراري 80 مم",
     "arabicLimitation": "يتم إنشاء الإيصال بالفرنسية. قد لا يعرض محرك PDF الأحرف العربية في البيانات بشكل صحيح.",
     "amountPaid": "المبلغ المؤدى",
     "total": "المجموع",
@@ -808,7 +804,9 @@
     "paymentDetails": "تفاصيل الدفع",
     "signature": "التوقيع / الختم",
     "unavailable": "التفاصيل التاريخية غير متاحة",
-    "enrollment_fee": "رسوم التسجيل"
+    "enrollment_fee": "رسوم التسجيل",
+    "thermal80": "وصل 80 × تلقائي مم",
+    "thermal58": "وصل 58 × تلقائي مم"
   },
   "teachers": {
     "title": "الأساتذة",
