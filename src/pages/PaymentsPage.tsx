@@ -13,6 +13,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
+import WhatsAppLink from '../components/ui/WhatsAppLink';
 import Button from '../components/ui/Button';
 import MonthPicker from '../components/ui/MonthPicker';
 import EmptyState from '../components/ui/EmptyState';
@@ -319,6 +320,7 @@ export function PaymentsPage() {
                                 </td>
                               ) : null}
                               <td className="px-4 py-2 text-end">
+                                {section.key === 'late' && <WhatsAppLink testId={`late-whatsapp-${row.student_id}`} phone={row.student_phone} message={t('students.reminder', { name: row.student_name, groups: row.groups || t('students.noGroup'), amount: formatCurrency(row.total_due_cents) })} />}{' '}
                                 <Button
                                   size="sm"
                                   data-testid="payment-collect"

@@ -282,7 +282,11 @@
       "restoreInfo": "Fermez l'application, remplacez le fichier de base de données par la sauvegarde, puis relancez.",
       "restoreContinue": "Continuer",
       "close": "Fermer",
-      "selectedBackup": "Sauvegarde sélectionnée"
+      "selectedBackup": "Sauvegarde sélectionnée",
+      "resetData": "Remise à zéro des données",
+      "resetWarning": "Suppression définitive, pour toutes les années, des élèves, groupes, inscriptions, factures, paiements, professeurs, dépenses, reçus, corbeille et historique. Les paramètres, références et accès sont conservés. Faites une sauvegarde avant de continuer.",
+      "resetConfirm": "Tout supprimer",
+      "resetSuccess": "Données supprimées"
     },
     "expenseCategories": "Catégories de dépenses",
     "expenseCategoriesDescription": "Les catégories proposées dans le formulaire de dépense (Loyer, WiFi, Électricité…).",
@@ -418,7 +422,18 @@
     "enrollment_fee": "Frais d'inscription",
     "student_phone": "Tél Élève",
     "enrollment_fee_dh": "Frais d'inscription (DH)",
-    "enrollment_fee_future": "Appliqué à la première inscription annuelle ; les factures déjà créées ne sont pas modifiées."
+    "enrollment_fee_future": "Appliqué à la première inscription annuelle ; les factures déjà créées ne sont pas modifiées.",
+    "groupsColumn": "Groupes inscrits",
+    "monthStatus": "Statut du mois",
+    "noGroup": "Sans groupe",
+    "reminder": "Bonjour, concernant {{name}} (groupe : {{groups}}), le montant restant est de {{amount}}. Merci de votre attention.",
+    "monthStatuses": {
+      "none": "Sans groupe",
+      "paid": "Payé",
+      "late": "En retard",
+      "unpaid": "Impayé",
+      "notInvoiced": "À facturer"
+    }
   },
   "groups": {
     "title": "Groupes",
@@ -550,7 +565,8 @@
     },
     "newGroup": "Nouveau groupe",
     "newStudent": "Nouvel élève",
-    "customFee": "Tarif mensuel personnalisé (DH)"
+    "customFee": "Tarif mensuel personnalisé (DH)",
+    "levelMismatch": "Attention : le niveau de l'élève ({{student}}) diffère du niveau du groupe ({{group}})."
   },
   "student": {
     "activeEnrollments": "Inscriptions actives",
@@ -747,7 +763,13 @@
     "validation": {
       "amountRequired": "Le montant doit être supérieur à 0",
       "invoicesRequired": "Sélectionnez au moins une facture"
-    }
+    },
+    "paymentDate": "Date du paiement",
+    "dateRequired": "La date du paiement est obligatoire",
+    "historicMonth": "Mois à régulariser",
+    "prepareMonth": "Préparer ce mois",
+    "prepared": "Factures créées : {{count}}",
+    "historicHint": "Pour un ancien mois, vérifiez d'abord la date de début d'inscription, puis préparez ce mois pour cet élève."
   },
   "receipt": {
     "title": "Reçu de paiement",

@@ -22,6 +22,7 @@ export interface PaymentInput {
   amountCents: number;
   method: string;
   notes?: string | null;
+  paymentDate?: string | null;
 }
 
 export interface PaymentHistoryFilters {
@@ -42,6 +43,7 @@ export const paymentsApi = {
       amountCents: input.amountCents,
       method: input.method,
       notes: input.notes ?? null,
+      paymentDate: input.paymentDate ?? null,
     }),
 
   history: (filters: PaymentHistoryFilters = {}) =>

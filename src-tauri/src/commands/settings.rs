@@ -234,3 +234,26 @@ mod tests {
         assert!(set_setting_value(&conn, "   ", "x").is_err());
     }
 }
+
+/// Explicit reset of operational data across every school year. Settings,
+/// reference lists and authentication are retained. The transaction makes the
+/// deletion atomic and also includes soft-deleted records and audit entries.
+pub fn reset_operational_data(conn: &Connection) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(|e| db_err("Réinitialisation", e))?;
+    tx.execute_batch(r#"
+        DELETE FROM receipts; DELETE FROM payments; DELETE FROM enrollment_fees;
+        DELETE FROM enrollment_fee_attempts; DELETE FROM invoices;
+        DELETE FROM group_year_imports; DELETE FROM enrollments; DELETE FROM group_schedules;
+        DELETE FROM student_school_years; DELETE FROM teacher_school_years;
+        DELETE FROM teacher_subjects; DELETE FROM teacher_activities;
+        DELETE FROM teacher_compensation; DELETE FROM teacher_settlements;
+        DELETE FROM monthly_expenses; DELETE FROM groups; DELETE FROM students;
+        DELETE FROM teachers; DELETE FROM audit_log;
+    "#).map_err(|e| db_err("Réinitialisation", e))?;
+    tx.commit().map_err(|e| db_err("Réinitialisation", e))
+}
+
+#[tauri::command]
+pub fn cmd_reset_operational_data(db: State<'_, Db>) -> Result<(), String> {
+    reset_operational_data(&db.conn())
+}

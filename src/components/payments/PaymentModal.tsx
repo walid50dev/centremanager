@@ -6,8 +6,10 @@ import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import EmptyState from '../ui/EmptyState';
 import Modal from '../ui/Modal';
 import MoneyInput from '../ui/MoneyInput';
+import Input from '../ui/Input';
+import { todayIso } from '../../services/enrollments';
 import { toast } from '../ui/Toast';
-import { LATE_PAYMENTS_EVENT } from '../../stores/appStore';
+import { LATE_PAYMENTS_EVENT, useAppStore } from '../../stores/appStore';
 import ReceiptPreviewModal from './ReceiptPreviewModal';
 import StudentModal from '../students/StudentModal';
 import { invoicesApi } from '../../services/invoices';
@@ -45,6 +47,8 @@ const METHOD_ICONS: Record<PaymentMethod, string> = {
  */
 export function PaymentModal({ open, studentId = null, onClose, onSaved }: PaymentModalProps) {
   const { t } = useTranslation();
+  const activeYear = useAppStore(state => state.activeSchoolYear);
+  const lastHistoricMonth = [todayIso().slice(0, 7), activeYear?.end_date?.slice(0, 7)].filter((value): value is string => Boolean(value)).sort()[0];
 
   const [step, setStep] = useState(1);
   const [student, setStudent] = useState<Student | null>(null);
@@ -53,6 +57,8 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
   const [amountCents, setAmountCents] = useState(0);
   const [method, setMethod] = useState<PaymentMethod>('espèces');
   const [notes, setNotes] = useState('');
+  const [paymentDate, setPaymentDate] = useState(todayIso);
+  const [historicMonth, setHistoricMonth] = useState(() => todayIso().slice(0, 7));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +120,8 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
     setAmountCents(0);
     setMethod('espèces');
     setNotes('');
+    setPaymentDate(todayIso());
+    setHistoricMonth(todayIso().slice(0, 7));
     setSearch('');
     setResults([]);
     setError(null);
@@ -182,6 +190,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         amountCents,
         method,
         notes: notes.trim() ? notes.trim() : null,
+        paymentDate: paymentDate === todayIso() ? null : paymentDate,
       });
       toast.success(t('payment.toast.recorded'));
       // The sidebar badge counts late invoices: a payment can settle one.
@@ -235,6 +244,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         <Button
           data-testid="payment-next"
           onClick={() => {
+            if (!paymentDate) { setError(t('payment.dateRequired')); return; }
             if (amountCents <= 0) {
               setError(t('payment.validation.amountRequired'));
               return;
@@ -346,6 +356,15 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         {/* ---------------------------------------------------------- step 2 */}
         {step === 2 && student ? (
           <div className="space-y-3">
+            <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-3">
+              <p className="w-full text-xs text-muted">{t('payment.historicHint')}</p>
+              <Input type="month" label={t('payment.historicMonth')} data-testid="payment-historic-month" min={activeYear?.start_date?.slice(0, 7)} max={lastHistoricMonth} value={historicMonth} onChange={e => setHistoricMonth(e.target.value)} />
+              <Button variant="secondary" data-testid="payment-prepare-month" disabled={!historicMonth || loading} onClick={() => { void (async () => {
+                try { setLoading(true); const [year, month] = historicMonth.split('-').map(Number); const count = await invoicesApi.generateForStudent(student.id, month, year); const rows = await invoicesApi.forStudent(student.id); setInvoices(rows); const ids = rows.filter(i => i.remaining_cents > 0 && i.kind === 'invoice' && i.period_month === month && i.period_year === year).map(i => i.id); setSelected(ids); setAmountCents(rows.filter(i => ids.includes(i.id)).reduce((sum, i) => sum + i.remaining_cents, 0)); toast.info(t('payment.prepared', { count })); }
+                catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
+                finally { setLoading(false); }
+              })(); }}>{t('payment.prepareMonth')}</Button>
+            </div>
             <div className="rounded-md border border-border bg-background px-3 py-2 text-[13px]">
               <span className="text-muted">{t('payment.studentLabel')} </span>
               <span className="font-medium text-foreground">{student.full_name}</span>
@@ -453,6 +472,8 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
               </p>
             ) : null}
 
+            <Input type="date" required label={t('payment.paymentDate')} data-testid="payment-date" max={todayIso()}
+              value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
             <fieldset>
               <legend className="mb-1.5 block text-label text-muted">{t('payment.method')}</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -519,6 +540,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
               <p className="text-muted">{t('payment.amountLabel')}</p>
               <p className="text-h2 font-semibold text-foreground">{formatCurrency(amountCents)}</p>
 
+              <p className="mt-3 text-muted">{t('payment.paymentDate')}</p><p className="font-medium">{paymentDate}</p>
               <p className="mt-3 text-muted">{t('payment.methodLabel')}</p>
               <p className="font-medium text-foreground">{methodLabel(t, method)}</p>
 

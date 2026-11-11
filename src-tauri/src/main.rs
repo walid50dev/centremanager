@@ -45,6 +45,7 @@ fn main() {
             commands::auth::cmd_get_lock_timeout,
             commands::auth::cmd_set_lock_timeout,
             // Settings (key/value)
+            commands::settings::cmd_reset_operational_data,
             commands::settings::cmd_get_centre_info,
             commands::settings::cmd_set_centre_info,
             commands::settings::cmd_get_all_settings,
@@ -109,6 +110,7 @@ fn main() {
             commands::enrollments::cmd_get_student_enrollments,
             commands::enrollments::cmd_get_available_groups_for_student,
             // Invoicing (Phase 5)
+            commands::invoices::cmd_generate_student_month_invoices,
             commands::invoices::cmd_generate_monthly_invoices,
             commands::invoices::cmd_get_student_invoices,
             commands::invoices::cmd_get_late_payment_count,

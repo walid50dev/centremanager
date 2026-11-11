@@ -2262,21 +2262,34 @@ npm run dev                 # navigateur
 npm run tauri dev           # application desktop debug
 ```
 
-Au premier lancement navigateur, le profil **dev** est remplacé une fois par
-`test-data/centremanager-charge.json`, une représentation des mêmes données que
-la base SQLite fournie. Une copie de l’ancien stockage est conservée dans
-`localStorage` sous `centremanager.dev.pre-load-test-backup-v1`. Les modifications
-ultérieures sont conservées aux redémarrages. Le mot de passe existant reste
-inchangé ; dans un profil neuf, il est `test1234`. Pour désactiver l’application
-du jeu sur un profil non encore initialisé : `VITE_LOAD_TEST_FIXTURE=0 npm run dev`.
+Par défaut, un profil navigateur neuf et une base Tauri debug neuve ne contiennent
+aucun élève, groupe, professeur, paiement ou dépense. Les niveaux, matières,
+paramètres et année scolaire active sont conservés comme références utiles.
+Les profils déjà existants ne sont jamais effacés automatiquement : pour les
+vider, utiliser **Paramètres → Sauvegarde → Remise à zéro des données**, après
+une sauvegarde, puis confirmer. Cette opération irréversible supprime les données
+opérationnelles et la corbeille de **toutes les années**, mais conserve les
+références, réglages et accès. Elle ne supprime pas les fichiers de sauvegarde.
 
-Tauri **debug** copie `test-data/centremanager-charge.db` vers
-`test-data/centremanager-dev.db` uniquement si cette dernière n’existe pas, puis
-utilise cette copie persistante. Au premier démarrage, le mot de passe de test
-est `test1234` ; il n’est pas réinitialisé ensuite. Pour recommencer, fermer
-Tauri et mettre de côté la base de développement ainsi que ses fichiers `-wal`
-et `-shm` avant de relancer. La base réelle du répertoire applicatif et les
-builds de production ne sont pas modifiés.
+Le jeu de test reste disponible uniquement sur demande explicite :
+
+```sh
+VITE_LOAD_TEST_FIXTURE=1 npm run dev
+CENTREMANAGER_LOAD_TEST_FIXTURE=1 npm run tauri dev
+```
+
+En navigateur, le chargement explicite sauvegarde au préalable le profil dev
+existant et conserve son mot de passe ; un profil neuf reçoit `test1234`.
+En Tauri debug, le jeu n'est copié que si `test-data/centremanager-dev.db`
+n'existe pas ; le mot de passe `test1234` n'est créé que s'il n'y en a pas.
+Les modifications ultérieures sont conservées et la base de production n'est
+jamais remplacée par le jeu de test.
+
+Pour saisir un paiement antérieur, définir la date de début d'inscription réelle,
+préparer le mois concerné dans le modal de paiement, sélectionner les factures
+puis renseigner la date effective du paiement dans l'année active. La préparation
+ne crée que les factures manquantes de l'élève choisi ; les paiements sont datés
+du jour renseigné dans l'historique et les totaux, et leur saisie est journalisée.
 
 ### Base SQLite autonome
 

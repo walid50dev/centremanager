@@ -58,6 +58,34 @@ pub fn french_month_name(month: i32) -> &'static str {
 // Monthly generation
 // ---------------------------------------------------------------------------
 
+/// Prepare one student's missing monthly invoices, without affecting other students.
+pub fn generate_student_month(conn: &Connection, student_id: i64, month: i32, year: i32) -> Result<i32, String> {
+    if !(1..=12).contains(&month) || !(2000..=2100).contains(&year) { return Err("Période invalide".into()); }
+    let first = format!("{year:04}-{month:02}-01");
+    let last = format!("{year:04}-{month:02}-{:02}", super::enrollments::last_day_of_month(year, month));
+    let (start, end): (String, String) = conn.query_row("SELECT start_date, end_date FROM school_years WHERE is_active=1 LIMIT 1", [], |r| Ok((r.get(0)?, r.get(1)?))).map_err(|e| db_err("Année scolaire", e))?;
+    if last < start || first > end || first > today().format("%Y-%m-%d").to_string() { return Err("Mois hors de l'année scolaire active ou dans le futur".into()); }
+    let tx = conn.unchecked_transaction().map_err(|e| db_err("Transaction", e))?;
+    let rows: Vec<(i64, String, i64)> = {
+        let mut stmt = tx.prepare("SELECT e.id, e.start_date, COALESCE(e.custom_monthly_fee_cents,g.monthly_fee_cents) FROM enrollments e JOIN groups g ON g.id=e.group_id JOIN students s ON s.id=e.student_id WHERE e.student_id=?1 AND s.deleted_at IS NULL AND g.deleted_at IS NULL AND g.school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1) AND e.start_date<=?2 AND (COALESCE(e.status,'actif')='actif' OR e.end_date IS NOT NULL) AND (e.end_date IS NULL OR e.end_date>=?3)").map_err(|e| db_err("Inscriptions", e))?;
+        let rows = stmt.query_map(params![student_id, last, first], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map_err(|e| db_err("Inscriptions", e))?;
+        rows.collect::<rusqlite::Result<_>>().map_err(|e| db_err("Inscriptions", e))?
+    };
+    let mut count = 0;
+    for (id, start_date, fee) in rows {
+        let day = parse_iso_date(&start_date).map(|d| d.day() as i32).unwrap_or(1);
+        count += tx.execute("INSERT OR IGNORE INTO invoices (enrollment_id,period_month,period_year,amount_cents,paid_amount_cents,status,due_date) VALUES (?1,?2,?3,?4,0,'impayé',?5)", params![id, month, year, fee, adjust_due_date(year, month, day)]).map_err(|e| db_err("Facture", e))? as i32;
+    }
+    tx.execute("INSERT INTO audit_log (action, entity_type, entity_id, details) VALUES ('GENERATE_STUDENT_INVOICES', 'student', ?1, ?2)", params![student_id, json!({"month": month, "year": year, "count": count}).to_string()]).map_err(|e| db_err("Journalisation", e))?;
+    tx.commit().map_err(|e| db_err("Transaction", e))?;
+    Ok(count)
+}
+
+#[tauri::command]
+pub fn cmd_generate_student_month_invoices(db: State<'_, Db>, student_id: i64, month: i32, year: i32) -> Result<i32, String> {
+    generate_student_month(&db.conn(), student_id, month, year)
+}
+
 /// Create the invoices of `month`/`year` for every **active** enrollment.
 ///
 /// Existing `(enrollment_id, month, year)` rows are skipped, so running the

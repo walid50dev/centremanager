@@ -10,10 +10,10 @@ import { isTauri } from './services/api';
 useAppStore.getState().applyLanguage(useAppStore.getState().language);
 
 async function start() {
-  // A one-time replacement in browser development profiles. Existing auth is
+  // An explicitly requested one-time replacement in browser development profiles. Existing auth is
   // retained; previous browser data is saved before the test fixture is applied.
   // Production builds and Tauri use their own database paths and skip this.
-  if (import.meta.env.DEV && import.meta.env.VITE_LOAD_TEST_FIXTURE !== '0' && !isTauri()) {
+  if (import.meta.env.DEV && import.meta.env.VITE_LOAD_TEST_FIXTURE === '1' && !isTauri()) {
     const { applyBundledLoadTest } = await import('../scripts/load-test-fixture.mjs');
     await applyBundledLoadTest();
     const { authApi } = await import('./services/auth');

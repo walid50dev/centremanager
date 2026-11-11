@@ -9,6 +9,7 @@ import SettingsSection from './SettingsSection';
 import { toast } from '../ui/Toast';
 import { backupApi, settingsApi } from '../../services/settings';
 import { isTauri } from '../../services/api';
+import { LATE_PAYMENTS_EVENT } from '../../stores/appStore';
 import { formatBytes, formatDateTime, formatFileStamp } from '../../utils/format';
 import type { DbInfo } from '../../types';
 
@@ -18,6 +19,8 @@ type RestoreStage = 'idle' | 'confirm' | 'info';
 export function BackupSection() {
   const { t } = useTranslation();
 
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [info, setInfo] = useState<DbInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [backingUp, setBackingUp] = useState(false);
@@ -141,10 +144,19 @@ export function BackupSection() {
             >
               {t('settings.backup.restore')}
             </Button>
+            <Button variant="destructive" data-testid="reset-data" onClick={() => setResetOpen(true)}>{t('settings.backup.resetData')}</Button>
           </div>
         </>
       )}
 
+      <ConfirmDialog open={resetOpen} title={t('settings.backup.resetData')} message={t('settings.backup.resetWarning')}
+        confirmLabel={t('settings.backup.resetConfirm')} cancelLabel={t('common.cancel')} loading={resetting}
+        onClose={() => setResetOpen(false)} onConfirm={() => { void (async () => {
+          setResetting(true);
+          try { await settingsApi.resetOperationalData(); setResetOpen(false); toast.success(t('settings.backup.resetSuccess')); await loadInfo(); window.dispatchEvent(new CustomEvent(LATE_PAYMENTS_EVENT)); }
+          catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+          finally { setResetting(false); }
+        })(); }} />
       <ConfirmDialog
         open={restoreStage === 'confirm'}
         title={t('settings.backup.restoreTitle')}

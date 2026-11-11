@@ -1,48 +1,17 @@
-// Run with the default Vite dev server at :1420 and the opt-out server at :1421.
+// Run with a default server on :1420 and an explicit VITE_LOAD_TEST_FIXTURE=1 server on :1422.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { chromium } from 'playwright';
-
-const opts = { headless: true };
-if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) opts.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-if (process.env.PLAYWRIGHT_NO_SANDBOX === '1') opts.args = ['--no-sandbox'];
-const browser = await chromium.launch(opts);
-const key = 'centremanager.dev.settings_store_v1';
-const backup = 'centremanager.dev.pre-load-test-backup-v1';
-const marker = 'centremanager.dev.load-test-applied-v1';
+import {chromium} from 'playwright';
+const opts={headless:true}; if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) opts.executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH; if(process.env.PLAYWRIGHT_NO_SANDBOX==='1') opts.args=['--no-sandbox'];
+const browser=await chromium.launch(opts);
 try {
-  const page = await browser.newPage();
-  const oldStore = JSON.stringify({ students: [{ id: 99, first_name: 'Ancien' }] });
-  const digest = createHash('sha256').update('ancien1234').digest('hex');
-  await page.addInitScript(({ key, oldStore, digest }) => {
-    if (!sessionStorage.getItem('testInitialized')) {
-      localStorage.setItem(key, oldStore);
-      localStorage.setItem('centremanager.dev.mock_password_digest', digest);
-      sessionStorage.setItem('testInitialized', '1');
-    }
-  }, { key, oldStore, digest });
-  await page.goto('http://localhost:1420');
-  await page.locator('input[type=password]').fill('ancien1234');
-  await page.locator('form button[type=submit]').click();
-  await page.getByTestId('kpi-students').getByText('200', { exact: true }).waitFor();
-  assert.equal(await page.evaluate(k => localStorage.getItem(k), backup), oldStore);
-  await page.evaluate(k => {
-    const data = JSON.parse(localStorage.getItem(k));
-    data.students[0].notes = 'Modification après chargement';
-    localStorage.setItem(k, JSON.stringify(data));
-  }, key);
-  await page.reload();
-  await page.locator('input[type=password]').fill('ancien1234');
-  await page.locator('form button[type=submit]').click();
-  await page.getByTestId('kpi-students').getByText('200', { exact: true }).waitFor();
-  assert.equal(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).students[0].notes, key), 'Modification après chargement');
-  assert.equal(await page.evaluate(k => localStorage.getItem(k), backup), oldStore);
-  await page.close();
-  const disabled = await browser.newPage();
-  await disabled.goto('http://localhost:1421');
-  await disabled.locator('input[type=password]').first().waitFor();
-  assert.equal(await disabled.evaluate(k => localStorage.getItem(k), marker), null);
-  assert.equal(await disabled.evaluate(k => localStorage.getItem(k), backup), null);
-  assert.equal(await disabled.evaluate(() => localStorage.getItem('centremanager.dev.mock_password_digest')), null);
-  console.log('Browser default: existing profile backed up, password preserved, edits survive reload; opt-out passed.');
-} finally { await browser.close(); }
+ const page=await browser.newPage(); await page.goto('http://localhost:1420'); await page.locator('input[type=password]').first().waitFor();
+ const call=(cmd,args={})=>page.evaluate(async({cmd,args})=>(await import('/src/services/settingsDevBackend.ts')).devInvoke(cmd,args),{cmd,args});
+ assert.equal((await call('cmd_get_students')).total,0); assert.equal((await call('cmd_get_groups')).length,0); assert.equal((await call('cmd_get_teachers')).length,0);
+ await page.evaluate(async()=>{const {authApi}=await import('/src/services/auth.ts'); await authApi.setup('Centre','admin123');});
+ const student=await call('cmd_create_student',{data:{first_name:'Salma',last_name:'Test',phone:'0612345678',guardian_phone:'0712345678',guardian_name:'Parent',level_id:1,enrollment_date:'2026-09-01',status:'actif'}});
+ await page.reload(); await page.locator('input[type=password]').fill('admin123'); await page.locator('form button[type=submit]').click();
+ await page.getByTestId('nav-students').waitFor(); assert.equal((await call('cmd_get_students')).total,1); assert.ok((await call('cmd_get_student_detail',{id:student})).student);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('centremanager.dev.load-test-applied-v1')),null);
+ const demo=await browser.newPage(); await demo.goto('http://localhost:1422'); await demo.locator('input[type=password]').fill('test1234'); await demo.locator('form button[type=submit]').click(); await demo.getByTestId('kpi-students').getByText('200',{exact:true}).waitFor();
+ console.log('Browser default: clean first start and persistent real edits; demo fixture only on explicit opt-in.');
+} finally {await browser.close();}

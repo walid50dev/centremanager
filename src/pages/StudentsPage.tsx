@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Search, UserPlus, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, UserPlus, Users, Pencil } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import TrashButton from '../components/ui/TrashButton';
 import ViewButton from '../components/ui/ViewButton';
+import WhatsAppLink from '../components/ui/WhatsAppLink';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Input from '../components/ui/Input';
@@ -14,9 +15,12 @@ import ImportButton from '../components/year-import/ImportButton';
 import { toast } from '../components/ui/Toast';
 import { levelsApi } from '../services/settings';
 import { studentsApi } from '../services/students';
+import { enrollmentsApi, todayIso } from '../services/enrollments';
+import { invoicesApi } from '../services/invoices';
+import { groupsApi } from '../services/groups';
 import { FOCUS_SEARCH_EVENT } from '../hooks/useKeyboardShortcuts';
 import { useDebounce } from '../hooks/useDebounce';
-import { cn, formatDate, formatPhone } from '../utils/format';
+import { cn, formatCurrency, formatPhone } from '../utils/format';
 import type { Level, PaginatedStudents, Student } from '../types';
 
 const PAGE_LIMIT = 20;
@@ -38,6 +42,8 @@ export function StudentsPage() {
   const [levels, setLevels] = useState<Level[]>([]);
   const [result, setResult] = useState<PaginatedStudents>(EMPTY_PAGE);
   const [loading, setLoading] = useState(true);
+  const loadSequence = useRef(0);
+  const [money, setMoney] = useState<Record<number, { groups: string[]; amount: number; status: 'none' | 'paid' | 'late' | 'unpaid' | 'notInvoiced' }>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
 
@@ -58,6 +64,7 @@ export function StudentsPage() {
   }, []);
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     try {
       const rows = await studentsApi.list({
@@ -67,12 +74,24 @@ export function StudentsPage() {
         page,
         limit: PAGE_LIMIT,
       });
+      const groups = await groupsApi.list();
+      const now = new Date(); const month = now.getMonth() + 1; const year = now.getFullYear();
+      const summaries = await Promise.all(rows.data.map(async student => {
+        const [enrollments, invoices] = await Promise.all([enrollmentsApi.forStudent(student.id), invoicesApi.forStudent(student.id)]);
+        const active = enrollments.filter(e => e.status === 'actif' && groups.some(g => g.id === e.group_id && !g.deleted_at));
+        const names = active.map(e => { const group = groups.find(g => g.id === e.group_id); return group?.name || `${e.subject_name} — ${e.level_name}`; });
+        const current = invoices.filter(i => i.kind === 'invoice' && i.period_month === month && i.period_year === year && active.some(e => e.enrollment_id === i.enrollment_id) && i.status !== 'annulé');
+        const amount = current.reduce((sum, invoice) => sum + invoice.remaining_cents, 0);
+        const status = !active.length ? 'none' : current.some(i => i.remaining_cents > 0 && i.due_date < todayIso()) ? 'late' : amount > 0 ? 'unpaid' : active.some(e => !current.some(i => i.enrollment_id === e.enrollment_id)) ? 'notInvoiced' : 'paid';
+        return [student.id, { groups: names, amount, status }] as const;
+      }));
+      if (sequence !== loadSequence.current) return;
+      setMoney(Object.fromEntries(summaries));
       setResult(rows);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('common.error'));
-      setResult(EMPTY_PAGE);
+      if (sequence === loadSequence.current) { toast.error(error instanceof Error ? error.message : t('common.error')); setResult(EMPTY_PAGE); }
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [debouncedSearch, levelId, status, page, t]);
 
@@ -186,24 +205,9 @@ export function StudentsPage() {
           <table className="w-full border-collapse text-body">
             <thead className="bg-background">
               <tr>
-                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.columns.name')}
-                </th>
-                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.columns.level')}
-                </th>
-                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.guardian_column')}
-                </th>
-                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.student_phone')}
-                </th>
-                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.columns.status')}
-                </th>
-                <th scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">
-                  {t('students.enrollment_column')}
-                </th><th scope="col" className="border-b border-border px-4 py-2.5 text-start text-muted">{t('trash.actions')}</th>
+                {['students.columns.name', 'students.columns.level', 'students.student_phone', 'students.guardian_column', 'students.groupsColumn', 'students.monthStatus', 'trash.actions'].map(key => (
+                  <th key={key} scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">{t(key)}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -273,34 +277,15 @@ export function StudentsPage() {
                     tabIndex={0}
                     className="group cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                   >
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-foreground group-hover:underline">
-                        {student.full_name}
-                      </span>
-
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {student.level_name ? (
-                        <span className="text-foreground">
-                          {student.level_name}
-                          {student.branch_name && (
-                            <span className="text-muted"> — {student.branch_name}</span>
-                          )}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted">{student.guardian_name ?? '—'}<span className="block tabular-nums" dir="ltr">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span></td>
-                    <td className="px-4 py-3 text-muted">{student.phone ? formatPhone(student.phone) : '—'}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={student.status === 'actif' ? 'success' : 'destructive'}>
-                        {student.status === 'actif' ? t('students.active') : t('students.inactive')}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted">{formatDate(student.enrollment_date)}</td>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
+                    <td className="px-4 py-3 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2"><span dir="ltr">{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink testId={`student-whatsapp-${student.id}`} phone={student.phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
+                    <td className="px-4 py-3"><div>{student.guardian_name ?? '—'}</div><div className="flex items-center gap-2"><span dir="ltr">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink testId={`guardian-whatsapp-${student.id}`} phone={student.guardian_phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
+                    <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
+                    <td className="px-4 py-3"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'unpaid' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
                     <td className="px-4 py-3"><div className="flex justify-end gap-1">
                       <ViewButton name={student.full_name} testId={`view-student-${student.id}`} onView={() => navigate(`/students/${student.id}`)} />
+                      <span onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Button variant="ghost" size="icon" title={t('students.edit')} aria-label={t('students.edit')} data-testid={`edit-student-${student.id}`} onClick={() => { setEditing(student); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button></span>
                       <TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} />
                     </div></td>
                   </tr>
