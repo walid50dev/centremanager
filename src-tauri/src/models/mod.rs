@@ -256,6 +256,7 @@ pub struct StudentInvoice {
     pub kind: String,
     pub school_year_label: Option<String>,
     pub group_subject: String,
+    pub group_name: Option<String>,
     pub group_level: String,
     pub group_branch: Option<String>,
     pub period_month: i32,

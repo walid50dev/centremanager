@@ -38,11 +38,8 @@ export function PrintingSection({ settings, updateLocal }: PrintingSectionProps)
         {([
           { value: 'thermal' as const, labelKey: 'settings.printing.thermal', hintKey: 'settings.printing.thermalHint' },
           { value: 'thermal58' as const, labelKey: 'settings.printing.thermal58', hintKey: 'settings.printing.thermal58Hint' },
-          { value: 'a5' as const, labelKey: 'settings.printing.a5', hintKey: 'settings.printing.a5Hint' },
-          { value: 'a4' as const, labelKey: 'settings.printing.a4', hintKey: 'settings.printing.a4Hint' },
         ]).map((option) => {
           const selected = current === option.value;
-          const isA4 = option.value === 'a4' || option.value === 'a5';
           return (
             <button
               key={option.value}
@@ -61,7 +58,7 @@ export function PrintingSection({ settings, updateLocal }: PrintingSectionProps)
               <span
                 className={cn(
                   'flex shrink-0 flex-col justify-between rounded-sm border border-border bg-white p-1 shadow-sm',
-                  isA4 ? 'h-16 w-[46px]' : 'h-16 w-[30px]',
+                  'h-16 w-[30px]',
                 )}
                 aria-hidden="true"
               >

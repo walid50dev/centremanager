@@ -14,6 +14,7 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
 import Input from '../ui/Input';
+import MoneyInput from '../ui/MoneyInput';
 import Modal from '../ui/Modal';
 import { toast } from '../ui/Toast';
 import GroupModal from '../groups/GroupModal';
@@ -96,6 +97,7 @@ export function EnrollmentModal({
 
   // shared
   const [dates, setDates] = useState<Record<number, string>>({});
+  const [fees, setFees] = useState<Record<number, number>>({});
 
   // Reset everything on open.
   useEffect(() => {
@@ -108,6 +110,7 @@ export function EnrollmentModal({
     setSelectedGroupIds([]);
     setAvailableGroups([]);
     setDates({});
+    setFees({});
     setQuickGroup(false);
     setQuickStudent(false);
   }, [open]);
@@ -207,12 +210,12 @@ export function EnrollmentModal({
       return mode === 'from_group' ? selectedStudent !== null : selectedGroupIds.length > 0;
     }
     if (step === 2) {
-      return selectedGroups.every((entry) => Boolean(dates[entry.id]));
+      return selectedGroups.every((entry) => Boolean(dates[entry.id]) && Number.isSafeInteger(fees[entry.id] ?? entry.monthly_fee_cents) && (fees[entry.id] ?? entry.monthly_fee_cents) >= 0);
     }
     return true;
-  }, [step, mode, selectedStudent, selectedGroupIds, selectedGroups, dates]);
+  }, [step, mode, selectedStudent, selectedGroupIds, selectedGroups, dates, fees]);
 
-  const totalMonthly = selectedGroups.reduce((sum, entry) => sum + entry.monthly_fee_cents, 0);
+  const totalMonthly = selectedGroups.reduce((sum, entry) => sum + (fees[entry.id] ?? entry.monthly_fee_cents), 0);
 
   const toggleGroup = useCallback((entry: Group) => {
     setSelectedGroupIds((current) =>
@@ -231,6 +234,7 @@ export function EnrollmentModal({
       student_id: targetStudentId,
       group_id: entry.id,
       start_date: dates[entry.id] ?? todayIso(),
+      custom_monthly_fee_cents: fees[entry.id] ?? null,
     }));
 
     setSubmitting(true);
@@ -247,7 +251,7 @@ export function EnrollmentModal({
     } finally {
       setSubmitting(false);
     }
-  }, [mode, studentId, selectedStudent, selectedGroups, dates, onSaved, onClose, t]);
+  }, [mode, studentId, selectedStudent, selectedGroups, dates, fees, onSaved, onClose, t]);
 
   const studentLabel = mode === 'from_student' ? (student?.full_name ?? '') : (selectedStudent?.full_name ?? '');
 
@@ -518,7 +522,7 @@ export function EnrollmentModal({
             {selectedGroups.map((entry) => (
               <div
                 key={entry.id}
-                className="grid grid-cols-1 items-end gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_190px]"
+                className="grid grid-cols-1 items-end gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_160px_160px]"
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-foreground">
@@ -529,6 +533,9 @@ export function EnrollmentModal({
                     {groupSchedule(t, entry)} · {formatCurrency(entry.monthly_fee_cents)}
                   </p>
                 </div>
+                <MoneyInput label={t('enrollment.customFee')} data-testid={`enrollment-fee-${entry.id}`}
+                  valueCents={fees[entry.id] ?? entry.monthly_fee_cents}
+                  onChange={value => setFees(current => ({ ...current, [entry.id]: value }))} />
                 <Input
                   label={t('enrollment.startDate')}
                   type="date"
@@ -572,7 +579,7 @@ export function EnrollmentModal({
                       ) : null}
                     </td>
                     <td className="px-4 py-2.5 text-muted">{formatDate(dates[entry.id] ?? todayIso())}</td>
-                    <td className="px-4 py-2.5 text-end">{formatCurrency(entry.monthly_fee_cents)}</td>
+                    <td className="px-4 py-2.5 text-end">{formatCurrency(fees[entry.id] ?? entry.monthly_fee_cents)}</td>
                   </tr>
                 ))}
               </tbody>

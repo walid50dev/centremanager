@@ -12,6 +12,7 @@ try {
   await server.ssrLoadModule('/src/i18n/index.ts');
   const { default: CenterSection } = await server.ssrLoadModule('/src/components/settings/CenterSection.tsx');
   const { devInvoke } = await server.ssrLoadModule('/src/services/settingsDevBackend.ts');
+  const { useToastStore } = await server.ssrLoadModule('/src/components/ui/Toast.tsx');
   const initial = await devInvoke('cmd_get_all_settings');
   function Wrapper() {
     const [settings, setSettings] = useState(initial);
@@ -28,9 +29,10 @@ try {
   assert.ok(image); assert.match(image.getAttribute('src'), /^data:image\/png;base64,/);
   assert.equal((await devInvoke('cmd_get_centre_info')).logo, image.getAttribute('src'));
   const old = image.getAttribute('src');
-  Object.defineProperty(upload, 'files', { configurable: true, value: [new dom.window.File([new Uint8Array(500 * 1024 + 1)], 'big.png', { type: 'image/png' })] });
+  Object.defineProperty(upload, 'files', { configurable: true, value: [new dom.window.File([new Uint8Array(2 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' })] });
   await act(async () => { upload.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await new Promise(r => setTimeout(r, 100)); });
   assert.equal((await devInvoke('cmd_get_centre_info')).logo, old, 'oversized image rejected');
+  assert.ok(useToastStore.getState().toasts.some(t => t.variant === 'error' && t.message.includes('2 Mo')), 'clear size error toast');
   // Model browser canvas rasterisation for an SVG; the persisted image must
   // be a PDF-compatible PNG rather than an SVG data URL.
   globalThis.Image = class {

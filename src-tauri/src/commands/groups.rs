@@ -539,6 +539,10 @@ pub fn financial_summary(
         )
         .map_err(|err| db_err("Comptage des inscriptions actives", err))?;
 
+    let theoretical: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(COALESCE(custom_monthly_fee_cents, ?2)), 0) FROM enrollments WHERE group_id=?1 AND COALESCE(status, 'actif')='actif'",
+        params![group.id, group.monthly_fee_cents], |row| row.get(0),
+    ).map_err(|err| db_err("Somme des tarifs", err))?;
     let collected: i64 = conn
         .query_row(
             "SELECT COALESCE(SUM(i.paid_amount_cents), 0)
@@ -557,7 +561,7 @@ pub fn financial_summary(
         year,
         active_enrollments: active as i32,
         monthly_fee_cents: group.monthly_fee_cents,
-        theoretical_total_cents: active * group.monthly_fee_cents,
+        theoretical_total_cents: theoretical,
         collected_total_cents: collected,
     })
 }

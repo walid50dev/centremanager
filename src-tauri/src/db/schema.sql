@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
     group_id   INTEGER REFERENCES groups(id) ON DELETE CASCADE,
     start_date TEXT NOT NULL,
     end_date   TEXT,
+    custom_monthly_fee_cents INTEGER CHECK(custom_monthly_fee_cents >= 0),
     status     TEXT DEFAULT 'actif',
     UNIQUE (student_id, group_id)
 );

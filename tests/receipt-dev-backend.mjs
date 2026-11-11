@@ -14,7 +14,9 @@ try {
   assert.deepEqual(await devInvoke('cmd_get_centre_info'), { name: 'Centre Test', logo: null });
   await assert.rejects(devInvoke('cmd_set_centre_info', { name: '', logo: null }));
   await assert.rejects(devInvoke('cmd_set_centre_info', { name: 'x', logo: 'data:image/gif;base64,YWJj' }));
-  const tooLarge = 'data:image/png;base64,' + Buffer.alloc(500 * 1024 + 1).toString('base64');
+  const maximum = 'data:image/png;base64,' + Buffer.alloc(2 * 1024 * 1024).toString('base64');
+  await devInvoke('cmd_set_centre_info', { name: 'Centre Test', logo: maximum });
+  const tooLarge = 'data:image/png;base64,' + Buffer.alloc(2 * 1024 * 1024 + 1).toString('base64');
   await assert.rejects(devInvoke('cmd_set_centre_info', { name: 'Centre Test', logo: tooLarge }));
   await devInvoke('cmd_set_centre_info', { name: 'Centre Test', logo });
   const key = 'centremanager.dev.settings_store_v1';

@@ -80,7 +80,7 @@ pub fn generate_monthly_invoices(conn: &Connection, month: i32, year: i32) -> Re
     let rows: Vec<(i64, String, i64)> = {
         let mut stmt = tx
             .prepare(
-                "SELECT e.id, e.start_date, g.monthly_fee_cents
+                "SELECT e.id, e.start_date, COALESCE(e.custom_monthly_fee_cents, g.monthly_fee_cents)
                  FROM enrollments e
                  JOIN groups g ON g.id = e.group_id
                  JOIN students st ON st.id = e.student_id
@@ -171,7 +171,7 @@ pub fn student_invoices(conn: &Connection, student_id: i64) -> Result<Vec<Studen
                     COALESCE(i.status, 'impayé'),
                     COALESCE(i.due_date, ''),
                     CASE WHEN f.id IS NOT NULL THEN 'enrollment_fee' ELSE 'invoice' END,
-                    y.label
+                    y.label, g.name
              FROM invoices i
              LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
              LEFT JOIN school_years y ON y.id=f.school_year_id
@@ -196,6 +196,7 @@ pub fn student_invoices(conn: &Connection, student_id: i64) -> Result<Vec<Studen
                 kind: row.get(11)?,
                 school_year_label: row.get(12)?,
                 group_subject: row.get(2)?,
+                group_name: row.get(13)?,
                 group_level: row.get(3)?,
                 group_branch: row.get(4)?,
                 period_month: row.get(5)?,

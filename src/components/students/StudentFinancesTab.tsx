@@ -7,7 +7,9 @@ import Card from '../ui/Card';
 import EmptyState from '../ui/EmptyState';
 import PaymentModal from '../payments/PaymentModal';
 import { toast } from '../ui/Toast';
+import { whatsappUrl } from '../../utils/whatsapp';
 import { invoicesApi } from '../../services/invoices';
+import { isTauri } from '../../services/api';
 import { paymentsApi } from '../../services/payments';
 import { cn, formatCurrency, formatDate } from '../../utils/format';
 import {
@@ -20,12 +22,14 @@ import type { PaymentRow, StudentInvoice } from '../../types';
 
 export interface StudentFinancesTabProps {
   studentId: number;
+  studentName: string;
+  studentPhone: string;
   /** Called after a payment is recorded (refreshes the audit tab too). */
   onChanged?: () => void;
 }
 
 /** Tab 3 of the student sheet: invoices, balance and payment history. */
-export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabProps) {
+export function StudentFinancesTab({ studentId, studentName, studentPhone, onChanged }: StudentFinancesTabProps) {
   const { t } = useTranslation();
 
   const [invoices, setInvoices] = useState<StudentInvoice[]>([]);
@@ -151,6 +155,8 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
               {invoices.map((invoice) => {
                 const meta = statusMeta(invoice.status);
                 const overdue = isOverdue(invoice.due_date, invoice.remaining_cents);
+                const group = invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : (invoice.group_name || `${invoice.group_subject} — ${invoice.group_level}`);
+                const whatsapp = invoice.remaining_cents > 0 ? whatsappUrl(studentPhone, t('student.whatsappMessage', { name: studentName, group })) : null;
                 return (
                   <tr key={invoice.id} className="border-t border-border">
                     <td className="px-4 py-2.5 font-medium text-foreground">
@@ -170,6 +176,12 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
                     </td>
                     <td className="px-4 py-2.5">
                       <Badge variant={meta.variant}>{t(meta.labelKey)}</Badge>
+                      {whatsapp && <a className="ms-2 inline-flex text-success hover:underline" href={whatsapp} target="_blank" rel="noopener noreferrer" onClick={event => {
+                        if (isTauri()) {
+                          event.preventDefault();
+                          void import('@tauri-apps/plugin-shell').then(({ open }) => open(whatsapp)).catch(error => toast.error(error instanceof Error ? error.message : String(error)));
+                        }
+                      }} data-testid={`whatsapp-${invoice.id}`} aria-label={t('student.whatsapp')}>{t('student.whatsapp')}</a>}
                     </td>
                     <td className="px-4 py-2.5 text-muted">
                       {formatDate(invoice.due_date)}

@@ -1,5 +1,4 @@
 import { PDFViewer } from '@react-pdf/renderer';
-import ReceiptA4Document from './ReceiptA4';
 import ReceiptThermalDocument from './ReceiptThermal';
 import type { ReceiptDocumentData, ReceiptLabels } from './receiptLabels';
 import type { ReceiptTemplate } from './receiptPdf';
@@ -27,11 +26,7 @@ export function ReceiptPdfViewer({ template, data, labels, height = 400 }: Recei
       style={{ border: 0 }}
       data-testid="receipt-pdf-viewer"
     >
-      {template === 'a4' || template === 'a5' ? (
-        <ReceiptA4Document data={data} labels={labels} template={template} />
-      ) : (
-        <ReceiptThermalDocument data={data} labels={labels} template={template} />
-      )}
+      <ReceiptThermalDocument data={data} labels={labels} template={template} />
     </PDFViewer>
   );
 }

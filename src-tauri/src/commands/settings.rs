@@ -122,8 +122,8 @@ pub fn set_centre_info(conn: &Connection, name: &str, logo: Option<&str>) -> Res
         let body = &payload[..payload.len() - padding];
         if payload.is_empty() || payload.len() % 4 != 0 || padding > 2
             || !body.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'+' || c == b'/')
-            || payload.len() / 4 * 3 - padding > 500 * 1024 {
-            return Err("Logo invalide ou trop volumineux (500 Ko maximum)".to_string());
+            || payload.len() / 4 * 3 - padding > 2 * 1024 * 1024 {
+            return Err("Logo invalide ou trop volumineux (2 Mo maximum)".to_string());
         }
     }
     let tx = conn.unchecked_transaction().map_err(|e| db_err("Enregistrement du centre", e))?;
