@@ -18,6 +18,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 export const settingsApi = {
+  resetOperationalData: () => call<void>('cmd_reset_operational_data'),
   getEnrollmentFee: () => call<number>('cmd_get_enrollment_fee'),
   setEnrollmentFee: (amount: number, yearId: number) => call<void>('cmd_set_enrollment_fee', { amount, yearId }),
   getCentreInfo: () => call<CentreInfo>('cmd_get_centre_info'),

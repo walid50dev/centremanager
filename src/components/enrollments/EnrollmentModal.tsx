@@ -518,6 +518,14 @@ export function EnrollmentModal({
       {step === 2 ? (
         <div className="space-y-3">
           <p className="text-[13px] text-muted">{t('enrollment.datesHint')}</p>
+          {selectedGroups.map(entry => {
+            const selected = mode === 'from_student' ? student : selectedStudent;
+            return selected?.level_id && entry.level_id && selected.level_id !== entry.level_id ? (
+              <div key={entry.id} role="alert" data-testid={`level-warning-${entry.id}`} className="rounded-md border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900">
+                ⚠️ {t('enrollment.levelMismatch', { student: selected.level_name ?? '—', group: entry.level_name })}
+              </div>
+            ) : null;
+          })}
           <div className="space-y-2">
             {selectedGroups.map((entry) => (
               <div

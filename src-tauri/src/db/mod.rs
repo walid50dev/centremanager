@@ -547,10 +547,12 @@ fn seed_reference_data(conn: &Connection) -> rusqlite::Result<()> {
     let year_count: i64 =
         tx.query_row("SELECT COUNT(*) FROM school_years", [], |row| row.get(0))?;
     if year_count == 0 {
+        use chrono::{Datelike, Local};
+        let now = Local::now().date_naive();
+        let start = if now.month() >= 9 { now.year() } else { now.year() - 1 };
         tx.execute(
-            "INSERT INTO school_years (label, start_date, end_date, is_active)
-             VALUES ('2024-2025', '2024-09-01', '2025-06-30', 1)",
-            [],
+            "INSERT INTO school_years (label, start_date, end_date, is_active) VALUES (?1, ?2, ?3, 1)",
+            params![format!("{start}-{}", start + 1), format!("{start}-09-01"), format!("{}-08-31", start + 1)],
         )?;
     }
 
@@ -640,18 +642,19 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     #[cfg(not(debug_assertions))]
     use tauri::Manager;
 
-    // Debug builds use a persistent project-local test database. Copy the
-    // supplied fixture only on first launch; never replace edits on restart or
-    // touch the production app-data directory (including its WAL/SHM files).
+    // Debug builds use a persistent project-local database. A synthetic fixture
+    // is copied only on explicit opt-in and only if the target does not exist.
+    // Never replace edits or touch production app-data (including WAL/SHM).
     #[cfg(debug_assertions)]
     let path = {
         let _ = app;
         let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("test-data");
         fs::create_dir_all(&test_dir)
             .map_err(|err| format!("Impossible de créer {} : {err}", test_dir.display()))?;
-        let fixture = test_dir.join("centremanager-charge.db");
         let target = test_dir.join("centremanager-dev.db");
-        ensure_debug_fixture(&fixture, &target)?;
+        if std::env::var("CENTREMANAGER_LOAD_TEST_FIXTURE").as_deref() == Ok("1") {
+            ensure_debug_fixture(&test_dir.join("centremanager-charge.db"), &target)?;
+        }
         target
     };
     #[cfg(not(debug_assertions))]
@@ -673,10 +676,10 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     // Seed sensible defaults on first launch (idempotent).
     seed_defaults(&conn).map_err(|err| format!("Échec de l'initialisation des données : {err}"))?;
 
-    // The synthetic debug database has no credentials. Initialize only when
-    // missing, so a developer's changed test password survives restarts.
+    // Only an explicitly requested fixture gets a test password, and only
+    // when credentials are missing.
     #[cfg(debug_assertions)]
-    if !crate::commands::auth::check_setup(&conn)? {
+    if std::env::var("CENTREMANAGER_LOAD_TEST_FIXTURE").as_deref() == Ok("1") && !crate::commands::auth::check_setup(&conn)? {
         crate::commands::auth::setup(&conn, "Centre Test Marrakech", "test1234")?;
     }
 

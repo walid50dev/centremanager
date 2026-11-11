@@ -334,6 +334,9 @@ function seed(): DevStore {
     is_active: true,
   }));
 
+  const demo = import.meta.env.VITE_LOAD_TEST_FIXTURE === '1';
+  const now = new Date();
+  const startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   return {
     settings: {
       center_name: localStorage.getItem(AUTH_CENTER_NAME_KEY) ?? 'Centre Excellence',
@@ -348,19 +351,20 @@ function seed(): DevStore {
     branches,
     subjects,
     schoolYears: [
-      { id: 1, label: '2024-2025', start_date: '2024-09-01', end_date: '2025-06-30', is_active: true },
+      demo ? { id: 1, label: '2024-2025', start_date: '2024-09-01', end_date: '2025-06-30', is_active: true } : { id: 1, label: `${startYear}-${startYear + 1}`, start_date: `${startYear}-09-01`, end_date: `${startYear + 1}-08-31`, is_active: true },
     ],
     nextLevelId: levels.length + 1,
     nextBranchId: branches.length + 1,
     nextSubjectId: subjects.length + 1,
     nextYearId: 2,
-    students: seedStudents(levels, branches),
+    students: demo ? seedStudents(levels, branches) : [],
     ...seedGroups(levels, branches),
     ...seedTeachers(),
-    expenses: seedExpenses(),
+    expenses: demo ? seedExpenses() : [],
+    ...(demo ? {} : { groups: [], enrollments: [], invoices: [], payments: [], receipts: [], teachers: [], teacherActivities: [], teacherSettlements: [], nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1, nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1 }),
     auditLog: [],
-    nextStudentId: 5,
-    nextExpenseId: 8,
+    nextStudentId: demo ? 5 : 1,
+    nextExpenseId: demo ? 8 : 1,
     nextAuditId: 1,
   };
 }
@@ -1401,7 +1405,13 @@ function devRecordPayment(
   amountCents: number,
   method: string,
   notes: string | null,
+  paymentDate: string | null = null,
 ): number {
+  if (paymentDate) {
+    const parsed = new Date(`${paymentDate}T00:00:00Z`);
+    const year = store.schoolYears.find(y => y.is_active);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0,10) !== paymentDate || paymentDate > todayIsoDate() || (paymentDate !== todayIsoDate() && (!year?.start_date || !year.end_date || paymentDate < year.start_date || paymentDate > year.end_date))) throw new Error("La date doit être passée et comprise dans l'année scolaire active");
+  }
   if (!Number.isFinite(amountCents) || amountCents <= 0) {
     throw new Error('Le montant doit être supérieur à 0');
   }
@@ -1422,7 +1432,7 @@ function devRecordPayment(
 
   invoices.sort((a, b) => a.due_date.localeCompare(b.due_date) || a.id - b.id);
 
-  const createdAt = nowTimestamp();
+  const createdAt = paymentDate ? `${paymentDate} ${nowTimestamp().slice((11))}` : nowTimestamp();
   const normalizedMethod = method.trim() || 'espèces';
   let leftover = amountCents;
   let firstId: number | null = null;
@@ -3197,6 +3207,22 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     // -- Invoicing (Phase 5) ----------------------------------------------
+    case 'cmd_generate_student_month_invoices': {
+      const studentId = asNumber(args, 'studentId'), month = asNumber(args, 'month'), year = asNumber(args, 'year');
+      if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000 || year > 2100) throw new Error('Période invalide');
+      const first = `${year}-${String(month).padStart(2, '0')}-01`;
+      const last = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+      const active = store.schoolYears.find(y => y.is_active);
+      if (!active?.start_date || !active.end_date || last < active.start_date || first > active.end_date || first > todayIsoDate()) throw new Error("Mois hors de l'année scolaire active ou dans le futur");
+      let count = 0;
+      for (const e of store.enrollments.filter(e => e.student_id === studentId && e.start_date <= last && (e.status === 'actif' || !!e.end_date) && (!e.end_date || e.end_date >= first))) {
+        const group = store.groups.find(g => g.id === e.group_id && !g.deleted_at && g.school_year_id === active.id);
+        if (!group || !store.students.some(s => s.id === studentId && !s.deleted_at) || store.invoices.some(i => i.enrollment_id === e.id && i.period_month === month && i.period_year === year)) continue;
+        store.invoices.push({ id: store.nextInvoiceId++, enrollment_id: e.id, period_month: month, period_year: year, amount_cents: e.custom_monthly_fee_cents ?? group.monthly_fee_cents, paid_amount_cents: 0, status: 'impayé', due_date: adjustDueDate(year, month, Number(e.start_date.slice(8,10)) || 1), created_at: nowTimestamp() }); count++;
+      }
+      logAudit(store, 'GENERATE_STUDENT_INVOICES', studentId, JSON.stringify({ month, year, count }), 'student');
+      save(store); return count;
+    }
     case 'cmd_generate_monthly_invoices': {
       const month = asNumber(args, 'month');
       const year = asNumber(args, 'year');
@@ -3272,13 +3298,18 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const notes = typeof args?.notes === 'string' ? args.notes : null;
       const snapshot = JSON.stringify(store);
       try {
-        return devRecordPayment(store, studentId, invoiceIds, amountCents, method, notes);
+        return devRecordPayment(store, studentId, invoiceIds, amountCents, method, notes, typeof args?.paymentDate === 'string' ? args.paymentDate : null);
       } catch (error) {
         Object.assign(store, JSON.parse(snapshot) as DevStore);
         throw error;
       } finally {
         save(store);
       }
+    }
+
+    case 'cmd_reset_operational_data': {
+      Object.assign(store, { students: [], groups: [], enrollments: [], invoices: [], payments: [], receipts: [], teachers: [], teacherActivities: [], teacherSettlements: [], expenses: [], auditLog: [], studentYears: {}, teacherYears: {}, teacherYearTrash: {}, studentTrashYears: {}, feeHandledYears: {}, expenseYears: {}, groupImports: {}, nextStudentId: 1, nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1, nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1, nextExpenseId: 1, nextAuditId: 1 });
+      localStorage.setItem(STORE_KEY, JSON.stringify(store)); return undefined;
     }
 
     case 'cmd_get_unattributed_payment_count': return store.payments.filter(row => row.school_year_id == null).length;

@@ -9,7 +9,7 @@
 //! amount, the payment date and the group labels into the `receipts` row, so a
 //! later rename never rewrites an old receipt.
 
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 use tauri::State;
@@ -53,6 +53,26 @@ pub fn record_payment(
     method: &str,
     notes: Option<&str>,
 ) -> Result<i64, String> {
+    record_payment_at(conn, student_id, invoice_ids, amount_cents, method, notes, None)
+}
+
+pub fn record_payment_at(
+    conn: &Connection, student_id: i64, invoice_ids: &[i64], amount_cents: i64,
+    method: &str, notes: Option<&str>, payment_date: Option<&str>,
+) -> Result<i64, String> {
+    let timestamp = if let Some(value) = payment_date {
+        let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| "Date de paiement invalide".to_string())?;
+        let today = Local::now().date_naive();
+        let (start, end): (Option<String>, Option<String>) = conn.query_row(
+            "SELECT start_date, end_date FROM school_years WHERE is_active=1 LIMIT 1", [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).map_err(|e| db_err("Année scolaire", e))?;
+        let canonical_date = date.format("%Y-%m-%d").to_string();
+        if value != canonical_date.as_str() || date > today || (date != today && (start.as_deref().map_or(true, |s| value < s) || end.as_deref().map_or(true, |e| value > e))) {
+            return Err("La date doit être passée et comprise dans l'année scolaire active".to_string());
+        }
+        format!("{} {}", date.format("%Y-%m-%d"), Local::now().format("%H:%M:%S"))
+    } else { now_timestamp() };
     if amount_cents <= 0 {
         return Err("Le montant doit être supérieur à 0".to_string());
     }
@@ -137,7 +157,7 @@ pub fn record_payment(
     invoices.sort_by(|a, b| a.3.cmp(&b.3).then(a.0.cmp(&b.0)));
 
     // Every allocation shares the timestamp and a durable transaction batch id.
-    let created_at = now_timestamp();
+    let created_at = timestamp;
     let mut leftover = amount_cents;
     let mut first_payment_id: Option<i64> = None;
     let mut allocations: Vec<(i64, i64)> = Vec::new();
@@ -700,15 +720,17 @@ pub fn cmd_record_payment(
     amount_cents: i64,
     method: String,
     notes: Option<String>,
+    payment_date: Option<String>,
 ) -> Result<i64, String> {
     let conn = db.conn();
-    record_payment(
+    record_payment_at(
         &conn,
         student_id,
         &invoice_ids,
         amount_cents,
         &method,
         notes.as_deref(),
+        payment_date.as_deref(),
     )
 }
 

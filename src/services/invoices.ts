@@ -14,6 +14,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 export const invoicesApi = {
+  generateForStudent: (studentId: number, month: number, year: number) =>
+    call<number>('cmd_generate_student_month_invoices', { studentId, month, year }),
   /** Idempotent: existing `(enrollment, month, year)` rows are skipped. */
   generateMonthly: (month: number, year: number) =>
     call<number>('cmd_generate_monthly_invoices', { month, year }),
