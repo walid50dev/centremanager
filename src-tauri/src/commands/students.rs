@@ -169,7 +169,7 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
     }
 
     let guardian_phone = validate_phone(data.guardian_phone.as_deref().unwrap_or(&data.phone), "téléphone du tuteur")?;
-    let phone = if data.phone.trim().is_empty() { String::new() } else { validate_phone(&data.phone, "téléphone de l'élève")? };
+    let phone = validate_phone(&data.phone, "téléphone de l'élève")?;
     if data.enrollment_fee_cents.unwrap_or(0) < 0 { return Err("Les frais d'inscription doivent être positifs ou nuls".to_string()); }
 
     let secondary_contact_phone = match optional_text(&data.secondary_contact_phone) {

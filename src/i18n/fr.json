@@ -166,10 +166,10 @@
       "description": "Nom, coordonnées et logo affichés sur les reçus.",
       "address": "Adresse",
       "phone": "Téléphone",
-      "logoHint": "PNG, JPG ou SVG, 500 Ko maximum",
+      "logoHint": "PNG, JPG ou SVG, 2 Mo maximum",
       "logoUpdated": "Logo mis à jour ✓",
       "logoRemoved": "Logo retiré",
-      "logoTooLarge": "L’image dépasse 500 Ko",
+      "logoTooLarge": "L’image dépasse 2 Mo",
       "logoInvalid": "Veuillez choisir un fichier PNG, JPG ou SVG valide",
       "nameRequired": "Le nom du centre est obligatoire",
       "success": "Informations du centre mises à jour ✓"
@@ -242,15 +242,11 @@
     },
     "printing": {
       "description": "Format papier utilisé pour les reçus.",
-      "a4": "A4",
-      "a4Hint": "210 × 297 mm",
       "thermal": "Thermique 80mm",
       "thermalHint": "80 × auto mm",
       "updated": "Format d'impression enregistré ✓",
       "thermal58": "Ticket thermique 58 mm",
-      "thermal58Hint": "58 × auto mm",
-      "a5": "A5",
-      "a5Hint": "148 × 210 mm"
+      "thermal58Hint": "58 × auto mm"
     },
     "security": {
       "description": "Verrouillage automatique et mot de passe administrateur.",
@@ -553,7 +549,8 @@
       "feeCreated": "Frais d'inscription facturés : {{amount}}"
     },
     "newGroup": "Nouveau groupe",
-    "newStudent": "Nouvel élève"
+    "newStudent": "Nouvel élève",
+    "customFee": "Tarif mensuel personnalisé (DH)"
   },
   "student": {
     "activeEnrollments": "Inscriptions actives",
@@ -592,7 +589,9 @@
       "unpaid": "Impayé",
       "partial": "Partiel",
       "overdue": "en retard"
-    }
+    },
+    "whatsapp": "WhatsApp",
+    "whatsappMessage": "Bonjour, nous vous rappelons courtoisement que le paiement de {{name}} pour le groupe {{group}} reste en attente. Merci de votre attention."
   },
   "payments": {
     "tabCollections": "Encaissements",
@@ -1030,7 +1029,6 @@
     "section_students": "Élèves",
     "section_groups": "Groupes",
     "section_teachers": "Enseignants",
-    "section_payments": "Paiements",
     "section_expenses": "Dépenses",
     "section_salaries": "Salaires",
     "generating": "Génération en cours...",
@@ -1038,7 +1036,8 @@
     "revenue": "Encaissements",
     "net": "Net",
     "subject": "Matière",
-    "note": "Les avances sans facture ne sont pas ventilées par matière. Les salaires sont rattachés au mois de paie."
+    "note": "Les avances sans facture ne sont pas ventilées par matière. Les salaires sont rattachés au mois de paie.",
+    "success": "Fichier exporté avec succès"
   },
   "school_year": {
     "delete": "Supprimer l’année",

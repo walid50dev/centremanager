@@ -41,8 +41,6 @@ function TemplateToggle({
   const options: Array<{ value: ReceiptTemplate; label: string }> = [
     { value: 'thermal', label: t('receipt.thermal80') },
     { value: 'thermal58', label: t('receipt.thermal58') },
-    { value: 'a5', label: 'A5 · 148 × 210 mm' },
-    { value: 'a4', label: 'A4 · 210 × 297 mm' },
   ];
 
   return (

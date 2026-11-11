@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { BookOpen } from 'lucide-react';
 import Badge from '../ui/Badge';
 import Card from '../ui/Card';
-import CompensationConfigCard from './CompensationConfigCard';
 import { formatDate } from '../../utils/format';
 import type { TeacherDetail } from '../../types';
 
@@ -21,7 +20,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 /** Tab 1 of the teacher sheet: identity, subjects and payroll configuration. */
-export function TeacherInfoTab({ detail, onChanged }: TeacherInfoTabProps) {
+export function TeacherInfoTab({ detail }: TeacherInfoTabProps) {
   const { t } = useTranslation();
   const { teacher } = detail;
   const subjectNames = teacher.subjects ? teacher.subjects.split(', ') : [];
@@ -73,12 +72,6 @@ export function TeacherInfoTab({ detail, onChanged }: TeacherInfoTabProps) {
         </div>
       </Card>
 
-      <CompensationConfigCard
-        teacherId={teacher.id}
-        groups={detail.groups}
-        config={detail.compensation_config}
-        onSaved={onChanged}
-      />
     </div>
   );
 }

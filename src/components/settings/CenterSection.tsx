@@ -9,8 +9,8 @@ import { settingsApi } from '../../services/settings';
 import { useAuthStore } from '../../stores/authStore';
 import { pdfCompatibleLogo } from '../../utils/centreLogo';
 
-/** The original upload is limited to 500 KiB. */
-const MAX_LOGO_BYTES = 500 * 1024;
+/** The original upload is limited to 2 MiB. */
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 export interface CenterSectionProps {
   settings: Record<string, string>;

@@ -166,10 +166,10 @@
       "description": "الاسم ومعلومات الاتصال والشعار الظاهرة على الوصولات.",
       "address": "العنوان",
       "phone": "الهاتف",
-      "logoHint": "PNG أو JPG أو SVG، بحد أقصى 500 كيلوبايت",
+      "logoHint": "PNG أو JPG أو SVG، بحد أقصى 2 ميغابايت",
       "logoUpdated": "تم تحديث الشعار ✓",
       "logoRemoved": "تمت إزالة الشعار",
-      "logoTooLarge": "حجم الصورة يتجاوز 500 كيلوبايت",
+      "logoTooLarge": "حجم الصورة يتجاوز 2 ميغابايت",
       "logoInvalid": "يرجى اختيار ملف PNG أو JPG أو SVG صالح",
       "nameRequired": "اسم المركز مطلوب",
       "success": "تم تحديث معلومات المركز ✓"
@@ -242,15 +242,11 @@
     },
     "printing": {
       "description": "شكل الورق المستخدم في الوصولات.",
-      "a4": "A4",
-      "a4Hint": "210 × 297 mm",
       "thermal": "حراري 80 ملم",
       "thermalHint": "80 × auto mm",
       "updated": "تم حفظ صيغة الطباعة ✓",
       "thermal58": "وصل حراري 58 مم",
-      "thermal58Hint": "58 × auto mm",
-      "a5": "A5",
-      "a5Hint": "148 × 210 mm"
+      "thermal58Hint": "58 × auto mm"
     },
     "security": {
       "description": "القفل التلقائي وكلمة مرور المدير.",
@@ -561,7 +557,8 @@
       "feeCreated": "تم إصدار فاتورة رسوم التسجيل: {{amount}}"
     },
     "newGroup": "مجموعة جديدة",
-    "newStudent": "تلميذ جديد"
+    "newStudent": "تلميذ جديد",
+    "customFee": "التعرفة الشهرية الخاصة (درهم)"
   },
   "student": {
     "activeEnrollments": "التسجيلات النشطة",
@@ -600,7 +597,9 @@
       "unpaid": "غير مسددة",
       "partial": "جزئية",
       "overdue": "متأخرة"
-    }
+    },
+    "whatsapp": "WhatsApp",
+    "whatsappMessage": "مرحباً، نذكّركم بلطف بأن أداء {{name}} عن مجموعة {{group}} لا يزال مستحقاً. شكراً لتعاونكم."
   },
   "payments": {
     "tabCollections": "التحصيل",
@@ -1078,7 +1077,6 @@
     "section_students": "التلاميذ",
     "section_groups": "المجموعات",
     "section_teachers": "الأساتذة",
-    "section_payments": "المدفوعات",
     "section_expenses": "المصروفات",
     "section_salaries": "الرواتب",
     "generating": "جاري الإنشاء...",
@@ -1086,7 +1084,8 @@
     "revenue": "المداخيل",
     "net": "الصافي",
     "subject": "المادة",
-    "note": "لا توزع التسبيقات دون فاتورة حسب المادة. تُنسب الرواتب إلى شهر الأجر."
+    "note": "لا توزع التسبيقات دون فاتورة حسب المادة. تُنسب الرواتب إلى شهر الأجر.",
+    "success": "تم تصدير الملف بنجاح"
   },
   "school_year": {
     "delete": "حذف السنة",

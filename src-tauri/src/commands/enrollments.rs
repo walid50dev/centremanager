@@ -28,6 +28,7 @@ pub struct BatchEnrollmentInput {
     pub student_id: i64,
     pub group_id: i64,
     pub start_date: String,
+    pub custom_monthly_fee_cents: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,8 +193,12 @@ fn enroll_on(
     student_id: i64,
     group_id: i64,
     start_date: &str,
+    custom_monthly_fee_cents: Option<i64>,
 ) -> Result<EnrollmentResult, String> {
     let date = parse_date(start_date)?;
+    if matches!(custom_monthly_fee_cents, Some(fee) if fee < 0) {
+        return Err("Tarif personnalisé invalide".to_string());
+    }
     ensure_student_active(conn, student_id)?;
     let group = ensure_group_active(conn, group_id)?;
 
@@ -223,25 +228,25 @@ fn enroll_on(
         // a second one.
         Some((id, _)) => {
             conn.execute(
-                "UPDATE enrollments SET start_date = ?1, end_date = NULL, status = 'actif'
+                "UPDATE enrollments SET start_date = ?1, end_date = NULL, status = 'actif', custom_monthly_fee_cents = ?3
                  WHERE id = ?2",
-                params![start, id],
+                params![start, id, custom_monthly_fee_cents],
             )
             .map_err(|err| db_err("Réactivation de l'inscription", err))?;
             id
         }
         None => {
             conn.execute(
-                "INSERT INTO enrollments (student_id, group_id, start_date, status)
-                 VALUES (?1, ?2, ?3, 'actif')",
-                params![student_id, group_id, start,],
+                "INSERT INTO enrollments (student_id, group_id, start_date, status, custom_monthly_fee_cents)
+                 VALUES (?1, ?2, ?3, 'actif', ?4)",
+                params![student_id, group_id, start, custom_monthly_fee_cents],
             )
             .map_err(|err| db_err("Création de l'inscription", err))?;
             conn.last_insert_rowid()
         }
     };
 
-    let (invoice_id, created) = ensure_invoice(conn, enrollment_id, date, group.monthly_fee_cents)?;
+    let (invoice_id, created) = ensure_invoice(conn, enrollment_id, date, custom_monthly_fee_cents.unwrap_or(group.monthly_fee_cents))?;
 
     // A fee invoice has no enrollment_id: it must survive deletion of a group.
     // The unique student/year constraint prevents duplicates across a batch.
@@ -301,7 +306,7 @@ pub fn enroll_student(
     let tx = conn
         .unchecked_transaction()
         .map_err(|err| db_err("Ouverture de la transaction", err))?;
-    let id = enroll_on(&tx, student_id, group_id, start_date)?;
+    let id = enroll_on(&tx, student_id, group_id, start_date, None)?;
     tx.commit()
         .map_err(|err| db_err("Validation de l'inscription", err))?;
     Ok(id.id)
@@ -327,7 +332,7 @@ pub fn enroll_student_batch_details(conn: &Connection, items: &[BatchEnrollmentI
 
     let mut ids = Vec::with_capacity(items.len());
     for item in items {
-        match enroll_on(&tx, item.student_id, item.group_id, &item.start_date) {
+        match enroll_on(&tx, item.student_id, item.group_id, &item.start_date, item.custom_monthly_fee_cents) {
             Ok(id) => ids.push(id),
             Err(error) => {
                 // Dropping the transaction would roll back too; be explicit.
@@ -396,7 +401,7 @@ pub fn student_enrollments(
             "SELECT e.id, g.id,
                     COALESCE(s.name, '—'), COALESCE(l.name, '—'), b.name, t.full_name,
                     COALESCE(g.day_of_week, ''), COALESCE(g.start_time, ''), COALESCE(g.end_time, ''),
-                    g.monthly_fee_cents, COALESCE(e.start_date, ''), e.end_date,
+                    COALESCE(e.custom_monthly_fee_cents, g.monthly_fee_cents), COALESCE(e.start_date, ''), e.end_date,
                     COALESCE(e.status, 'actif')
              FROM enrollments e
              JOIN groups g ON g.id = e.group_id
@@ -459,7 +464,7 @@ pub fn cmd_enroll_student(
     start_date: String,
 ) -> Result<EnrollmentResult, String> {
     let conn = db.conn();
-    let item = BatchEnrollmentInput { student_id, group_id, start_date };
+    let item = BatchEnrollmentInput { student_id, group_id, start_date, custom_monthly_fee_cents: None };
     enroll_student_batch_details(&conn, &[item]).map(|mut rows| rows.remove(0))
 }
 
@@ -565,7 +570,7 @@ mod tests {
         let g = group(&conn, 30_000, 10, "Lundi");
         let s = student(&conn, "Test Fee", "0612345678");
         conn.execute("UPDATE students SET enrollment_fee_cents=20000 WHERE id=?1", params![s]).unwrap();
-        let rows = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:s, group_id:g, start_date:"2026-09-01".into() }]).unwrap();
+        let rows = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:s, group_id:g, start_date:"2026-09-01".into(), custom_monthly_fee_cents: None }]).unwrap();
         let fee = rows[0].enrollment_fee_invoice_id.unwrap();
         assert_eq!(rows[0].enrollment_fee_amount_cents, Some(20_000));
         let invoices = super::super::invoices::student_invoices(&conn, s).unwrap();
@@ -596,7 +601,7 @@ mod tests {
         conn.execute("UPDATE students SET enrollment_fee_cents=20000 WHERE id=?1", params![s]).unwrap();
         let a = group(&conn, 10_000, 10, "Lundi");
         let b = group(&conn, 10_000, 10, "Mardi");
-        let inputs = [BatchEnrollmentInput { student_id:s, group_id:a, start_date:"2026-09-01".into() }, BatchEnrollmentInput { student_id:s, group_id:b, start_date:"2026-09-01".into() }];
+        let inputs = [BatchEnrollmentInput { student_id:s, group_id:a, start_date:"2026-09-01".into(), custom_monthly_fee_cents: None }, BatchEnrollmentInput { student_id:s, group_id:b, start_date:"2026-09-01".into(), custom_monthly_fee_cents: None }];
         let rows = enroll_student_batch_details(&conn, &inputs).unwrap();
         assert!(rows[0].enrollment_fee_invoice_id.is_some());
         assert!(rows[1].enrollment_fee_invoice_id.is_none());
@@ -607,7 +612,7 @@ mod tests {
         assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![other], |r| r.get::<_, i64>(0)).unwrap(), 0);
         super::super::settings::set_enrollment_fee(&conn, 20_000).unwrap();
         super::super::trash::delete_group_data(&conn, a).unwrap();
-        let result = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:other, group_id:b, start_date:"2026-09-01".into() }]).unwrap();
+        let result = enroll_student_batch_details(&conn, &[BatchEnrollmentInput { student_id:other, group_id:b, start_date:"2026-09-01".into(), custom_monthly_fee_cents: None }]).unwrap();
         assert!(result[0].enrollment_fee_invoice_id.is_none(), "zero decision survives deleting the first group");
         assert_eq!(conn.query_row("SELECT COUNT(*) FROM enrollment_fees WHERE student_id=?1", params![other], |r| r.get::<_, i64>(0)).unwrap(), 0);
     }
@@ -821,6 +826,21 @@ mod tests {
     }
 
     #[test]
+    fn custom_fee_is_used_for_new_invoices_without_rewriting_history() {
+        let conn = test_conn();
+        let g = group(&conn, 30_000, 10, "Lundi");
+        let s = student(&conn, "Salma Test", "0612345678");
+        let input = BatchEnrollmentInput { student_id: s, group_id: g, start_date: "2026-09-01".into(), custom_monthly_fee_cents: Some(17_500) };
+        let id = enroll_student_batch_details(&conn, &[input]).unwrap()[0].id;
+        super::super::invoices::generate_monthly_invoices(&conn, 10, 2026).unwrap();
+        conn.execute("UPDATE enrollments SET custom_monthly_fee_cents=20000 WHERE id=?1", params![id]).unwrap();
+        super::super::invoices::generate_monthly_invoices(&conn, 10, 2026).unwrap();
+        super::super::invoices::generate_monthly_invoices(&conn, 11, 2026).unwrap();
+        let invoices = super::super::invoices::student_invoices(&conn, s).unwrap();
+        assert_eq!(invoices.iter().map(|i| i.amount_cents).collect::<Vec<_>>(), vec![20_000, 17_500, 17_500]);
+    }
+
+    #[test]
     fn batch_enrollment_creates_every_row_and_the_invoices() {
         let conn = test_conn();
         let maths = group(&conn, 30_000, 10, "Lundi");
@@ -835,11 +855,13 @@ mod tests {
                     student_id,
                     group_id: maths,
                     start_date: "2026-09-15".to_string(),
+                    custom_monthly_fee_cents: None,
                 },
                 BatchEnrollmentInput {
                     student_id,
                     group_id: physique,
                     start_date: "2026-09-15".to_string(),
+                    custom_monthly_fee_cents: None,
                 },
             ],
         )
@@ -875,11 +897,13 @@ mod tests {
                     student_id,
                     group_id: first,
                     start_date: "2026-01-31".to_string(),
+                    custom_monthly_fee_cents: None,
                 },
                 BatchEnrollmentInput {
                     student_id,
                     group_id: second,
                     start_date: "2026-02-10".to_string(),
+                    custom_monthly_fee_cents: None,
                 },
             ],
         )
@@ -897,12 +921,14 @@ mod tests {
                     student_id: other_student,
                     group_id: second,
                     start_date: "2026-03-01".to_string(),
+                    custom_monthly_fee_cents: None,
                 },
                 // Already enrolled -> the second insert must not survive.
                 BatchEnrollmentInput {
                     student_id,
                     group_id: first,
                     start_date: "2026-03-01".to_string(),
+                    custom_monthly_fee_cents: None,
                 },
             ],
         );

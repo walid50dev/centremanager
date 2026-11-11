@@ -47,7 +47,7 @@ class EnrollmentFeeSqlTests(base.YearImportTests):
         with self.assertRaises(sqlite3.IntegrityError): db.execute(insert_fee, (1, 1, 20000, fee_invoice))
         student_sql = literal('invoices.rs', 'CASE WHEN f.id IS NOT NULL THEN \'enrollment_fee\'')
         rows = db.execute(student_sql, (1,)).fetchall()
-        self.assertEqual(rows[0][11:], ('enrollment_fee', '2024-2025'))
+        self.assertEqual(rows[0][11:13], ('enrollment_fee', '2024-2025'))
         ownership = literal('payments.rs', 'SELECT EXISTS(\n                    SELECT 1 FROM invoices i')
         self.assertEqual(db.execute(ownership, (fee_invoice, 1)).fetchone()[0], 1)
         self.assertEqual(db.execute(ownership, (fee_invoice, 2)).fetchone()[0], 0)

@@ -6,8 +6,10 @@ import { pdf } from '@react-pdf/renderer';
 import { inflateSync } from 'node:zlib';
 const server = await createServer({ optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true }, appType: 'custom' });
 try {
-  const { default: A4 } = await server.ssrLoadModule('/src/components/print/ReceiptA4.tsx');
   const { default: Thermal, wrapValue } = await server.ssrLoadModule('/src/components/print/ReceiptThermal.tsx');
+  const { normaliseTemplate } = await server.ssrLoadModule('/src/components/print/receiptPdf.tsx');
+  assert.equal(normaliseTemplate('a4'), 'thermal');
+  assert.equal(normaliseTemplate('a5'), 'thermal');
   const labels = { heading: 'RECU DE PAIEMENT', shortHeading: 'RECU', number: 'No', date: 'Date', student: 'Eleve', level: 'Niveau', subject: 'Matiere', group: 'Groupe', month: 'Mois', amount: 'Montant', total: 'TOTAL', method: 'Mode', studentInfo: 'Informations eleve', paymentDetails: 'Details du paiement', signature: 'Signature', thanks: 'Merci', thankYouShort: 'Merci', groups: 'Groupes', period: 'Periode', advance: 'Avance', unavailable: 'Details indisponibles', centerFallback: 'CentreManager' };
   // Tiny valid PNG.
   const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
@@ -21,7 +23,7 @@ try {
     const buffers = []; for await (const part of stream) buffers.push(part);
     return Buffer.concat(buffers);
   };
-  for (const [name, component, template, width, height] of [['A4', A4, 'a4', 595.28, 841.89], ['A5', A4, 'a5', 419.53, 595.28], ['thermal80', Thermal, 'thermal', 80*72/25.4, null], ['thermal58', Thermal, 'thermal58', 58*72/25.4, null]]) {
+  for (const [name, component, template, width, height] of [['thermal80', Thermal, 'thermal', 80*72/25.4, null], ['thermal58', Thermal, 'thermal58', 58*72/25.4, null]]) {
     const buffer = await render(component, template);
     assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
     assert.ok(buffer.length > 1000, `${name} PDF generated`);
@@ -40,11 +42,11 @@ try {
     assert.ok(decodedStreams > 0, `${name} has content streams`);
     const text = [...decoded.matchAll(/BT([\s\S]*?)ET/g)].map(part => [...part[1].matchAll(/<([0-9a-f]+)>/gi)].map(hex => Buffer.from(hex[1], 'hex').toString('latin1')).join('')).join(' ').replace(/\s+/g, ' ');
     for (const value of ['Maths', 'Physique', 'Chimie', 'Novembre 2025', '400.00 DH', '350.00 DH', '50.00 DH', '800.00 DH', 'Salma']) assert.ok(text.includes(value), `${name}: missing ${value} in ${text}`);
-    assert.equal(decoded.includes('/I1 Do'), name === 'A4' || name === 'A5', 'sheet formats embed the logo');
+    assert.equal(decoded.includes('/I1 Do'), false, 'sheet formats embed the logo');
   }
   data.logo = null;
-  assert.ok((await render(A4)).length > 1000, 'A4 PDF renders without logo');
+  assert.ok((await render(Thermal, 'thermal')).length > 1000, 'thermal PDF renders without logo');
   const longWord = 'a'.repeat(80);
   assert.equal(wrapValue(longWord, 20).join(''), longWord, 'thermal words are not truncated');
-  console.log('PDF: A4 with PNG and thermal documents rendered with multiple payment lines');
+  console.log('PDF: thermal documents rendered with multiple payment lines');
 } finally { await server.close(); }

@@ -10,7 +10,7 @@ import Select from '../ui/Select';
 import SettingsSection from './SettingsSection';
 import { toast } from '../ui/Toast';
 import { schoolYearsApi } from '../../services/settings';
-import { downloadExcel, type ExportSection } from '../../services/yearExport';
+import { downloadExcel } from '../../services/yearExport';
 import { downloadYearPdf } from '../year-export/yearPdf';
 import { formatDate } from '../../utils/format';
 import type { SchoolYear } from '../../types';
@@ -74,7 +74,7 @@ export function SchoolYearSection() {
     finally { setDeleting(false); }
   };
 
-  const handleExport = async (year: SchoolYear, section: ExportSection | 'pdf') => {
+  const handleExport = async (year: SchoolYear, section: 'excel' | 'pdf') => {
     if (exporting !== null) return;
     setExporting(year.id);
     try {
@@ -85,7 +85,8 @@ export function SchoolYearSection() {
           revenue: t('export.revenue'), expenses: t('export.section_expenses'), salaries: t('export.section_salaries'),
           net: t('export.net'), subject: t('export.subject'), note: t('export.note'),
         }, i18n.language === 'ar');
-      } else await downloadExcel(year.id, year.label ?? '', section);
+      } else await downloadExcel(year.id, year.label ?? '');
+      toast.success(t('export.success'));
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
     finally { setExporting(null); }
   };
@@ -165,13 +166,7 @@ export function SchoolYearSection() {
                   </p>
                 </div>
                 <Button size="sm" variant="secondary" disabled={exporting !== null} onClick={() => void handleExport(year, 'pdf')} data-testid={`year-pdf-${year.id}`}>📄 {exporting === year.id ? t('export.generating') : t('export.pdf')}</Button>
-                <select aria-label={t('export.excel')} data-testid={`year-excel-${year.id}`} value="" disabled={exporting !== null}
-                  className="h-8 max-w-[170px] rounded border border-border bg-white px-2 text-[13px]" onChange={event => {
-                    if (event.target.value) void handleExport(year, event.target.value as ExportSection);
-                  }}>
-                  <option value="">📊 {t('export.excel')}</option>
-                  {(['students','groups','teachers','payments','expenses','salaries'] as const).map(section => <option key={section} value={section}>{t(`export.section_${section}`)}</option>)}
-                </select>
+                <Button size="sm" variant="secondary" disabled={exporting !== null} onClick={() => void handleExport(year, 'excel')} data-testid={`year-excel-${year.id}`}>📊 {t('export.excel')}</Button>
                 <span title={year.is_active ? t('school_year.cannot_delete_active') : t('school_year.delete')}>
                   <Button size="icon" variant="ghost" aria-label={year.is_active ? t('school_year.cannot_delete_active') : t('school_year.delete')}
                     data-testid={`year-delete-${year.id}`} disabled={year.is_active || deleting} onClick={() => setDeleteYear(year)}><Trash2 className="h-4 w-4" aria-hidden="true" /></Button>

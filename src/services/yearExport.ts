@@ -21,11 +21,20 @@ export const EXPORT_COLUMNS: Record<ExportSection, string[]> = {
   expenses: ['id', 'label', 'amount_cents', 'category', 'month', 'year', 'notes', 'created_at'],
   salaries: ['id', 'teacher', 'month', 'year', 'amount_cents', 'payment_method', 'notes', 'payment_date', 'created_at'],
 };
-export async function downloadExcel(yearId: number, label: string, section: ExportSection) {
-  const [rows, xlsx] = await Promise.all([yearExportApi.data(yearId, section), import('xlsx')]);
-  const sheet = xlsx.utils.json_to_sheet(rows, { header: EXPORT_COLUMNS[section] });
+export const EXCEL_SHEETS: Array<{ section: ExportSection; name: string }> = [
+  { section: 'students', name: 'Élèves' }, { section: 'payments', name: 'Paiements' },
+  { section: 'expenses', name: 'Dépenses' }, { section: 'teachers', name: 'Professeurs' },
+  { section: 'groups', name: 'Groupes' }, { section: 'salaries', name: 'Paiements professeurs' },
+];
+export async function downloadExcel(yearId: number, label: string) {
+  const [xlsx, ...datasets] = await Promise.all([
+    import('xlsx'), ...EXCEL_SHEETS.map(({ section }) => yearExportApi.data(yearId, section)),
+  ]);
   const book = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(book, sheet, section);
-  xlsx.writeFile(book, `${safeFile(label)}_${section}.xlsx`);
+  EXCEL_SHEETS.forEach(({section, name}, index) => {
+    const sheet = xlsx.utils.json_to_sheet(datasets[index], { header: EXPORT_COLUMNS[section] });
+    xlsx.utils.book_append_sheet(book, sheet, name);
+  });
+  xlsx.writeFile(book, `${safeFile(label)}_export.xlsx`);
 }
 export function safeFile(value: string) { return value.replace(/[^A-Za-z0-9_-]+/g, '-') || 'annee'; }

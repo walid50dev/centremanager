@@ -183,6 +183,7 @@ interface DevSettlement {
 
 /** Enrollments are stored raw, like the SQL table. */
 interface DevEnrollment {
+  custom_monthly_fee_cents?: number | null;
   id: number;
   student_id: number;
   group_id: number;
@@ -789,7 +790,7 @@ function validateStudentInput(store: DevStore, input: Record<string, unknown>): 
   }
   const guardianPhone = normaliseDevPhone(text(input.guardian_phone ?? input.phone));
   const phone = normaliseDevPhone(text(input.phone));
-  if (phone && !PHONE_PATTERN.test(phone)) throw new Error('Format de téléphone de l’élève invalide');
+  if (!PHONE_PATTERN.test(phone)) throw new Error('Format de téléphone de l’élève invalide');
   if (!PHONE_PATTERN.test(guardianPhone)) throw new Error('Format de téléphone du tuteur invalide (06XXXXXXXX ou 07XXXXXXXX)');
   const secondary_contact_phone = normaliseDevPhone(text(input.secondary_contact_phone)) || null;
   if (secondary_contact_phone && !PHONE_PATTERN.test(secondary_contact_phone)) throw new Error('Format de téléphone invalide');
@@ -1108,7 +1109,9 @@ function enrollOne(
   studentId: number,
   groupId: number,
   startDate: string,
+  customFee: number | null = null,
 ): { id: number; enrollment_fee_invoice_id: number | null; enrollment_fee_amount_cents: number | null } {
+  if (customFee !== null && (!Number.isSafeInteger(customFee) || customFee < 0)) throw new Error('Tarif personnalisé invalide');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
     throw new Error("Date d'inscription invalide (format attendu AAAA-MM-JJ)");
   }
@@ -1133,6 +1136,7 @@ function enrollOne(
 
   let enrollment: DevEnrollment;
   if (existing) {
+    existing.custom_monthly_fee_cents = customFee;
     existing.start_date = startDate;
     existing.end_date = null;
     existing.status = 'actif';
@@ -1142,6 +1146,7 @@ function enrollOne(
       id: store.nextEnrollmentId++,
       student_id: studentId,
       group_id: groupId,
+      custom_monthly_fee_cents: customFee,
       start_date: startDate,
       end_date: null,
       status: 'actif',
@@ -1162,7 +1167,7 @@ function enrollOne(
       enrollment_id: enrollment.id,
       period_month: month,
       period_year: year,
-      amount_cents: raw.monthly_fee_cents,
+      amount_cents: customFee ?? raw.monthly_fee_cents,
       paid_amount_cents: 0,
       status: 'impayé',
       due_date: adjustDueDate(year, month, day),
@@ -1275,6 +1280,7 @@ function devInvoiceRows(store: DevStore, studentId: number): StudentInvoice[] {
         kind: invoice.fee_student_id ? 'enrollment_fee' : 'invoice',
         school_year_label: store.schoolYears.find(y => y.id === invoice.fee_school_year_id)?.label ?? null,
         group_subject: group?.subject_name ?? '—',
+        group_name: group?.name ?? null,
         group_level: group?.level_name ?? '—',
         group_branch: group?.branch_name ?? null,
         period_month: invoice.period_month,
@@ -2222,7 +2228,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       if (logo) {
         const match = /^data:image\/(?:png|jpeg|svg\+xml);base64,([A-Za-z0-9+/]+)(={0,2})$/.exec(logo);
         const encoded = match ? match[1] + match[2] : '';
-        if (!match || encoded.length % 4 !== 0 || encoded.length / 4 * 3 - match[2].length > 500 * 1024) throw new Error('Logo invalide ou trop volumineux (500 Ko maximum)');
+        if (!match || encoded.length % 4 !== 0 || encoded.length / 4 * 3 - match[2].length > 2 * 1024 * 1024) throw new Error('Logo invalide ou trop volumineux (2 Mo maximum)');
       }
       Object.assign(store.settings, { centre_name: name, center_name: name, centre_logo: logo, center_logo: logo });
       localStorage.setItem(AUTH_CENTER_NAME_KEY, name);
@@ -2741,7 +2747,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
         .sort((a, b) => a.student_name.localeCompare(b.student_name));
 
       const activeEnrollments = students.length;
-      const theoretical = activeEnrollments * raw.monthly_fee_cents;
+      const theoretical = store.enrollments.filter(e => e.group_id === raw.id && e.status === 'actif').reduce((sum, e) => sum + (e.custom_monthly_fee_cents ?? raw.monthly_fee_cents), 0);
       const activeIds = new Set(students.map((student) => student.enrollment_id));
       const collected = store.invoices
         .filter(
@@ -3116,7 +3122,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       // Atomic: restore the store snapshot if any item fails.
       const snapshot = JSON.stringify(store);
       try {
-        return items.map((item) => enrollOne(store, item.student_id, item.group_id, item.start_date));
+        return items.map((item) => enrollOne(store, item.student_id, item.group_id, item.start_date, item.custom_monthly_fee_cents ?? null));
       } catch (error) {
         Object.assign(store, JSON.parse(snapshot) as DevStore);
         throw error;
@@ -3163,7 +3169,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
             day_of_week: raw?.day_of_week ?? '',
             start_time: raw?.start_time ?? '',
             end_time: raw?.end_time ?? '',
-            monthly_fee_cents: raw?.monthly_fee_cents ?? 0,
+            monthly_fee_cents: enrollment.custom_monthly_fee_cents ?? raw?.monthly_fee_cents ?? 0,
             start_date: enrollment.start_date,
             end_date: enrollment.end_date,
             status: enrollment.status,
@@ -3214,7 +3220,7 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
           enrollment_id: enrollment.id,
           period_month: month,
           period_year: year,
-          amount_cents: group.monthly_fee_cents,
+          amount_cents: enrollment.custom_monthly_fee_cents ?? group.monthly_fee_cents,
           paid_amount_cents: 0,
           status: 'impayé',
           due_date: adjustDueDate(year, month, day),

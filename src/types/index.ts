@@ -165,6 +165,7 @@ export interface EnrollmentInput {
   student_id: number;
   group_id: number;
   start_date: string;
+  custom_monthly_fee_cents?: number | null;
 }
 
 export interface Receipt {
@@ -277,6 +278,7 @@ export interface StudentInvoice {
   kind: 'invoice' | 'enrollment_fee';
   school_year_label: string | null;
   group_subject: string;
+  group_name: string | null;
   group_level: string;
   group_branch: string | null;
   period_month: number;

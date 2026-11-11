@@ -357,7 +357,7 @@ export function StudentDetailPage() {
       )}
 
       {tab === 'finances' && (
-        <StudentFinancesTab studentId={student.id} onChanged={() => void load()} />
+        <StudentFinancesTab studentId={student.id} studentName={student.full_name} studentPhone={student.phone} onChanged={() => void load()} />
       )}
 
       {tab === 'history' && (

@@ -25,9 +25,9 @@ try {
   await id('nav-teachers').click(); await id(`teacher-card-${teacherId}`).click();
   await page.getByRole('heading', {name:'Prof Sans Config'}).waitFor();
   assert.equal(await page.getByRole('tab',{name:'Activités'}).count(),0);
-  assert.match(await id('compensation-config').innerText(), /Estimation indicative.*paiement réel.*manuellement/i);
-  assert.ok(await id('comp-mode').locator('option[value=fixed_monthly]').count());
-  assert.ok(await id('comp-mode').locator('option[value=percentage]').count());
+  assert.equal(await id('compensation-config').count(), 0);
+  assert.equal(await id('comp-mode').count(), 0);
+  assert.doesNotMatch(await page.locator('body').innerText(), /Estimation de rémunération/);
   await page.getByRole('tab',{name:'Paiements',exact:true}).click();
   await id('teacher-unattributed').waitFor(); await id('teacher-unattributed').locator('summary').click();
   assert.match(await id('teacher-unattributed').innerText(), /Ancien sans période/);

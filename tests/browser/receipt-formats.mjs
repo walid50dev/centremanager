@@ -14,10 +14,10 @@ try {
  await id('payment-next').click();
  await id('payment-confirm-print').click(); await id('receipt-preview').waitFor();
  assert.equal(await id('receipt-preview').getAttribute('data-template'),'thermal');
- for(const format of ['thermal58','a5','a4','thermal']) { await id(`receipt-template-${format}`).click(); assert.equal(await id('receipt-preview').getAttribute('data-template'),format); }
+ for(const format of ['thermal58','thermal']) { await id(`receipt-template-${format}`).click(); assert.equal(await id('receipt-preview').getAttribute('data-template'),format); }
  await page.getByRole('dialog').last().getByRole('button',{name:'Fermer',exact:true}).first().click();
  await id('nav-settings').click(); await page.getByRole('button',{name:/Impression/}).first().click();
- assert.equal(await page.getByRole('radiogroup').getByRole('radio').count(),4);
+ assert.equal(await page.getByRole('radiogroup').getByRole('radio').count(),2);
  await page.getByRole('radio',{name:/58 mm/}).click(); assert.equal(await call('cmd_get_setting',{key:'receipt_format'}),'thermal58');
- console.log('Browser receipt: optional payment note, four preview formats, thermal default and persistent settings passed.');
+ console.log('Browser receipt: optional payment note, two preview formats, thermal default and persistent settings passed.');
 } finally {await browser.close();}

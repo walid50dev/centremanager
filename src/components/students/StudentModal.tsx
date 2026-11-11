@@ -67,7 +67,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
     return () => { active = false; };
   }, [open, form.level]);
   const valid = form.first.trim() && form.last.trim() && form.level && form.enrollment && form.guardian.trim() &&
-    isValidPhone(form.phone) && (!form.studentPhone.trim() || isValidPhone(form.studentPhone)) && Number.isFinite(form.fee) && form.fee >= 0 && (!form.secondaryPhone.trim() || isValidPhone(form.secondaryPhone));
+    isValidPhone(form.phone) && isValidPhone(form.studentPhone) && Number.isFinite(form.fee) && form.fee >= 0 && (!form.secondaryPhone.trim() || isValidPhone(form.secondaryPhone));
   const relations = useMemo(() => ['father', 'mother', 'guardian', 'brother', 'sister', 'other'].map(value => ({ value, label: t(`students.relation_${value}`) })), [t]);
   const update = (key: keyof Form, value: string | number) => setForm(previous => ({ ...previous, [key]: value, ...(key === 'level' && value !== previous.level ? { branch: '' } : {}) }));
   const save = async () => {
@@ -105,7 +105,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
             options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
             onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}
             getOptionValue={branch => branch.id} clearable onCreate={() => setQuickBranch(true)} disableCreate={zIndex >= 70} />
-          <Input type="tel" dir="ltr" label={t('students.student_phone')} data-testid="student-phone" value={form.studentPhone} onChange={e => update('studentPhone', e.target.value)} error={form.studentPhone && !isValidPhone(form.studentPhone) ? t('students.validation.phoneFormat') : undefined} />
+          <Input type="tel" dir="ltr" label={t('students.student_phone')} required data-testid="student-phone" value={form.studentPhone} onChange={e => update('studentPhone', e.target.value)} error={showErrors && !form.studentPhone.trim() ? t('common.required') : form.studentPhone && !isValidPhone(form.studentPhone) ? t('students.validation.phoneFormat') : undefined} />
           <Input label={t('students.school_name')} data-testid="student-school-name" placeholder="Lycée Moulay Youssef" value={form.school} onChange={e => update('school', e.target.value)} />
           <Input type="date" label={t('students.birth_date')} data-testid="student-birth-date" value={form.birth} onChange={e => update('birth', e.target.value)} />
           <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
