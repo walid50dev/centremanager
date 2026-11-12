@@ -202,11 +202,19 @@ export function StudentsPage() {
       {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-body">
+          <table className="w-full min-w-[970px] border-collapse text-body" data-testid="students-table">
             <thead className="bg-background">
               <tr>
-                {['students.columns.name', 'students.columns.level', 'students.student_phone', 'students.guardian_column', 'students.groupsColumn', 'students.monthStatus', 'trash.actions'].map(key => (
-                  <th key={key} scope="col" className="border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted">{t(key)}</th>
+                {[
+                  ['students.columns.name', 'min-w-[180px]'],
+                  ['students.columns.level', 'min-w-[120px]'],
+                  ['students.student_phone', 'min-w-[150px]'],
+                  ['students.guardian_column', 'min-w-[180px]'],
+                  ['students.groupsColumn', 'min-w-[140px]'],
+                  ['students.monthStatus', 'min-w-[100px]'],
+                  ['trash.actions', 'min-w-[100px]'],
+                ].map(([key, width]) => (
+                  <th key={key} scope="col" className={cn('border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted', width)}>{t(key)}</th>
                 ))}
               </tr>
             </thead>
@@ -277,13 +285,13 @@ export function StudentsPage() {
                     tabIndex={0}
                     className="group cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                   >
-                    <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
-                    <td className="px-4 py-3 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
-                    <td className="px-4 py-3"><div className="flex items-center gap-2"><span dir="ltr">{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink testId={`student-whatsapp-${student.id}`} phone={student.phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
-                    <td className="px-4 py-3"><div>{student.guardian_name ?? '—'}</div><div className="flex items-center gap-2"><span dir="ltr">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink testId={`guardian-whatsapp-${student.id}`} phone={student.guardian_phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
-                    <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
-                    <td className="px-4 py-3"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'unpaid' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
-                    <td className="px-4 py-3"><div className="flex justify-end gap-1">
+                    <td className="px-4 py-2.5"><div className="flex items-center gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
+                    <td className="px-4 py-2.5 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
+                    <td className="px-4 py-2.5"><div className="flex flex-row flex-nowrap items-center gap-2" dir="ltr"><span className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`student-phone-text-${student.id}`}>{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink compact label={t('students.student_phone')} testId={`student-whatsapp-${student.id}`} phone={student.phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
+                    <td className="px-4 py-2.5"><div>{student.guardian_name ?? '—'}</div><div className="flex flex-row flex-nowrap items-center gap-2" dir="ltr"><span className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`guardian-phone-text-${student.id}`}>{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} testId={`guardian-whatsapp-${student.id}`} phone={student.guardian_phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
+                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
+                    <td className="px-4 py-2.5"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'unpaid' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
+                    <td className="px-4 py-2.5"><div className="flex justify-end gap-1">
                       <ViewButton name={student.full_name} testId={`view-student-${student.id}`} onView={() => navigate(`/students/${student.id}`)} />
                       <span onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Button variant="ghost" size="icon" title={t('students.edit')} aria-label={t('students.edit')} data-testid={`edit-student-${student.id}`} onClick={() => { setEditing(student); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button></span>
                       <TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} />

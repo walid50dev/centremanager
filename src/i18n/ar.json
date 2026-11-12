@@ -615,7 +615,8 @@
       "overdue": "متأخرة"
     },
     "whatsapp": "WhatsApp",
-    "whatsappMessage": "مرحباً، نذكّركم بلطف بأن أداء {{name}} عن مجموعة {{group}} لا يزال مستحقاً. شكراً لتعاونكم."
+    "whatsappMessage": "مرحباً، نذكّركم بلطف بأن أداء {{name}} عن مجموعة {{group}} لا يزال مستحقاً. شكراً لتعاونكم.",
+    "sendWhatsApp": "إرسال رسالة عبر واتساب"
   },
   "payments": {
     "tabCollections": "التحصيل",
