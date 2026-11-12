@@ -9,9 +9,10 @@ import EmptyState from '../ui/EmptyState';
 import { toast } from '../ui/Toast';
 import EnrollmentModal from './EnrollmentModal';
 import { enrollmentsApi } from '../../services/enrollments';
+import { groupsApi } from '../../services/groups';
 import { cn, formatCurrency, formatDate } from '../../utils/format';
 import { groupSchedule } from '../../utils/schedule';
-import type { StudentEnrollment } from '../../types';
+import type { Group, StudentEnrollment } from '../../types';
 
 export interface StudentEnrollmentsTabProps {
   studentId: number;
@@ -29,6 +30,7 @@ export function StudentEnrollmentsTab({
   const { t } = useTranslation();
 
   const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showEnded, setShowEnded] = useState(false);
@@ -38,7 +40,9 @@ export function StudentEnrollmentsTab({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setEnrollments(await enrollmentsApi.forStudent(studentId));
+      const [rows, groupRows] = await Promise.all([enrollmentsApi.forStudent(studentId), groupsApi.list()]);
+      setEnrollments(rows);
+      setGroups(groupRows);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -78,7 +82,7 @@ export function StudentEnrollmentsTab({
   const schedule = (enrollment: StudentEnrollment) => groupSchedule(t, enrollment);
 
   const groupLabel = (enrollment: StudentEnrollment) =>
-    `${enrollment.level_name}${enrollment.branch_name ? ` · ${enrollment.branch_name}` : ''}`;
+    groups.find(group => group.id === enrollment.group_id)?.name || `${enrollment.level_name}${enrollment.branch_name ? ` · ${enrollment.branch_name}` : ''}`;
 
   return (
     <div className="space-y-4">
@@ -123,7 +127,7 @@ export function StudentEnrollmentsTab({
           />
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]" data-testid="active-enrollments">
             <thead className="bg-background text-label text-muted">
               <tr>
@@ -131,7 +135,8 @@ export function StudentEnrollmentsTab({
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.group')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('groups.teacher')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.schedule')}</th>
-                <th className="px-4 py-2.5 text-end font-medium">{t('groups.monthlyFee')}</th>
+                <th className="whitespace-nowrap px-4 py-2.5 text-end font-medium">{t('students.standardFee')}</th>
+                <th className="whitespace-nowrap px-4 py-2.5 text-end font-medium">{t('students.personalFee')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.startDate')}</th>
                 <th className="px-4 py-2.5 text-end font-medium">{t('common.actions')}</th>
               </tr>
@@ -145,7 +150,10 @@ export function StudentEnrollmentsTab({
                     {enrollment.teacher_name ?? t('groups.noTeacher')}
                   </td>
                   <td className="px-4 py-2.5 text-muted">{schedule(enrollment)}</td>
-                  <td className="px-4 py-2.5 text-end">{formatCurrency(enrollment.monthly_fee_cents)}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-end">{groups.find(group => group.id === enrollment.group_id) ? formatCurrency(groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents) : '—'}</td>
+                  <td className={cn('whitespace-nowrap px-4 py-2.5 text-end', groups.find(group => group.id === enrollment.group_id) && enrollment.monthly_fee_cents < groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents && 'font-semibold text-success')}>
+                    {formatCurrency(enrollment.monthly_fee_cents)}{groups.find(group => group.id === enrollment.group_id) && enrollment.monthly_fee_cents < groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents ? ` (${t('students.reducedFee')})` : ''}
+                  </td>
                   <td className="px-4 py-2.5 text-muted">{formatDate(enrollment.start_date)}</td>
                   <td className="px-4 py-2.5 text-end">
                     <Button
@@ -182,7 +190,7 @@ export function StudentEnrollmentsTab({
           </button>
 
           {showEnded ? (
-            <div className="overflow-hidden rounded-lg border border-border opacity-80">
+            <div className="overflow-x-auto rounded-lg border border-border opacity-80">
               <table className="w-full text-[13px]" data-testid="ended-enrollments">
                 <thead className="bg-background text-label text-muted">
                   <tr>

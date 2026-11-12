@@ -6,6 +6,7 @@ import Button from '../ui/Button';
 import Card from '../ui/Card';
 import EmptyState from '../ui/EmptyState';
 import PaymentModal from '../payments/PaymentModal';
+import ReceiptPreviewModal from '../payments/ReceiptPreviewModal';
 import { toast } from '../ui/Toast';
 import { whatsappUrl } from '../../utils/whatsapp';
 import { invoicesApi } from '../../services/invoices';
@@ -36,22 +37,27 @@ export function StudentFinancesTab({ studentId, studentName, studentPhone, onCha
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [receiptId, setReceiptId] = useState<number | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState<number | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [invoiceRows, history] = await Promise.all([
         invoicesApi.forStudent(studentId),
-        paymentsApi.history({ studentId, limit: 100 }),
+        paymentsApi.history({ studentId, page: historyPage, limit: 20 }),
       ]);
       setInvoices(invoiceRows);
       setPayments(history.data);
+      setHistoryTotal(history.total);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
-  }, [studentId]);
+  }, [studentId, historyPage]);
 
   useEffect(() => {
     void load();
@@ -138,7 +144,7 @@ export function StudentFinancesTab({ studentId, studentName, studentPhone, onCha
           />
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-[13px]" data-testid="student-invoices">
             <thead className="bg-background text-label text-muted">
               <tr>
@@ -208,33 +214,45 @@ export function StudentFinancesTab({ studentId, studentName, studentPhone, onCha
             />
           </Card>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-[13px]" data-testid="student-payments">
               <thead className="bg-background text-label text-muted">
                 <tr>
                   <th className="px-4 py-2.5 text-start font-medium">{t('student.paymentDate')}</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-start font-medium">{t('students.paidMonth')}</th>
+                  <th className="px-4 py-2.5 text-start font-medium">{t('student.group')}</th>
                   <th className="px-4 py-2.5 text-end font-medium">{t('student.amount')}</th>
                   <th className="px-4 py-2.5 text-start font-medium">{t('student.paymentMethod')}</th>
                   <th className="px-4 py-2.5 text-start font-medium">{t('student.notes')}</th>
+                  <th className="px-4 py-2.5 text-start font-medium">{t('receipt.title')}</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map((payment) => (
-                  <tr key={payment.id} className="border-t border-border">
-                    <td className="px-4 py-2.5 text-muted">{formatDate(payment.created_at)}</td>
+                {payments.map((payment) => {
+                  const invoice = invoices.find(item => item.id === payment.invoice_id);
+                  return <tr key={payment.id} className="border-t border-border">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{formatDate(payment.created_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{invoice ? invoice.kind === 'enrollment_fee' ? invoice.school_year_label : periodLabel(t, invoice.period_month, invoice.period_year) : '—'}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{invoice ? invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : invoice.group_name || `${invoice.group_subject} — ${invoice.group_level}` : '—'}</td>
                     <td className="px-4 py-2.5 text-end font-medium tabular-nums text-success">
                       {formatCurrency(payment.amount_cents)}
                     </td>
                     <td className="px-4 py-2.5 text-muted">{methodLabel(t, payment.payment_method)}</td>
                     <td className="px-4 py-2.5 text-muted">{payment.notes ?? '—'}</td>
-                  </tr>
-                ))}
+                    <td className="px-4 py-2.5"><Button size="sm" variant="secondary" disabled={receiptBusy !== null} data-testid={`student-receipt-${payment.id}`} onClick={() => {
+                      setReceiptBusy(payment.id);
+                      void paymentsApi.createReceipt(payment.id).then(setReceiptId).catch(error => toast.error(error instanceof Error ? error.message : String(error))).finally(() => setReceiptBusy(null));
+                    }}>{t('students.viewReceipt')}</Button></td>
+                  </tr>;
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
+      {historyTotal > 20 && <div className="flex items-center justify-end gap-3"><Button size="sm" variant="secondary" disabled={historyPage <= 1} onClick={() => setHistoryPage(page => page - 1)}>{t('students.pagination.previous')}</Button><span className="text-sm text-muted">{t('students.pagination.page', { page: historyPage, total: Math.ceil(historyTotal / 20) })}</span><Button size="sm" variant="secondary" disabled={historyPage * 20 >= historyTotal} onClick={() => setHistoryPage(page => page + 1)}>{t('students.pagination.next')}</Button></div>}
+      {receiptId !== null && <ReceiptPreviewModal receiptId={receiptId} onClose={() => setReceiptId(null)} />}
       <PaymentModal
         open={paymentOpen}
         studentId={studentId}

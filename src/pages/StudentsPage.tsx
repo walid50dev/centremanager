@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Search, UserPlus, Users, Pencil } from 'lucide-react';
 import Badge from '../components/ui/Badge';
 import TrashButton from '../components/ui/TrashButton';
@@ -12,6 +11,8 @@ import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import StudentModal from '../components/students/StudentModal';
 import ImportButton from '../components/year-import/ImportButton';
+import Modal from '../components/ui/Modal';
+import StudentDetailPage from './StudentDetailPage';
 import { toast } from '../components/ui/Toast';
 import { levelsApi } from '../services/settings';
 import { studentsApi } from '../services/students';
@@ -32,7 +33,6 @@ type StatusFilter = '' | 'actif' | 'inactif';
 
 export function StudentsPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
   const [levelId, setLevelId] = useState<string>('');
@@ -43,8 +43,9 @@ export function StudentsPage() {
   const [result, setResult] = useState<PaginatedStudents>(EMPTY_PAGE);
   const [loading, setLoading] = useState(true);
   const loadSequence = useRef(0);
-  const [money, setMoney] = useState<Record<number, { groups: string[]; amount: number; status: 'none' | 'paid' | 'late' | 'unpaid' | 'notInvoiced' }>>({});
+  const [money, setMoney] = useState<Record<number, { groups: string[]; amount: number; status: 'none' | 'paid' | 'late' | 'partial' }>>({});
   const [modalOpen, setModalOpen] = useState(false);
+  const [viewing, setViewing] = useState<Student | null>(null);
   const [editing, setEditing] = useState<Student | null>(null);
 
   const debouncedSearch = useDebounce(search, 300);
@@ -82,7 +83,8 @@ export function StudentsPage() {
         const names = active.map(e => { const group = groups.find(g => g.id === e.group_id); return group?.name || `${e.subject_name} — ${e.level_name}`; });
         const current = invoices.filter(i => i.kind === 'invoice' && i.period_month === month && i.period_year === year && active.some(e => e.enrollment_id === i.enrollment_id) && i.status !== 'annulé');
         const amount = current.reduce((sum, invoice) => sum + invoice.remaining_cents, 0);
-        const status = !active.length ? 'none' : current.some(i => i.remaining_cents > 0 && i.due_date < todayIso()) ? 'late' : amount > 0 ? 'unpaid' : active.some(e => !current.some(i => i.enrollment_id === e.enrollment_id)) ? 'notInvoiced' : 'paid';
+        const missing = active.some(e => !current.some(i => i.enrollment_id === e.enrollment_id));
+        const status = current.some(i => i.remaining_cents > 0 && Boolean(i.due_date) && i.due_date < todayIso()) ? 'late' : amount > 0 && current.some(i => i.paid_amount_cents > 0) ? 'partial' : active.length > 0 && !missing && amount === 0 ? 'paid' : 'none';
         return [student.id, { groups: names, amount, status }] as const;
       }));
       if (sequence !== loadSequence.current) return;
@@ -202,16 +204,16 @@ export function StudentsPage() {
       {/* Table */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[970px] border-collapse text-body" data-testid="students-table">
+          <table className="w-full min-w-[1100px] border-collapse text-body" data-testid="students-table">
             <thead className="bg-background">
               <tr>
                 {[
                   ['students.columns.name', 'min-w-[180px]'],
                   ['students.columns.level', 'min-w-[120px]'],
-                  ['students.student_phone', 'min-w-[150px]'],
-                  ['students.guardian_column', 'min-w-[180px]'],
+                  ['students.guardian_column', 'min-w-[300px]'],
                   ['students.groupsColumn', 'min-w-[140px]'],
-                  ['students.monthStatus', 'min-w-[100px]'],
+                  ['students.monthStatus', 'min-w-[120px]'],
+                  ['students.statusColumn', 'min-w-[120px]'],
                   ['trash.actions', 'min-w-[100px]'],
                 ].map(([key, width]) => (
                   <th key={key} scope="col" className={cn('border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted', width)}>{t(key)}</th>
@@ -275,24 +277,24 @@ export function StudentsPage() {
                 result.data.map((student) => (
                   <tr
                     key={student.id}
-                    onClick={() => navigate(`/students/${student.id}`)}
+                    onClick={() => setViewing(student)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        navigate(`/students/${student.id}`);
+                        setViewing(student);
                       }
                     }}
                     tabIndex={0}
                     className="group cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                   >
-                    <td className="px-4 py-2.5"><div className="flex items-center gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
-                    <td className="px-4 py-2.5 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
-                    <td className="px-4 py-2.5"><div className="flex flex-row flex-nowrap items-center gap-2" dir="ltr"><span className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`student-phone-text-${student.id}`}>{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink compact label={t('students.student_phone')} testId={`student-whatsapp-${student.id}`} phone={student.phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
-                    <td className="px-4 py-2.5"><div>{student.guardian_name ?? '—'}</div><div className="flex flex-row flex-nowrap items-center gap-2" dir="ltr"><span className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`guardian-phone-text-${student.id}`}>{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} testId={`guardian-whatsapp-${student.id}`} phone={student.guardian_phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
-                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
-                    <td className="px-4 py-2.5"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'unpaid' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
-                    <td className="px-4 py-2.5"><div className="flex justify-end gap-1">
-                      <ViewButton name={student.full_name} testId={`view-student-${student.id}`} onView={() => navigate(`/students/${student.id}`)} />
+                    <td className="px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="whitespace-nowrap font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
+                    <td className="px-4 py-3 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
+                    <td className="px-4 py-3"><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><bdi>{student.guardian_name || '—'}</bdi><span dir="ltr" className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`guardian-phone-text-${student.id}`}>{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} testId={`guardian-whatsapp-${student.id}`} phone={student.guardian_phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
+                    <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
+                    <td className="px-4 py-3"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'partial' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
+                    <td className="px-4 py-3"><Badge variant={student.status === 'actif' ? 'success' : 'muted'}>{student.status === 'actif' ? t('students.active') : t('students.inactive')}</Badge></td>
+                    <td className="px-4 py-3"><div className="flex justify-end gap-1">
+                      <ViewButton name={student.full_name} testId={`view-student-${student.id}`} onView={() => setViewing(student)} />
                       <span onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Button variant="ghost" size="icon" title={t('students.edit')} aria-label={t('students.edit')} data-testid={`edit-student-${student.id}`} onClick={() => { setEditing(student); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button></span>
                       <TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} />
                     </div></td>
@@ -336,6 +338,10 @@ export function StudentsPage() {
           </Button>
         </div>
       </div>
+
+      <Modal open={viewing !== null} onClose={() => { setViewing(null); void load(); }} title={t('students.sheetTitle')} size="xl" zIndex={40} testId="student-sheet">
+        {viewing && <StudentDetailPage studentIdOverride={viewing.id} onClose={() => { setViewing(null); void load(); }} />}
+      </Modal>
 
       <StudentModal
         open={modalOpen}

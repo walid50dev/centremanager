@@ -57,7 +57,9 @@ try {
   await render(StudentPage); noYearDropdown();
   let button = query(`[data-testid="view-student-${student.id}"]`);
   assert.equal(button.title, 'Voir la fiche'); assert.match(button.getAttribute('aria-label'), /Voir la fiche/);
-  await click(button); assert.equal(path, `/students/${student.id}`);
+  await click(button); assert.equal(path, '/');
+  await act(async () => { await wait(250); });
+  assert.match(query('[data-testid="student-sheet"]').textContent, new RegExp(student.full_name));
   await render(TeachersPage); noYearDropdown();
   button = query(`[data-testid="view-teacher-${teacher.id}"]`);
   await act(async () => { button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key:'Enter', bubbles:true })); });

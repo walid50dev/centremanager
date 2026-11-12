@@ -262,6 +262,7 @@ export function EnrollmentModal({
       onClose={onClose}
       zIndex={zIndex}
       size="xl"
+      testId="enrollment-modal"
       title={t('enrollment.title')}
       description={
         mode === 'from_student'

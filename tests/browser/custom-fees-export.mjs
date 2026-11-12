@@ -15,9 +15,9 @@ try {
  await page.reload(); await page.locator('input[type=password]').fill('admin123'); await page.locator('form button[type=submit]').click();
  await page.getByTestId('nav-students').click();
  await page.getByTestId('view-student-'+sid).click();
- await page.getByRole('tab',{name:'Inscriptions'}).click();
+ await page.getByRole('tab',{name:'Groupes et tarifs'}).click();
  await page.getByRole('button',{name:'Inscrire à un groupe'}).first().click();
- const dialog=page.getByRole('dialog');
+ const dialog=page.getByTestId('enrollment-modal');
  const groupLabel=dialog.locator('label').filter({hasText:'333.77'}).last();
  await groupLabel.locator('input[type=checkbox]').check();
  await dialog.getByRole('button',{name:'Suivant'}).click();
@@ -28,9 +28,10 @@ try {
  await dialog.getByRole('button',{name:'Suivant'}).click();
  await dialog.getByRole('button',{name:"Confirmer l'inscription"}).click(); await dialog.waitFor({state:'hidden'});
  const invoices=await call('cmd_get_student_invoices',{studentId:sid}); assert.equal(invoices[0].amount_cents,17500);
- await page.getByRole('tab',{name:'Finances'}).click();
+ await page.getByRole('tab',{name:'Historique des paiements'}).click();
  const link=page.getByTestId(`whatsapp-${invoices[0].id}`); await link.waitFor();
  const href=new URL(await link.getAttribute('href')); assert.equal(href.pathname,'/212612345678'); assert.match(href.searchParams.get('text'),/Salma Essai/); assert.match(href.searchParams.get('text'),/Groupe Atlas/);
+ await page.getByTestId('student-sheet').getByRole('button',{name:'Fermer'}).first().click();
  await page.getByTestId('nav-settings').click();
  await page.getByRole('button',{name:/Année scolaire/}).first().click();
  const year=await call('cmd_get_active_school_year');
