@@ -23,7 +23,7 @@ try {
  const now=new Date(); await call('cmd_generate_monthly_invoices',{month:now.getMonth()+1,year:now.getFullYear()});
  await id('nav-students').click(); await row.waitFor(); assert.match(await row.innerText(),/Groupe Atlas/); assert.match(await row.innerText(),/En retard/);
  url=new URL(await id(`student-whatsapp-${student.id}`).getAttribute('href')); assert.match(url.searchParams.get('text'),/Groupe Atlas/); assert.match(url.searchParams.get('text'),/300/);
- await id('nav-payments').click(); await id('section-late').waitFor(); const late=id(`late-whatsapp-${student.id}`); await late.waitFor(); url=new URL(await late.getAttribute('href')); assert.equal(url.pathname,'/212612345678'); assert.match(url.searchParams.get('text'),/Salma Essai/); assert.match(url.searchParams.get('text'),/Groupe Atlas/); assert.match(url.searchParams.get('text'),/300/);
+ await id('nav-payments').click(); await id('section-late').waitFor(); const late=id(`late-whatsapp-${student.id}`); await late.waitFor(); assert.match(await late.innerText(),/WhatsApp/); assert.equal(await late.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(22, 163, 74)'); url=new URL(await late.getAttribute('href')); assert.equal(url.pathname,'/212612345678'); assert.match(url.searchParams.get('text'),/Salma Essai/); assert.match(url.searchParams.get('text'),/Groupe Atlas/); assert.match(url.searchParams.get('text'),/300/);
  // Choose an earlier month and actual date, rather than the day of entry.
  await id('payments-new').click(); await id('payment-student-trigger').click(); await id('payment-student-search').fill('Salma Essai'); await id(`payment-student-option-${student.id}`).click();
  const startYear=Number(yr.start_date.slice(0,4)), historical=`${startYear}-10`;

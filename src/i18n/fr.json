@@ -607,7 +607,8 @@
       "overdue": "en retard"
     },
     "whatsapp": "WhatsApp",
-    "whatsappMessage": "Bonjour, nous vous rappelons courtoisement que le paiement de {{name}} pour le groupe {{group}} reste en attente. Merci de votre attention."
+    "whatsappMessage": "Bonjour, nous vous rappelons courtoisement que le paiement de {{name}} pour le groupe {{group}} reste en attente. Merci de votre attention.",
+    "sendWhatsApp": "Envoyer un message WhatsApp"
   },
   "payments": {
     "tabCollections": "Encaissements",
