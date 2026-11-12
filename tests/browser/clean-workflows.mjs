@@ -12,17 +12,16 @@ try {
  await id('nav-students').click(); await page.getByRole('button',{name:/nouvel élève/i}).first().click();
  await id('student-last-name').fill('Essai'); await id('student-first-name').fill('Salma'); await id('student-level-trigger').click(); await id('student-level-option-1').click(); await id('student-phone').fill('0612345678'); await id('student-guardian-name').fill('Parent Essai'); await id('student-guardian-phone').fill('0712345678'); await id('student-save').click(); await page.getByRole('dialog').waitFor({state:'hidden'});
  const student=(await call('cmd_get_students',{search:'Essai'})).data[0];
- const row=page.getByRole('row').filter({hasText:'Salma Essai'}); await row.waitFor(); assert.match(await row.innerText(),/Sans groupe/);
- let url=new URL(await id(`student-whatsapp-${student.id}`).getAttribute('href')); assert.equal(url.pathname,'/212612345678'); assert.match(url.searchParams.get('text'),/Salma Essai/);
- url=new URL(await id(`guardian-whatsapp-${student.id}`).getAttribute('href')); assert.equal(url.pathname,'/212712345678');
+ const row=page.getByRole('row').filter({hasText:'Salma Essai'}); await row.waitFor(); assert.match(await row.innerText(),/Non défini/);
+ let url=new URL(await id(`guardian-whatsapp-${student.id}`).getAttribute('href')); assert.equal(url.pathname,'/212712345678');
  const yr=await call('cmd_get_active_school_year'); const gid=await call('cmd_create_group',{data:{name:'Groupe Atlas',subject_id:1,level_id:2,school_year_id:yr.id,monthly_fee_cents:30000,capacity:10,schedules:[]}});
- await id(`view-student-${student.id}`).click(); await page.getByRole('tab',{name:'Inscriptions'}).click(); await page.getByRole('button',{name:'Inscrire à un groupe'}).first().click();
- let dialog=page.getByRole('dialog'); await dialog.locator('input[type=checkbox]').first().check(); await dialog.getByRole('button',{name:'Suivant'}).click();
+ await id(`view-student-${student.id}`).click(); await page.getByRole('tab',{name:'Groupes et tarifs'}).click(); await page.getByRole('button',{name:'Inscrire à un groupe'}).first().click();
+ let dialog=page.getByTestId('enrollment-modal'); await dialog.locator('input[type=checkbox]').first().check(); await dialog.getByRole('button',{name:'Suivant'}).click();
  assert.match(await id(`level-warning-${gid}`).innerText(),/diffère/);
- await dialog.locator('input[type=date]').fill(yr.start_date); await dialog.getByRole('button',{name:'Suivant'}).click(); await dialog.getByRole('button',{name:'Suivant'}).click(); await dialog.getByRole('button',{name:"Confirmer l'inscription"}).click(); await dialog.waitFor({state:'hidden'});
+ await dialog.locator('input[type=date]').fill(yr.start_date); await dialog.getByRole('button',{name:'Suivant'}).click(); await dialog.getByRole('button',{name:'Suivant'}).click(); await dialog.getByRole('button',{name:"Confirmer l'inscription"}).click(); await dialog.waitFor({state:'hidden'}); await id('student-sheet').getByRole('button',{name:'Fermer'}).first().click();
  const now=new Date(); await call('cmd_generate_monthly_invoices',{month:now.getMonth()+1,year:now.getFullYear()});
  await id('nav-students').click(); await row.waitFor(); assert.match(await row.innerText(),/Groupe Atlas/); assert.match(await row.innerText(),/En retard/);
- url=new URL(await id(`student-whatsapp-${student.id}`).getAttribute('href')); assert.match(url.searchParams.get('text'),/Groupe Atlas/); assert.match(url.searchParams.get('text'),/300/);
+ url=new URL(await id(`guardian-whatsapp-${student.id}`).getAttribute('href')); assert.match(url.searchParams.get('text'),/Groupe Atlas/); assert.match(url.searchParams.get('text'),/300/);
  await id('nav-payments').click(); await id('section-late').waitFor(); const late=id(`late-whatsapp-${student.id}`); await late.waitFor(); assert.match(await late.innerText(),/WhatsApp/); assert.equal(await late.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(22, 163, 74)'); url=new URL(await late.getAttribute('href')); assert.equal(url.pathname,'/212612345678'); assert.match(url.searchParams.get('text'),/Salma Essai/); assert.match(url.searchParams.get('text'),/Groupe Atlas/); assert.match(url.searchParams.get('text'),/300/);
  // Choose an earlier month and actual date, rather than the day of entry.
  await id('payments-new').click(); await id('payment-student-trigger').click(); await id('payment-student-search').fill('Salma Essai'); await id(`payment-student-option-${student.id}`).click();

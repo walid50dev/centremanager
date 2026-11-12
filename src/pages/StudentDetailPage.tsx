@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   BookOpen,
-  History,
+  CalendarDays,
   Info,
   Pencil,
   ToggleLeft,
@@ -14,6 +14,7 @@ import {
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import WhatsAppLink from '../components/ui/WhatsAppLink';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 import StudentModal from '../components/students/StudentModal';
@@ -25,13 +26,13 @@ import { studentsApi } from '../services/students';
 import { cn, formatDate, formatDateTime, formatPhone } from '../utils/format';
 import type { AuditEntry, Student, StudentDetail } from '../types';
 
-type TabKey = 'info' | 'enrollments' | 'finances' | 'history';
+type TabKey = 'info' | 'enrollments' | 'finances' | 'attendance';
 
 const TABS: Array<{ key: TabKey; labelKey: string; icon: typeof Info }> = [
   { key: 'info', labelKey: 'students.tabInfo', icon: Info },
   { key: 'enrollments', labelKey: 'students.tabEnrollments', icon: BookOpen },
   { key: 'finances', labelKey: 'students.tabFinances', icon: Wallet },
-  { key: 'history', labelKey: 'students.tabHistory', icon: History },
+  { key: 'attendance', labelKey: 'students.tabAttendance', icon: CalendarDays },
 ];
 
 /** Coloured dot + label for an audit action. */
@@ -44,7 +45,7 @@ const ACTION_STYLES: Record<string, { dot: string; labelKey: string }> = {
 /** Human-readable field names for the UPDATE/STATUS details JSON. */
 const FIELD_LABEL_KEYS: Record<string, string> = {
   full_name: 'students.name', first_name: 'students.first_name', last_name: 'students.last_name',
-  birth_date: 'students.birth_date', phone: 'students.guardian_phone', guardian_phone: 'students.guardian_phone',
+  birth_date: 'students.birth_date', phone: 'students.student_phone', guardian_phone: 'students.guardian_phone',
   guardian_name: 'students.guardian_name', guardian_relation: 'students.guardian_relation',
   secondary_contact_name: 'students.secondary_contact', secondary_contact_phone: 'students.secondary_phone',
   school_name: 'students.school_name', enrollment_date: 'students.enrollment_date',
@@ -139,12 +140,13 @@ function AuditDetails({ entry, lookups }: { entry: AuditEntry; lookups: NameLook
   );
 }
 
-export function StudentDetailPage() {
+export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOverride?: number; onClose?: () => void } = {}) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const studentId = Number(id);
+  const studentId = studentIdOverride ?? Number(id);
+  const close = onClose ?? (() => navigate('/students'));
 
   const [detail, setDetail] = useState<StudentDetail | null>(null);
   const [lookups, setLookups] = useState<NameLookups>({ levels: new Map(), branches: new Map() });
@@ -230,7 +232,7 @@ export function StudentDetailPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/students')}
+          onClick={close}
           leftIcon={<ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />}
           className="self-start"
         >
@@ -252,19 +254,11 @@ export function StudentDetailPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/students')}
-            aria-label={t('students.back')}
-            title={t('students.back')}
-          >
-            <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
-          </Button>
+          {onClose ? <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span> : <Button variant="ghost" size="icon" onClick={close} aria-label={t('students.back')} title={t('students.back')}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" /></Button>}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate">{student.full_name}</h1>
-              <Badge variant={isActive ? 'success' : 'destructive'}>
+              <Badge variant={isActive ? 'success' : 'muted'}>
                 {isActive ? t('students.active') : t('students.inactive')}
               </Badge>
             </div>
@@ -275,7 +269,8 @@ export function StudentDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <WhatsAppLink compact label={t('students.student_phone')} phone={student.phone} message={t('students.contactMessage', { name: student.full_name })} />
           <Button
             variant="secondary"
             onClick={() => setModalOpen(true)}
@@ -335,7 +330,10 @@ export function StudentDetailPage() {
             <InfoRow label={t('students.birth_date')}>{student.birth_date ? formatDate(student.birth_date) : '—'}</InfoRow>
             <InfoRow label={t('students.enrollment_date')}>{formatDate(student.enrollment_date)}</InfoRow>
             <InfoRow label={t('students.guardian_name')}>{student.guardian_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.guardian_phone')}>{student.phone ? <a href={`tel:${student.phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}</InfoRow>
+            <InfoRow label={t('students.student_phone')}>{student.phone ? <a href={`tel:${student.phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}</InfoRow>
+            <InfoRow label={t('students.guardian_phone')}><div className="flex items-center gap-2"><span dir="ltr" className="whitespace-nowrap">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} /></div></InfoRow>
+            <InfoRow label={t('students.parentNames')}>—</InfoRow>
+            <InfoRow label={t('students.guardianCin')}>—</InfoRow>
             <InfoRow label={t('students.guardian_relation')}>{student.guardian_relation ? t(`students.relation_${student.guardian_relation}`) : '—'}</InfoRow>
             <InfoRow label={t('students.secondary_contact')}>{student.secondary_contact_name ?? '—'}</InfoRow>
             <InfoRow label={t('students.secondary_phone')}>{student.secondary_contact_phone ? <a href={`tel:${student.secondary_contact_phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-parent-phone">{formatPhone(student.secondary_contact_phone)}</a> : '—'}</InfoRow>
@@ -345,6 +343,10 @@ export function StudentDetailPage() {
             <InfoRow label={t('students.created')}>{formatDate(student.created_at)}</InfoRow>
             <InfoRow label={t('students.updated')}>{formatDate(student.updated_at)}</InfoRow>
           </dl>
+          <p className="mt-4 text-xs text-muted">{t('students.unavailableFields')}</p>
+          <details className="mt-4 border-t border-border pt-4"><summary className="cursor-pointer text-sm font-medium text-primary">{t('students.tabHistory')}</summary>
+            {detail.audit_log.length === 0 ? <p className="mt-2 text-sm text-muted">{t('students.historyEmpty')}</p> : <ol className="mt-3 space-y-3">{detail.audit_log.map(entry => <li key={entry.id}><span className="text-sm font-medium">{t((ACTION_STYLES[entry.action] ?? { labelKey: 'students.history.other' }).labelKey)}</span><span className="ms-2 text-xs text-muted">{formatDateTime(entry.created_at)}</span><AuditDetails entry={entry} lookups={lookups} /></li>)}</ol>}
+          </details>
         </Card>
       )}
 
@@ -360,42 +362,8 @@ export function StudentDetailPage() {
         <StudentFinancesTab studentId={student.id} studentName={student.full_name} studentPhone={student.phone} onChanged={() => void load()} />
       )}
 
-      {tab === 'history' && (
-        <Card className="p-5">
-          {detail.audit_log.length === 0 ? (
-            <EmptyState
-              icon={<History className="h-5 w-5" aria-hidden="true" />}
-              title={t('students.historyEmpty')}
-            />
-          ) : (
-            <ol className="relative space-y-4 border-s border-border ps-5">
-              {detail.audit_log.map((entry) => {
-                const style = ACTION_STYLES[entry.action] ?? {
-                  dot: 'bg-muted',
-                  labelKey: 'students.history.other',
-                };
-                return (
-                  <li key={entry.id} className="relative">
-                    <span
-                      className={cn(
-                        'absolute -start-[26px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white',
-                        style.dot,
-                      )}
-                      aria-hidden="true"
-                    />
-                    <p className="text-[13px] font-medium text-foreground">
-                      {t(style.labelKey)}
-                      <span className="ms-2 font-normal text-muted">
-                        {formatDateTime(entry.created_at)}
-                      </span>
-                    </p>
-                    <AuditDetails entry={entry} lookups={lookups} />
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </Card>
+      {tab === 'attendance' && (
+        <Card className="p-5"><EmptyState icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} title={t('students.attendanceSoon')} /></Card>
       )}
 
       <StudentModal

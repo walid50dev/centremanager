@@ -18,33 +18,36 @@ try {
   await page.locator('input[type=password]').fill('admin123');
   await page.locator('form button[type=submit]').click();
   await id('nav-students').click();
-  await id(`student-whatsapp-${student}`).waitFor();
+  await id(`guardian-whatsapp-${student}`).waitFor();
 
   for (const language of ['fr', 'ar']) {
     await page.evaluate(async language => (await import('/src/stores/appStore.ts')).useAppStore.getState().setLanguage(language), language);
     await page.waitForFunction(language => document.documentElement.lang === language, language);
-    await id(`student-whatsapp-${student}`).waitFor();
+    await id(`guardian-whatsapp-${student}`).waitFor();
     for (const width of [1440, 1024, 375]) {
       await page.setViewportSize({ width, height: 900 });
       const table = id('students-table');
       const widths = await table.locator('thead th').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
-      [180, 120, 150, 180, 140, 100, 100].forEach ( (minimum, i) => assert.ok(widths[i] >= minimum - 0.5, `${language} ${width}: column ${i} width ${widths[i]}`));
+      [180, 120, 300, 140, 120, 120, 100].forEach ( (minimum, i) => assert.ok(widths[i] >= minimum - 0.5, `${language} ${width}: column ${i} width ${widths[i]}`));
       const padding = await table.locator('tbody tr').first().locator('td').first().evaluate(node => getComputedStyle(node).paddingTop);
-      assert.equal(padding, '10px');
+      assert.equal(padding, '12px');
       const scroll = await table.evaluate(node => ({ client: node.parentElement.clientWidth, scroll: node.parentElement.scrollWidth, overflow: getComputedStyle(node.parentElement).overflowX }));
       if (width === 375) { assert.equal(scroll.overflow, 'auto'); assert.ok(scroll.scroll > scroll.client); }
-      for (const [kind, expected] of [['student', '06 61 07 08 09'], ['guardian', '07 12 34 56 78']]) {
+      assert.equal(widths.length, 7);
+      for (const [kind, expected] of [['guardian', '07 12 34 56 78']]) {
         const phone = id(`${kind}-phone-text-${student}`), link = id(`${kind}-whatsapp-${student}`);
         assert.equal(await phone.textContent(), expected);
         const metrics = await phone.evaluate(node => {
           const phone = node.getBoundingClientRect(), link = node.nextElementSibling.getBoundingClientRect(), cell = node.closest('td').getBoundingClientRect();
-          const a = node.nextElementSibling, style = getComputedStyle(a);
-          return { whiteSpace: getComputedStyle(node).whiteSpace, direction: getComputedStyle(node.parentElement).direction, phone: { left: phone.left, right: phone.right, top: phone.top, bottom: phone.bottom }, link: { left: link.left, right: link.right, top: link.top, bottom: link.bottom, width: link.width, height: link.height }, cell: { left: cell.left, right: cell.right }, background: style.backgroundColor, radius: style.borderRadius, color: style.color, svg: !!a.querySelector('svg path') };
+          const a = node.nextElementSibling, style = getComputedStyle(a), name = node.previousElementSibling.getBoundingClientRect();
+          return { name: { left: name.left, right: name.right, top: name.top, bottom: name.bottom }, nameWhiteSpace: getComputedStyle(node.previousElementSibling).whiteSpace, whiteSpace: getComputedStyle(node).whiteSpace, direction: getComputedStyle(node.parentElement).direction, phone: { left: phone.left, right: phone.right, top: phone.top, bottom: phone.bottom }, link: { left: link.left, right: link.right, top: link.top, bottom: link.bottom, width: link.width, height: link.height }, cell: { left: cell.left, right: cell.right }, background: style.backgroundColor, radius: style.borderRadius, color: style.color, svg: !!a.querySelector('svg path') };
         });
-        assert.equal(metrics.whiteSpace, 'nowrap'); assert.equal(metrics.direction, 'ltr');
-        assert.ok(Math.abs(metrics.link.left - metrics.phone.right - 8) < 0.5);
+        assert.equal(metrics.whiteSpace, 'nowrap'); assert.equal(metrics.nameWhiteSpace, 'nowrap');
+        assert.ok(metrics.name.top < metrics.phone.bottom && metrics.name.bottom > metrics.phone.top);
+        assert.ok(metrics.name.left >= metrics.cell.left && metrics.name.right <= metrics.cell.right);
+        assert.ok(Math.abs((metrics.direction === 'rtl' ? metrics.phone.left - metrics.link.right : metrics.link.left - metrics.phone.right) - 8) < 0.5);
         assert.ok(metrics.phone.top < metrics.link.bottom && metrics.phone.bottom > metrics.link.top);
-        assert.ok(metrics.phone.left >= metrics.cell.left && metrics.link.right <= metrics.cell.right);
+        assert.ok(metrics.phone.left >= metrics.cell.left && metrics.phone.right <= metrics.cell.right && metrics.link.left >= metrics.cell.left && metrics.link.right <= metrics.cell.right);
         assert.equal(metrics.link.width, 28); assert.equal(metrics.link.height, 28);
         assert.equal(metrics.background, 'rgb(37, 211, 102)'); assert.equal(metrics.color, 'rgb(255, 255, 255)'); assert.equal(metrics.radius, '9999px'); assert.ok(metrics.svg);
         assert.equal(await link.getAttribute('title'), language === 'fr' ? 'Envoyer un message WhatsApp' : 'إرسال رسالة عبر واتساب');
@@ -56,10 +59,10 @@ try {
   // Links should not activate the surrounding row, including keyboard activation.
   await page.evaluate(() => document.querySelectorAll('[data-testid*="-whatsapp-"]').forEach(a => a.addEventListener('click', e => e.preventDefault())));
   const url = page.url();
-  for (const kind of ['student', 'guardian']) {
+  for (const kind of ['guardian']) {
     const link = id(`${kind}-whatsapp-${student}`);
-    await link.click(); assert.equal(page.url(), url);
-    await link.focus(); await page.keyboard.press('Enter'); assert.equal(page.url(), url);
+    await link.click(); assert.equal(page.url(), url); assert.equal(await id('student-sheet').count(), 0);
+    await link.focus(); await page.keyboard.press('Enter'); assert.equal(page.url(), url); assert.equal(await id('student-sheet').count(), 0);
   }
   console.log('Browser: student table geometry, compact WhatsApp links, accessibility and row isolation passed in FR/AR at desktop and mobile widths.');
 } finally { await browser.close(); }

@@ -25,7 +25,7 @@ try {
   const student = await call('cmd_create_student', { data:{ full_name:'Nadia Alaoui', first_name:'Nadia', last_name:'Alaoui', phone:'0661234567', guardian_name:'Rachid Alaoui', guardian_phone:'0661234567', enrollment_date:'2026-09-01', level_id:1, status:'actif', enrollment_fee_cents:20000 } });
   await act(async () => { root.render(React.createElement(MemoryRouter, {initialEntries:[`/students/${student}`]}, React.createElement(Routes, null, React.createElement(Route, {path:'/students/:id', element:React.createElement(StudentDetail)})))); }); await act(async () => { await wait(400); });
   const button = text => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === text);
-  await click(button('Inscriptions'));
+  await click(button('Groupes et tarifs'));
   await click(button('Inscrire à un groupe')); await act(async () => { await wait(350); });
   const option = [...document.querySelectorAll('[role="dialog"] input[type="checkbox"]')].find(el => !el.disabled); assert.ok(option);
   await click(option);
@@ -34,7 +34,7 @@ try {
   const fee = (await call('cmd_get_student_invoices', {studentId:student})).find(i => i.kind === 'enrollment_fee');
   assert.ok(fee); assert.equal(fee.amount_cents, 20000);
   const result = {enrollment_fee_invoice_id:fee.id};
-  await click(button('Finances')); await act(async () => { await wait(300); });
+  await click(button('Historique des paiements')); await act(async () => { await wait(300); });
   const table = query('[data-testid="student-invoices"]'); assert.match(table.textContent, /Frais d'inscription/); assert.ok(table.textContent.includes(year.label)); assert.match(table.textContent, /Impayé/i);
   await act(async () => { root.render(React.createElement(Payment, { open:true, studentId:student, onClose:()=>{}, onSaved:()=>{} })); }); await act(async () => { await wait(350); });
   const choices = query('[data-testid="payment-invoices"]'); assert.match(choices.textContent, /Frais d'inscription/); assert.ok(choices.textContent.includes(year.label));
