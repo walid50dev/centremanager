@@ -415,7 +415,6 @@
     "address_placeholder": "الحي، الشارع، المدينة...",
     "notes_placeholder": "الاحتياجات الخاصة، أوقات التوفر، ملاحظات...",
     "quick_required": "الاسم الشخصي والعائلي والمستوى واسم ولي الأمر مطلوبة.",
-    "guardian_column": "معلومات ولي الأمر",
     "enrollment_column": "التسجيل",
     "delete_confirm": "حذف {{name}} نهائياً؟ ستفقد جميع بياناته في كل السنوات، بما فيها التسجيلات والمدفوعات والإيصالات.",
     "deleted": "حُذف التلميذ نهائياً",
@@ -446,7 +445,11 @@
     "viewReceipt": "عرض الوصل",
     "statusColumn": "حالة التلميذ",
     "fatherName": "اسم الأب",
-    "motherName": "اسم الأم"
+    "motherName": "اسم الأم",
+    "studentContact": "تواصل التلميذ",
+    "whatsappStudent": "واتساب التلميذ",
+    "whatsappGuardian": "واتساب ولي الأمر",
+    "studentReminder": "مرحباً {{name}}، تذكير بخصوص أدائك للمجموعة {{groups}}. المبلغ المتبقي هو {{amount}}. شكراً لك!"
   },
   "groups": {
     "title": "المجموعات",

@@ -21,7 +21,7 @@ import { invoicesApi } from '../services/invoices';
 import { groupsApi } from '../services/groups';
 import { FOCUS_SEARCH_EVENT } from '../hooks/useKeyboardShortcuts';
 import { useDebounce } from '../hooks/useDebounce';
-import { cn, formatCurrency, formatPhone } from '../utils/format';
+import { cn, formatPhone } from '../utils/format';
 import type { Level, PaginatedStudents, Student } from '../types';
 
 const PAGE_LIMIT = 20;
@@ -210,7 +210,7 @@ export function StudentsPage() {
                 {[
                   ['students.columns.name', 'min-w-[180px]'],
                   ['students.columns.level', 'min-w-[120px]'],
-                  ['students.guardian_column', 'min-w-[300px]'],
+                  ['students.studentContact', 'min-w-[300px]'],
                   ['students.groupsColumn', 'min-w-[140px]'],
                   ['students.monthStatus', 'min-w-[120px]'],
                   ['students.statusColumn', 'min-w-[120px]'],
@@ -289,7 +289,7 @@ export function StudentsPage() {
                   >
                     <td className="px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="whitespace-nowrap font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
                     <td className="px-4 py-3 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
-                    <td className="px-4 py-3"><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><bdi>{student.guardian_name || '—'}</bdi><span dir="ltr" className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`guardian-phone-text-${student.id}`}>{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} testId={`guardian-whatsapp-${student.id}`} phone={student.guardian_phone} message={t('students.reminder', { name: student.full_name, groups: money[student.id]?.groups.join(', ') || t('students.noGroup'), amount: formatCurrency(money[student.id]?.amount ?? 0) })} /></div></td>
+                    <td className="px-4 py-3"><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><span dir="ltr" className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`student-phone-text-${student.id}`}>{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink compact label={t('students.student_phone')} testId={`student-whatsapp-${student.id}`} phone={student.phone} /></div></td>
                     <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
                     <td className="px-4 py-3"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'partial' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
                     <td className="px-4 py-3"><Badge variant={student.status === 'actif' ? 'success' : 'muted'}>{student.status === 'actif' ? t('students.active') : t('students.inactive')}</Badge></td>

@@ -271,7 +271,8 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <WhatsAppLink compact label={t('students.student_phone')} phone={student.phone} message={t('students.contactMessage', { name: student.full_name })} />
+          <WhatsAppLink label={t('students.whatsappStudent')} testId="sheet-whatsapp-student" phone={student.phone} />
+          <WhatsAppLink label={t('students.whatsappGuardian')} testId="sheet-whatsapp-guardian" phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} />
           <Button
             variant="secondary"
             onClick={() => setModalOpen(true)}
@@ -331,8 +332,8 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
             <InfoRow label={t('students.birth_date')}>{student.birth_date ? formatDate(student.birth_date) : '—'}</InfoRow>
             <InfoRow label={t('students.enrollment_date')}>{formatDate(student.enrollment_date)}</InfoRow>
             <InfoRow label={t('students.guardian_name')}>{student.guardian_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.student_phone')}>{student.phone ? <a href={`tel:${student.phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}</InfoRow>
-            <InfoRow label={t('students.guardian_phone')}><div className="flex items-center gap-2"><span dir="ltr" className="whitespace-nowrap">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} /></div></InfoRow>
+            <InfoRow label={t('students.student_phone')}><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">{student.phone ? <a href={`tel:${student.phone}`} className="whitespace-nowrap text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}<WhatsAppLink compact label={t('students.student_phone')} testId="detail-whatsapp-student" phone={student.phone} /></div></InfoRow>
+            <InfoRow label={t('students.guardian_phone')}><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><span dir="ltr" className="whitespace-nowrap">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} testId="detail-whatsapp-guardian" phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} /></div></InfoRow>
             <InfoRow label={t('students.fatherName')}>{student.nom_pere || '—'}</InfoRow>
             <InfoRow label={t('students.motherName')}>{student.nom_mere || '—'}</InfoRow>
             <InfoRow label={t('students.guardianCin')}>{student.cin_tuteur || '—'}</InfoRow>
