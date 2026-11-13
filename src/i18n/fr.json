@@ -415,7 +415,6 @@
     "address_placeholder": "Quartier, rue, ville...",
     "notes_placeholder": "Besoins spécifiques, disponibilités, remarques...",
     "quick_required": "Le prénom, le nom, le niveau et le nom du tuteur sont obligatoires.",
-    "guardian_column": "Contact tuteur",
     "enrollment_column": "Inscription",
     "delete_confirm": "Supprimer définitivement {{name}} ? Toutes ses données de toutes les années (inscriptions, paiements, reçus) seront perdues.",
     "deleted": "Élève supprimé définitivement",
@@ -446,7 +445,11 @@
     "viewReceipt": "Voir le reçu",
     "statusColumn": "Statut élève",
     "fatherName": "Nom du père",
-    "motherName": "Nom de la mère"
+    "motherName": "Nom de la mère",
+    "studentContact": "Contact Élève",
+    "whatsappStudent": "WhatsApp Élève",
+    "whatsappGuardian": "WhatsApp Tuteur",
+    "studentReminder": "Bonjour {{name}}, un rappel concernant ton paiement pour le groupe {{groups}}. Le montant restant est de {{amount}}. Merci !"
   },
   "groups": {
     "title": "Groupes",
