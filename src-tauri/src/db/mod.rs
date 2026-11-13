@@ -146,6 +146,11 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         }
     }
     upgrade_student_columns(conn)?;
+    for column in ["cin_tuteur", "nom_pere", "nom_mere"] {
+        if !column_exists(conn, "students", column)? {
+            conn.execute_batch(&format!("ALTER TABLE students ADD COLUMN {column} TEXT;"))?;
+        }
+    }
     if !column_exists(conn, "students", "enrollment_fee_cents")? {
         conn.execute_batch("ALTER TABLE students ADD COLUMN enrollment_fee_cents INTEGER NOT NULL DEFAULT 0 CHECK(enrollment_fee_cents >= 0);
             UPDATE students SET enrollment_fee_cents = COALESCE((SELECT amount FROM enrollment_fees f WHERE f.student_id=students.id ORDER BY f.id DESC LIMIT 1), 0);")?;
@@ -362,6 +367,11 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
     let trash_year = expr(&["trash_school_year_id"], "NULL")?;
     let birth = expr(&["birth_date", "date_of_birth"], "NULL")?;
     let guardian = expr(&["guardian_name", "father_name"], "NULL")?;
+    let enrollment_fee = expr(&["enrollment_fee_cents"], "COALESCE((SELECT amount FROM enrollment_fees f WHERE f.student_id=students.id ORDER BY f.id DESC LIMIT 1), 0)")?;
+    let cin_tuteur = expr(&["cin_tuteur"], "NULL")?;
+    let nom_pere = expr(&["nom_pere", "father_name"], "NULL")?;
+    let nom_mere = expr(&["nom_mere"], "NULL")?;
+    let phone = expr(&["phone", "guardian_phone"], "NULL")?;
     let guardian_phone = expr(&["guardian_phone", "phone"], "NULL")?;
     let relation = expr(&["guardian_relation"], "NULL")?;
     let secondary_name = expr(&["secondary_contact_name"], "NULL")?;
@@ -376,9 +386,10 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE students_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL,
             first_name TEXT, last_name TEXT, birth_date TEXT, phone TEXT,
-            guardian_name TEXT, guardian_phone TEXT, guardian_relation TEXT,
+            guardian_name TEXT, cin_tuteur TEXT, nom_pere TEXT, nom_mere TEXT, guardian_phone TEXT, guardian_relation TEXT,
             secondary_contact_name TEXT, secondary_contact_phone TEXT, school_name TEXT,
             enrollment_date TEXT NOT NULL DEFAULT (date('now')),
+            enrollment_fee_cents INTEGER NOT NULL DEFAULT 0 CHECK(enrollment_fee_cents >= 0),
             level_id INTEGER REFERENCES levels(id) ON DELETE SET NULL,
             branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
             address TEXT, notes TEXT, status TEXT DEFAULT 'actif',
@@ -386,10 +397,10 @@ fn upgrade_student_columns(conn: &Connection) -> rusqlite::Result<()> {
             trash_school_year_id INTEGER REFERENCES school_years(id)
         );
         INSERT INTO students_new (id, full_name, first_name, last_name, birth_date, phone,
-          guardian_name, guardian_phone, guardian_relation, secondary_contact_name, secondary_contact_phone,
-          school_name, enrollment_date, level_id, branch_id, address, notes, status, created_at, updated_at, deleted_at, trash_school_year_id)
-        SELECT id, full_name, {first}, {last}, {birth}, {guardian_phone}, {guardian}, {guardian_phone},
-          {relation}, {secondary_name}, {secondary_phone}, {school}, {enrollment}, level_id, branch_id,
+          guardian_name, cin_tuteur, nom_pere, nom_mere, guardian_phone, guardian_relation, secondary_contact_name, secondary_contact_phone,
+          school_name, enrollment_date, enrollment_fee_cents, level_id, branch_id, address, notes, status, created_at, updated_at, deleted_at, trash_school_year_id)
+        SELECT id, full_name, {first}, {last}, {birth}, {phone}, {guardian}, {cin_tuteur}, {nom_pere}, {nom_mere}, {guardian_phone},
+          {relation}, {secondary_name}, {secondary_phone}, {school}, {enrollment}, {enrollment_fee}, level_id, branch_id,
           {address}, notes, status, created_at, updated_at, {deleted_at}, {trash_year} FROM students;
         DROP TABLE students;
         ALTER TABLE students_new RENAME TO students;

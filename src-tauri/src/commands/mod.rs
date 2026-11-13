@@ -18,6 +18,7 @@
 
 #[cfg(test)]
 pub mod activities;
+pub mod absences;
 pub mod auth;
 pub mod backup;
 pub mod compensation;

@@ -1,9 +1,9 @@
 //! Payment commands (Phase 5).
 //!
-//! Money is **prepaid** and **never deleted**: recording a payment allocates the
+//! Money is **prepaid**: recording a payment allocates the
 //! amount to the oldest unpaid invoices first (by `due_date`, then `id`), and
 //! anything left over becomes an *advance* (`invoice_id = NULL`) for the next
-//! months. Nothing in this module can remove a payment or an invoice.
+//! months. Explicit deletion removes an entire payment batch and recalculates invoices.
 //!
 //! Receipts are **snapshots**: [`create_receipt`] copies the student name, the
 //! amount, the payment date and the group labels into the `receipts` row, so a
@@ -293,10 +293,16 @@ pub fn payments_history(
     let mut stmt = conn
         .prepare(&format!(
             "SELECT p.id, p.student_id, s.full_name, p.invoice_id, p.amount_cents,
-                    COALESCE(p.payment_method, ''), p.notes, COALESCE(p.created_at, '')
+                    COALESCE(p.payment_method, ''), p.notes, COALESCE(p.created_at, ''), i.period_month, i.period_year, COALESCE(NULLIF(TRIM(g.name),''), TRIM(COALESCE(su.name,'') || ' ' || COALESCE(l.name,''))), CASE WHEN f.id IS NOT NULL THEN 'enrollment_fee' WHEN p.invoice_id IS NULL THEN 'advance' ELSE 'invoice' END, y.label
              FROM payments p
              JOIN students s ON s.id = p.student_id
              LEFT JOIN invoices i ON i.id = p.invoice_id
+             LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
+             LEFT JOIN school_years y ON y.id=f.school_year_id
+             LEFT JOIN enrollments e ON e.id=i.enrollment_id
+             LEFT JOIN groups g ON g.id=e.group_id
+             LEFT JOIN subjects su ON su.id=g.subject_id
+             LEFT JOIN levels l ON l.id=g.level_id
              {where_clause}
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT ?4 OFFSET ?5"
@@ -308,6 +314,11 @@ pub fn payments_history(
             params![student_id, filter_month, filter_year, limit, offset],
             |row| {
                 Ok(PaymentRow {
+                    period_month: row.get(8)?,
+                    period_year: row.get(9)?,
+                    group_name: row.get(10)?,
+                    invoice_kind: row.get(11)?,
+                    school_year_label: row.get(12)?,
                     id: row.get(0)?,
                     student_id: row.get(1)?,
                     student_name: row.get(2)?,
@@ -366,6 +377,38 @@ fn receipt_session(conn: &Connection, payment_id: i64) -> Result<Vec<i64>, Strin
     }
     Ok(vec![payment_id])
 }
+
+/// Delete one whole transaction, including its receipt, atomically. Each history
+/// row is an allocation; deleting one must not leave a partially valid receipt.
+pub fn delete_payment(conn: &Connection, payment_id: i64) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(|e| db_err("Ouverture de la transaction", e))?;
+    let ids = receipt_session(&tx, payment_id)?;
+    let owner: i64 = tx.query_row("SELECT student_id FROM payments WHERE id=?1", params![payment_id], |r| r.get(0)).map_err(|e| db_err("Lecture du paiement",e))?;
+    let mut removed = Vec::new();
+    for id in &ids {
+        let (student_id, invoice_id, amount, allowed): (i64, Option<i64>, i64, bool) = tx.query_row(
+            "SELECT student_id, invoice_id, amount_cents, (school_year_id IS NULL OR school_year_id=(SELECT id FROM school_years WHERE is_active=1 LIMIT 1)) FROM payments WHERE id=?1", params![id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).map_err(|e| db_err("Lecture du paiement", e))?;
+        if !allowed { return Err("Paiement hors de l'année scolaire active".into()); }
+        if student_id != owner { return Err("Transaction incohérente ; suppression annulée".into()); }
+        if let Some(invoice) = invoice_id {
+            let (paid, due, previous_status): (i64, i64, String) = tx.query_row("SELECT COALESCE(paid_amount_cents,0),amount_cents,COALESCE(status,'impayé') FROM invoices WHERE id=?1", params![invoice], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(|e| db_err("Lecture de la facture", e))?;
+            if amount < 0 || paid < amount { return Err("Paiement incohérent avec la facture ; suppression annulée".into()); }
+            let remaining_paid = paid - amount;
+            tx.execute("UPDATE invoices SET paid_amount_cents=?1,status=?2 WHERE id=?3", params![remaining_paid,if previous_status == "annulé" { "annulé" } else { status_for(remaining_paid,due) },invoice]).map_err(|e| db_err("Mise à jour de la facture",e))?;
+        }
+        removed.push(json!({"id":id,"student_id":student_id,"invoice_id":invoice_id,"amount_cents":amount}));
+    }
+    for id in &ids {
+        tx.execute("DELETE FROM receipts WHERE payment_id=?1", params![id]).map_err(|e|db_err("Suppression du reçu",e))?;
+        tx.execute("DELETE FROM payments WHERE id=?1", params![id]).map_err(|e|db_err("Suppression du paiement",e))?;
+    }
+    tx.execute("INSERT INTO audit_log(action,entity_type,entity_id,details) VALUES('DELETE_PAYMENT','payment',?1,?2)", params![payment_id,json!({"student_id":owner,"deleted_allocations":removed}).to_string()]).map_err(|e|db_err("Journalisation",e))?;
+    tx.commit().map_err(|e| db_err("Validation de la suppression",e))
+}
+
+#[tauri::command]
+pub fn cmd_delete_payment(db: State<'_, Db>, payment_id: i64) -> Result<(), String> { delete_payment(&db.conn(), payment_id) }
 
 fn receipt_items(conn: &Connection, ids: &[i64]) -> Result<Vec<ReceiptItem>, String> {
     let mut items = Vec::new();
@@ -829,6 +872,27 @@ mod tests {
             .into_iter()
             .map(|invoice| invoice.id)
             .collect()
+    }
+
+    #[test]
+    fn deleting_one_allocation_reverses_whole_batch_and_receipt() {
+        let conn = test_conn();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        let student_id = student(&conn, "Salma", "0612345678");
+        let first = group_of(&conn, 1, 10, 10000);
+        let second = group_of(&conn, 2, 10, 20000);
+        enroll_student(&conn, student_id, first, "2026-03-01").unwrap();
+        enroll_student(&conn, student_id, second, "2026-03-01").unwrap();
+        let invoices = invoice_ids(&conn, student_id);
+        let payment = record_payment(&conn, student_id, &invoices, 35000, "espèces", None).unwrap();
+        let receipt = create_receipt(&conn, payment).unwrap();
+        let session = receipt_session(&conn, payment).unwrap();
+        assert_eq!(session.len(), 3);
+        delete_payment(&conn, *session.last().unwrap()).unwrap();
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM payments", [], |r| r.get::<_,i64>(0)).unwrap(), 0);
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM receipts WHERE id=?1", params![receipt], |r| r.get::<_,i64>(0)).unwrap(), 0);
+        assert!(student_invoices(&conn, student_id).unwrap().iter().all(|i| i.paid_amount_cents == 0));
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM audit_log WHERE action='DELETE_PAYMENT'", [], |r| r.get::<_,i64>(0)).unwrap(), 1);
     }
 
     #[test]

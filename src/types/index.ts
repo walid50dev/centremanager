@@ -202,6 +202,9 @@ export interface Student {
   birth_date: string | null;
   phone: string;
   guardian_name: string | null;
+  cin_tuteur?: string | null;
+  nom_pere?: string | null;
+  nom_mere?: string | null;
   guardian_phone: string | null;
   guardian_relation: string | null;
   secondary_contact_name: string | null;
@@ -254,6 +257,9 @@ export interface StudentInput {
   birth_date: string | null;
   phone: string;
   guardian_name: string | null;
+  cin_tuteur?: string | null;
+  nom_pere?: string | null;
+  nom_mere?: string | null;
   guardian_phone: string | null;
   guardian_relation: string | null;
   secondary_contact_name: string | null;
@@ -292,6 +298,8 @@ export interface StudentInvoice {
 
 /** One student's balance for a month, as shown on the Payments dashboard. */
 export interface InvoiceAlert {
+  guardian_name: string | null;
+  guardian_phone: string | null;
   student_id: number;
   student_name: string;
   student_phone: string;
@@ -314,6 +322,11 @@ export interface PaymentAlerts {
 
 /** One row of the payments history. */
 export interface PaymentRow {
+  period_month: number | null;
+  period_year: number | null;
+  group_name: string | null;
+  invoice_kind: 'invoice' | 'enrollment_fee' | 'advance';
+  school_year_label: string | null;
   id: number;
   student_id: number;
   student_name: string;

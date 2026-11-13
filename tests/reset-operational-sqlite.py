@@ -25,13 +25,17 @@ class ResetTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             file=Path(tmp)/'copy.db'; shutil.copyfile(ROOT/'test-data/centremanager-charge.db',file)
             db=sqlite3.connect(file); db.execute('PRAGMA foreign_keys=ON')
+            schema=(ROOT/'src-tauri/src/db/schema.sql').read_text()
+            db.execute(re.search(r'CREATE TABLE IF NOT EXISTS absences \(.*?\);',schema,re.S).group(0))
+            student,group=db.execute('SELECT student_id,group_id FROM enrollments LIMIT 1').fetchone()
+            db.execute("INSERT INTO absences(student_id,group_id,absence_date) VALUES(?,?,'2026-01-01')",(student,group)); db.commit()
             before=db.execute('select count(*) from students').fetchone()[0]; self.assertGreater(before,0)
             settings=db.execute('select count(*) from settings').fetchone()[0]
             source=(ROOT/'src-tauri/src/commands/settings.rs').read_text()
             block=source.split('pub fn reset_operational_data',1)[1]
             sql=re.search(r'tx.execute_batch\(r#"(.*?)"#\)',block,re.S).group(1)
             db.executescript('BEGIN;'+sql+'COMMIT;')
-            for table in ('students','groups','teachers','enrollments','invoices','payments','receipts','teacher_activities','teacher_compensation','teacher_settlements','monthly_expenses','audit_log','enrollment_fees','enrollment_fee_attempts','group_schedules','student_school_years','teacher_school_years','group_year_imports','teacher_subjects'):
+            for table in ('absences','students','groups','teachers','enrollments','invoices','payments','receipts','teacher_activities','teacher_compensation','teacher_settlements','monthly_expenses','audit_log','enrollment_fees','enrollment_fee_attempts','group_schedules','student_school_years','teacher_school_years','group_year_imports','teacher_subjects'):
                 self.assertEqual(db.execute(f'SELECT count(*) FROM {table}').fetchone()[0],0,table)
             self.assertGreater(db.execute('select count(*) from levels').fetchone()[0],0)
             self.assertEqual(db.execute('select count(*) from settings').fetchone()[0],settings)

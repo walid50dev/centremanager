@@ -6,8 +6,8 @@ import type { PaginatedPayments, ReceiptData } from '../types';
  * Typed wrappers for the payment commands
  * (`src-tauri/src/commands/payments.rs`).
  *
- * Payments and invoices are never deleted: there is deliberately no `remove`
- * in this API.
+ * Removing a payment deletes its entire allocation batch and receipt after
+ * confirmation and recalculates the affected invoice balances.
  */
 const USE_DEV_BACKEND = import.meta.env.DEV && !isTauri();
 
@@ -54,6 +54,8 @@ export const paymentsApi = {
       page: filters.page ?? 1,
       limit: filters.limit ?? 20,
     }),
+
+  remove: (paymentId: number) => call<void>('cmd_delete_payment', { paymentId }),
 
   createReceipt: (paymentId: number) => call<number>('cmd_create_receipt', { paymentId }),
 

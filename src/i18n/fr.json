@@ -437,17 +437,16 @@
     },
     "sheetTitle": "Fiche élève",
     "tabAttendance": "Absences et suivi",
-    "attendanceSoon": "🚧 Module de suivi des absences : Prochainement disponible",
     "contactMessage": "Bonjour, concernant {{name}}.",
-    "parentNames": "Nom du père / de la mère",
     "guardianCin": "CIN du tuteur",
-    "unavailableFields": "Les noms distincts des parents et le CIN ne sont pas disponibles dans la base actuelle.",
     "standardFee": "Tarif standard",
     "personalFee": "Tarif élève",
     "reducedFee": "Réduction",
     "paidMonth": "Mois payé",
     "viewReceipt": "Voir le reçu",
-    "statusColumn": "Statut élève"
+    "statusColumn": "Statut élève",
+    "fatherName": "Nom du père",
+    "motherName": "Nom de la mère"
   },
   "groups": {
     "title": "Groupes",
@@ -640,16 +639,12 @@
     "upcomingEmptyHint": "Les échéances des trois prochains jours apparaîtront ici.",
     "currentEmpty": "Aucun paiement ce mois",
     "currentEmptyHint": "Les élèves ayant tout réglé apparaîtront ici.",
-    "daysLate": "Jours de retard",
-    "dueDate": "Échéance",
     "amountDue": "Montant dû",
     "amountPaid": "Montant payé",
     "paymentDate": "Date paiement",
     "method": "Mode",
-    "collect": "Encaisser",
     "groups": "Groupe(s)",
     "name": "Nom",
-    "phone": "Téléphone",
     "students_one": "{{count}} élève",
     "students_other": "{{count}} élèves",
     "monthNames": [
@@ -671,7 +666,14 @@
     "teacherSummary": {
       "teacher": "Enseignant"
     },
-    "newPayment": "Encaisser un paiement"
+    "newPayment": "Encaisser un paiement",
+    "historyTab": "Historique",
+    "period": "Mois concerné",
+    "recordPayment": "Enregistrer le paiement",
+    "printReceipt": "Imprimer le reçu",
+    "deletePayment": "Supprimer le paiement",
+    "confirmDeletePayment": "Supprimer définitivement toute la transaction, ses affectations et son reçu ? Les factures concernées et les totaux seront recalculés. Cette action est irréversible.",
+    "deleted": "Paiement et reçu supprimés"
   },
   "expenses": {
     "title": "Frais du mois",
@@ -1085,5 +1087,20 @@
   },
   "actions": {
     "view": "Voir la fiche"
+  },
+  "attendance": {
+    "add": "Ajouter une absence",
+    "date": "Date",
+    "justified": "Justifiée",
+    "reason": "Motif",
+    "yes": "Oui",
+    "no": "Non",
+    "empty": "Aucune absence enregistrée",
+    "emptyHint": "Les absences de cet élève apparaîtront ici.",
+    "noGroup": "Inscrivez d’abord cet élève à un groupe de l’année active.",
+    "delete": "Supprimer l’absence",
+    "confirmDelete": "Supprimer définitivement cette absence ?",
+    "added": "Absence enregistrée",
+    "deleted": "Absence supprimée"
   }
 }

@@ -437,17 +437,16 @@
     },
     "sheetTitle": "ملف التلميذ",
     "tabAttendance": "الغياب والمتابعة",
-    "attendanceSoon": "🚧 وحدة متابعة الغياب: متاحة قريباً",
     "contactMessage": "مرحباً، بخصوص {{name}}.",
-    "parentNames": "اسم الأب / الأم",
     "guardianCin": "بطاقة هوية ولي الأمر",
-    "unavailableFields": "أسماء الوالدين المنفصلة ورقم هوية ولي الأمر غير متوفرة في قاعدة البيانات الحالية.",
     "standardFee": "التعريفة العادية",
     "personalFee": "تعريفة التلميذ",
     "reducedFee": "تخفيض",
     "paidMonth": "الشهر المدفوع",
     "viewReceipt": "عرض الوصل",
-    "statusColumn": "حالة التلميذ"
+    "statusColumn": "حالة التلميذ",
+    "fatherName": "اسم الأب",
+    "motherName": "اسم الأم"
   },
   "groups": {
     "title": "المجموعات",
@@ -652,16 +651,12 @@
     "upcomingEmptyHint": "ستظهر هنا الاستحقاقات الثلاثة أيام القادمة.",
     "currentEmpty": "لا يوجد دفع هذا الشهر",
     "currentEmptyHint": "سيظهر هنا التلاميذ الذين سددوا كل شيء.",
-    "daysLate": "أيام التأخير",
-    "dueDate": "تاريخ الاستحقاق",
     "amountDue": "المبلغ المستحق",
     "amountPaid": "المبلغ المدفوع",
     "paymentDate": "تاريخ الدفع",
     "method": "الطريقة",
-    "collect": "تحصيل",
     "groups": "المجموعة/المجموعات",
     "name": "الاسم",
-    "phone": "الهاتف",
     "students_zero": "لا تلاميذ",
     "students_one": "تلميذ واحد",
     "students_two": "تلميذان",
@@ -691,7 +686,14 @@
     "teacherSummary": {
       "teacher": "الأستاذ"
     },
-    "newPayment": "تسجيل دفعة"
+    "newPayment": "تسجيل دفعة",
+    "historyTab": "السجل",
+    "period": "الشهر المعني",
+    "recordPayment": "تسجيل الدفع",
+    "printReceipt": "طباعة الوصل",
+    "deletePayment": "حذف الدفع",
+    "confirmDeletePayment": "حذف المعاملة كاملةً وتوزيعاتها ووصلها نهائياً؟ ستُعاد حساب الفواتير والمجاميع. لا يمكن التراجع عن هذا الإجراء.",
+    "deleted": "تم حذف الدفع والوصل"
   },
   "expenses": {
     "title": "مصاريف الشهر",
@@ -1133,5 +1135,20 @@
   },
   "actions": {
     "view": "عرض البطاقة"
+  },
+  "attendance": {
+    "add": "إضافة غياب",
+    "date": "التاريخ",
+    "justified": "مبرر",
+    "reason": "السبب",
+    "yes": "نعم",
+    "no": "لا",
+    "empty": "لا توجد غيابات مسجلة",
+    "emptyHint": "ستظهر غيابات التلميذ هنا.",
+    "noGroup": "سجّل التلميذ أولاً في مجموعة من السنة النشطة.",
+    "delete": "حذف الغياب",
+    "confirmDelete": "هل تريد حذف هذا الغياب نهائياً؟",
+    "added": "تم تسجيل الغياب",
+    "deleted": "تم حذف الغياب"
   }
 }

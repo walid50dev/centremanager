@@ -112,6 +112,8 @@ interface DevStore {
   nextSubjectId: number;
   nextYearId: number;
   students: Student[];
+  absences?: Array<{ id: number; student_id: number; group_id: number; absence_date: string; reason: string | null; is_justified: boolean; created_at: string }>;
+  nextAbsenceId?: number;
   groups: Group[];
   enrollments: DevEnrollment[];
   invoices: DevInvoice[];
@@ -362,6 +364,7 @@ function seed(): DevStore {
     ...seedTeachers(),
     expenses: demo ? seedExpenses() : [],
     ...(demo ? {} : { groups: [], enrollments: [], invoices: [], payments: [], receipts: [], teachers: [], teacherActivities: [], teacherSettlements: [], nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1, nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1 }),
+    absences: [], nextAbsenceId: 1,
     auditLog: [],
     nextStudentId: demo ? 5 : 1,
     nextExpenseId: demo ? 8 : 1,
@@ -808,7 +811,7 @@ function validateStudentInput(store: DevStore, input: Record<string, unknown>): 
   if (status !== 'actif' && status !== 'inactif') throw new Error('Statut invalide');
   return { full_name, first_name: nullable(input.first_name), last_name: nullable(input.last_name),
     birth_date: nullable(input.birth_date), phone, guardian_phone: guardianPhone,
-    guardian_name: nullable(input.guardian_name), guardian_relation: nullable(input.guardian_relation),
+    guardian_name: nullable(input.guardian_name), cin_tuteur: nullable(input.cin_tuteur), nom_pere: nullable(input.nom_pere), nom_mere: nullable(input.nom_mere), guardian_relation: nullable(input.guardian_relation),
     secondary_contact_name: nullable(input.secondary_contact_name), secondary_contact_phone,
     school_name: nullable(input.school_name), enrollment_date: text(input.enrollment_date) || new Date().toISOString().slice(0, 10),
     level_id, branch_id, address: nullable(input.address), notes: nullable(input.notes), status,
@@ -834,6 +837,7 @@ function load(): DevStore {
           last_name: student.last_name ?? names.slice(1).join(' '),
           birth_date: student.birth_date ?? (old['date_of_birth'] as string | null) ?? null,
           guardian_name: student.guardian_name ?? (old['father_name'] as string | null) ?? null,
+          cin_tuteur: student.cin_tuteur ?? null, nom_pere: student.nom_pere ?? (old['father_name'] as string | null) ?? null, nom_mere: student.nom_mere ?? null,
           guardian_phone: student.guardian_phone ?? student.phone,
           guardian_relation: student.guardian_relation ?? null,
           secondary_contact_name: student.secondary_contact_name ?? null,
@@ -846,6 +850,8 @@ function load(): DevStore {
         return migrated;
       });
       // Stores written before Phase 5 have no payments/receipts.
+      parsed.absences ??= [];
+      parsed.nextAbsenceId ??= Math.max(0, ...parsed.absences.map(row => row.id)) + 1;
       parsed.payments ??= [];
       parsed.receipts ??= [];
       parsed.nextPaymentId ??= parsed.payments.length + 1;
@@ -1323,6 +1329,8 @@ function devAlerts(store: DevStore, month: number, year: number): PaymentAlerts 
       student_id: student.id,
       student_name: student.full_name,
       student_phone: student.phone,
+      guardian_name: student.guardian_name,
+      guardian_phone: student.guardian_phone,
       groups: '',
       total_due_cents: 0,
       total_paid_cents: 0,
@@ -1527,6 +1535,11 @@ function devPaymentsHistory(
 
   const data: PaymentRow[] = filtered.slice(start, start + safeLimit).map((payment) => ({
     id: payment.id,
+    period_month: store.invoices.find(i => i.id === payment.invoice_id)?.period_month ?? null,
+    period_year: store.invoices.find(i => i.id === payment.invoice_id)?.period_year ?? null,
+    group_name: payment.invoice_id === null ? null : (() => { const invoice = store.invoices.find(i => i.id === payment.invoice_id); return invoice && !invoice.fee_student_id ? devGroupLabel(store, invoice) : null; })(),
+    invoice_kind: payment.invoice_id === null ? 'advance' : store.invoices.find(i => i.id === payment.invoice_id)?.fee_student_id ? 'enrollment_fee' : 'invoice',
+    school_year_label: store.schoolYears.find(y => y.id === store.invoices.find(i => i.id === payment.invoice_id)?.fee_school_year_id)?.label ?? null,
     student_id: payment.student_id,
     student_name: store.students.find((entry) => entry.id === payment.student_id)?.full_name ?? '—',
     invoice_id: payment.invoice_id,
@@ -2004,6 +2017,7 @@ function removeGroup(store: DevStore, id: number) {
   removePayments(store, new Set(affected.map(p => p.id)));
   store.invoices = store.invoices.filter(i => !invoices.has(i.id));
   store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
+  store.absences = (store.absences ?? []).filter(a => a.group_id !== id);
   store.groups = store.groups.filter(g => g.id !== id);
   for (const [key,value] of Object.entries(store.groupImports ?? {})) if (Number(key.split(':')[0]) === id || value === id) delete store.groupImports![key];
 }
@@ -2020,6 +2034,7 @@ function removeStudent(store: DevStore, id: number) {
   removePayments(store, paymentIds);
   store.invoices = store.invoices.filter(i => !invoices.has(i.id) && i.fee_student_id !== id);
   store.enrollments = store.enrollments.filter(e => !enrollments.has(e.id));
+  store.absences = (store.absences ?? []).filter(a => a.student_id !== id);
   store.students = store.students.filter(s => s.id !== id); delete store.studentYears![id];
   store.auditLog = store.auditLog.filter(row => row.entity_type !== 'student' || row.entity_id !== id);
   delete store.studentTrashYears?.[id];
@@ -2675,6 +2690,29 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return undefined;
     }
 
+    case 'cmd_add_absence': {
+      const data = (args?.data ?? {}) as Record<string, unknown>;
+      const studentId = Number(data.student_id), groupId = Number(data.group_id), date = String(data.absence_date ?? '');
+      const parsed = new Date(`${date}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0,10) !== date) throw new Error('Date invalide');
+      const group = store.groups.find(g => g.id === groupId && !g.deleted_at && g.school_year_id === activeYearId(store));
+      const year = store.schoolYears.find(y => y.id === activeYearId(store));
+      if (!group || !year || !year.start_date || !year.end_date || date < year.start_date || date > year.end_date || !store.students.some(s => s.id === studentId && !s.deleted_at) || !store.enrollments.some(e => e.student_id === studentId && e.group_id === groupId)) throw new Error("Groupe ou date invalide pour l'année scolaire active");
+      const id = store.nextAbsenceId ?? 1; store.nextAbsenceId = id + 1;
+      (store.absences ??= []).push({ id, student_id: studentId, group_id: groupId, absence_date: date, reason: typeof data.reason === 'string' ? data.reason.trim() || null : null, is_justified: data.is_justified === true, created_at: new Date().toISOString().slice(0,19).replace('T',' ') });
+      save(store); return id;
+    }
+    case 'cmd_get_student_absences': {
+      const studentId = asNumber(args, 'studentId');
+      if (!store.students.some(s => s.id === studentId && !s.deleted_at)) throw new Error('Élève introuvable');
+      return clone((store.absences ?? []).filter(a => a.student_id === studentId && store.groups.some(g => g.id === a.group_id && !g.deleted_at && g.school_year_id === activeYearId(store))).map(a => { const g = store.groups.find(g => g.id === a.group_id)!; return { ...a, group_name: g.name || `${g.subject_name} — ${g.level_name}` }; }).sort((a,b) => b.absence_date.localeCompare(a.absence_date) || b.id - a.id));
+    }
+    case 'cmd_delete_absence': {
+      const id = asNumber(args, 'id');
+      if (!(store.absences ?? []).some(a => a.id === id && store.groups.some(g => g.id === a.group_id && !g.deleted_at && g.school_year_id === activeYearId(store)))) throw new Error('Absence introuvable');
+      store.absences = (store.absences ?? []).filter(a => a.id !== id); save(store); return undefined;
+    }
+
     // -- Groups (Phase 4) -------------------------------------------------
     case 'cmd_check_schedule_conflicts': {
       const groupId = args?.groupId == null ? null : asNumber(args, 'groupId');
@@ -3308,11 +3346,33 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     case 'cmd_reset_operational_data': {
-      Object.assign(store, { students: [], groups: [], enrollments: [], invoices: [], payments: [], receipts: [], teachers: [], teacherActivities: [], teacherSettlements: [], expenses: [], auditLog: [], studentYears: {}, teacherYears: {}, teacherYearTrash: {}, studentTrashYears: {}, feeHandledYears: {}, expenseYears: {}, groupImports: {}, nextStudentId: 1, nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1, nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1, nextExpenseId: 1, nextAuditId: 1 });
+      Object.assign(store, { absences: [], nextAbsenceId: 1, students: [], groups: [], enrollments: [], invoices: [], payments: [], receipts: [], teachers: [], teacherActivities: [], teacherSettlements: [], expenses: [], auditLog: [], studentYears: {}, teacherYears: {}, teacherYearTrash: {}, studentTrashYears: {}, feeHandledYears: {}, expenseYears: {}, groupImports: {}, nextStudentId: 1, nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1, nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1, nextExpenseId: 1, nextAuditId: 1 });
       localStorage.setItem(STORE_KEY, JSON.stringify(store)); return undefined;
     }
 
     case 'cmd_get_unattributed_payment_count': return store.payments.filter(row => row.school_year_id == null).length;
+
+    case 'cmd_delete_payment': {
+      const paymentId = asNumber(args, 'paymentId');
+      const payment = store.payments.find(p => p.id === paymentId);
+      if (!payment) throw new Error('Paiement introuvable');
+      const rows = devReceiptSession(store, payment);
+      if (rows.some(p => p.student_id !== payment.student_id)) throw new Error('Transaction incohérente ; suppression annulée');
+      if (rows.some(p => p.school_year_id != null && p.school_year_id !== activeYearId(store))) throw new Error("Paiement hors de l'année scolaire active");
+      const deductions = new Map<number, number>();
+      for (const p of rows) if (p.invoice_id !== null) deductions.set(p.invoice_id, (deductions.get(p.invoice_id) ?? 0) + p.amount_cents);
+      for (const [invoiceId, amount] of deductions) {
+        const invoice = store.invoices.find(i => i.id === invoiceId);
+        if (!invoice || amount < 0 || invoice.paid_amount_cents < amount) throw new Error('Paiement incohérent avec la facture ; suppression annulée');
+      }
+      for (const [invoiceId, amount] of deductions) {
+        const invoice = store.invoices.find(i => i.id === invoiceId)!; invoice.paid_amount_cents -= amount;
+        if (invoice.status !== 'annulé') invoice.status = invoiceStatus(invoice.paid_amount_cents, invoice.amount_cents);
+      }
+      removePayments(store, new Set(rows.map(p => p.id)));
+      logAudit(store, 'DELETE_PAYMENT', paymentId, JSON.stringify({ student_id: payment.student_id, deleted_allocations: rows.map(p => ({ id:p.id, invoice_id:p.invoice_id, amount_cents:p.amount_cents })) }), 'payment' as 'student');
+      save(store); return undefined;
+    }
 
     case 'cmd_get_payments_history': {
       const studentId = args?.studentId === null || args?.studentId === undefined

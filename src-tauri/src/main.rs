@@ -90,6 +90,9 @@ fn main() {
             // Backup
             commands::backup::cmd_backup_db,
             commands::backup::cmd_get_db_info,
+            commands::absences::cmd_add_absence,
+            commands::absences::cmd_get_student_absences,
+            commands::absences::cmd_delete_absence,
             // Students (Phase 3)
             commands::students::cmd_create_student,
             commands::students::cmd_delete_student,
@@ -117,6 +120,7 @@ fn main() {
             commands::invoices::cmd_get_payment_alerts,
             // Payments & receipts (Phase 5)
             commands::payments::cmd_record_payment,
+            commands::payments::cmd_delete_payment,
             commands::payments::cmd_get_payments_history,
             commands::payments::cmd_create_receipt,
             commands::payments::cmd_get_receipt_data,

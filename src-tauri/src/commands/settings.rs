@@ -241,7 +241,7 @@ mod tests {
 pub fn reset_operational_data(conn: &Connection) -> Result<(), String> {
     let tx = conn.unchecked_transaction().map_err(|e| db_err("Réinitialisation", e))?;
     tx.execute_batch(r#"
-        DELETE FROM receipts; DELETE FROM payments; DELETE FROM enrollment_fees;
+        DELETE FROM absences; DELETE FROM receipts; DELETE FROM payments; DELETE FROM enrollment_fees;
         DELETE FROM enrollment_fee_attempts; DELETE FROM invoices;
         DELETE FROM group_year_imports; DELETE FROM enrollments; DELETE FROM group_schedules;
         DELETE FROM student_school_years; DELETE FROM teacher_school_years;
