@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS students (
     birth_date TEXT,
     phone TEXT,
     guardian_name TEXT,
+    cin_tuteur TEXT,
+    nom_pere TEXT,
+    nom_mere TEXT,
     guardian_phone TEXT,
     guardian_relation TEXT,
     secondary_contact_name TEXT,
@@ -300,3 +303,15 @@ CREATE INDEX IF NOT EXISTS idx_expenses_month_year ON monthly_expenses(month, ye
 CREATE INDEX IF NOT EXISTS idx_expenses_category   ON monthly_expenses(category);
 CREATE INDEX IF NOT EXISTS idx_schedules_group     ON group_schedules(group_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_day       ON group_schedules(day_of_week);
+
+-- Student attendance, independent of invoices and payments.
+CREATE TABLE IF NOT EXISTS absences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    absence_date TEXT NOT NULL,
+    reason TEXT,
+    is_justified INTEGER NOT NULL DEFAULT 0 CHECK(is_justified IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_absences_student_date ON absences(student_id, absence_date);

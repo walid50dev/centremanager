@@ -252,6 +252,8 @@ struct StudentMonth {
     student_id: i64,
     student_name: String,
     student_phone: String,
+    guardian_name: Option<String>,
+    guardian_phone: Option<String>,
     groups: Vec<String>,
     total_amount_cents: i64,
     total_paid_cents: i64,
@@ -281,7 +283,7 @@ pub fn payment_alerts_on(
                     i.amount_cents,
                     COALESCE(i.paid_amount_cents, 0),
                     COALESCE(i.status, 'impayé'),
-                    COALESCE(i.due_date, ''), COALESCE(g.name, '')
+                    COALESCE(i.due_date, ''), COALESCE(g.name, ''), s.guardian_name, s.guardian_phone
              FROM invoices i
              LEFT JOIN enrollment_fees f ON f.invoice_id=i.id
              LEFT JOIN enrollments e ON e.id = i.enrollment_id
@@ -307,6 +309,8 @@ pub fn payment_alerts_on(
                 row.get::<_, String>(7)?,
                 row.get::<_, String>(8)?,
                 row.get::<_, String>(9)?,
+                row.get::<_, Option<String>>(10)?,
+                row.get::<_, Option<String>>(11)?,
             ))
         })
         .map_err(|err| db_err("Lecture des factures", err))?
@@ -316,7 +320,7 @@ pub fn payment_alerts_on(
     // Fold the flat rows into one accumulator per student, keeping the input
     // order (already sorted by student) so the buckets stay stable.
     let mut students: Vec<StudentMonth> = Vec::new();
-    for (student_id, name, phone, subject, level, amount, paid, status, due_date, custom_name) in rows {
+    for (student_id, name, phone, subject, level, amount, paid, status, due_date, custom_name, guardian_name, guardian_phone) in rows {
         let index = match students.iter().position(|s| s.student_id == student_id) {
             Some(index) => index,
             None => {
@@ -324,6 +328,8 @@ pub fn payment_alerts_on(
                     student_id,
                     student_name: name,
                     student_phone: phone,
+                    guardian_name,
+                    guardian_phone,
                     groups: Vec::new(),
                     total_amount_cents: 0,
                     total_paid_cents: 0,
@@ -410,6 +416,8 @@ pub fn payment_alerts_on(
         };
 
         let alert = InvoiceAlert {
+            guardian_name: student.guardian_name,
+            guardian_phone: student.guardian_phone,
             student_id: student.student_id,
             student_name: student.student_name,
             student_phone: student.student_phone,

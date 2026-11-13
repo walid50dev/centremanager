@@ -20,6 +20,7 @@ import EmptyState from '../components/ui/EmptyState';
 import StudentModal from '../components/students/StudentModal';
 import StudentEnrollmentsTab from '../components/enrollments/StudentEnrollmentsTab';
 import StudentFinancesTab from '../components/students/StudentFinancesTab';
+import StudentAbsencesTab from '../components/students/StudentAbsencesTab';
 import { toast } from '../components/ui/Toast';
 import { levelsApi } from '../services/settings';
 import { studentsApi } from '../services/students';
@@ -332,8 +333,9 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
             <InfoRow label={t('students.guardian_name')}>{student.guardian_name ?? '—'}</InfoRow>
             <InfoRow label={t('students.student_phone')}>{student.phone ? <a href={`tel:${student.phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}</InfoRow>
             <InfoRow label={t('students.guardian_phone')}><div className="flex items-center gap-2"><span dir="ltr" className="whitespace-nowrap">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} /></div></InfoRow>
-            <InfoRow label={t('students.parentNames')}>—</InfoRow>
-            <InfoRow label={t('students.guardianCin')}>—</InfoRow>
+            <InfoRow label={t('students.fatherName')}>{student.nom_pere || '—'}</InfoRow>
+            <InfoRow label={t('students.motherName')}>{student.nom_mere || '—'}</InfoRow>
+            <InfoRow label={t('students.guardianCin')}>{student.cin_tuteur || '—'}</InfoRow>
             <InfoRow label={t('students.guardian_relation')}>{student.guardian_relation ? t(`students.relation_${student.guardian_relation}`) : '—'}</InfoRow>
             <InfoRow label={t('students.secondary_contact')}>{student.secondary_contact_name ?? '—'}</InfoRow>
             <InfoRow label={t('students.secondary_phone')}>{student.secondary_contact_phone ? <a href={`tel:${student.secondary_contact_phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-parent-phone">{formatPhone(student.secondary_contact_phone)}</a> : '—'}</InfoRow>
@@ -343,7 +345,6 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
             <InfoRow label={t('students.created')}>{formatDate(student.created_at)}</InfoRow>
             <InfoRow label={t('students.updated')}>{formatDate(student.updated_at)}</InfoRow>
           </dl>
-          <p className="mt-4 text-xs text-muted">{t('students.unavailableFields')}</p>
           <details className="mt-4 border-t border-border pt-4"><summary className="cursor-pointer text-sm font-medium text-primary">{t('students.tabHistory')}</summary>
             {detail.audit_log.length === 0 ? <p className="mt-2 text-sm text-muted">{t('students.historyEmpty')}</p> : <ol className="mt-3 space-y-3">{detail.audit_log.map(entry => <li key={entry.id}><span className="text-sm font-medium">{t((ACTION_STYLES[entry.action] ?? { labelKey: 'students.history.other' }).labelKey)}</span><span className="ms-2 text-xs text-muted">{formatDateTime(entry.created_at)}</span><AuditDetails entry={entry} lookups={lookups} /></li>)}</ol>}
           </details>
@@ -363,7 +364,7 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
       )}
 
       {tab === 'attendance' && (
-        <Card className="p-5"><EmptyState icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} title={t('students.attendanceSoon')} /></Card>
+        <StudentAbsencesTab studentId={student.id} />
       )}
 
       <StudentModal

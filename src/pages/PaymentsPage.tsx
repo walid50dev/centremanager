@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Wallet,
   RefreshCw,
+  History,
   UserPlus,
 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
@@ -19,15 +20,16 @@ import MonthPicker from '../components/ui/MonthPicker';
 import EmptyState from '../components/ui/EmptyState';
 import PaymentModal from '../components/payments/PaymentModal';
 import TeacherSettlementsTab from '../components/payments/TeacherSettlementsTab';
+import StudentPaymentHistory from '../components/payments/StudentPaymentHistory';
 import { toast } from '../components/ui/Toast';
 import { LATE_PAYMENTS_EVENT } from '../stores/appStore';
 import { invoicesApi } from '../services/invoices';
 import { currentPeriod } from '../services/payments';
-import { cn, formatCurrency, formatDate, formatDateTime, formatPhone } from '../utils/format';
+import { cn, formatCurrency, formatDateTime, formatPhone } from '../utils/format';
 import { methodLabel, monthLabel } from '../utils/billing';
 import type { InvoiceAlert, PaymentAlerts } from '../types';
 
-type TabKey = 'collections' | 'teachers';
+type TabKey = 'collections' | 'teachers' | 'history';
 type SectionKey = 'late' | 'upcoming' | 'current';
 
 const EMPTY_ALERTS: PaymentAlerts = { late: [], upcoming: [], current: [] };
@@ -177,6 +179,7 @@ export function PaymentsPage() {
           [
             { key: 'collections', label: t('payments.tabCollections'), icon: Wallet },
             { key: 'teachers', label: t('payments.tabTeacherSettlements'), icon: GraduationCap },
+            { key: 'history', label: t('payments.historyTab'), icon: History },
           ] as Array<{ key: TabKey; label: string; icon: typeof Wallet }>
         ).map((entry) => (
           <button
@@ -200,6 +203,8 @@ export function PaymentsPage() {
 
       {tab === 'teachers' ? (
         <TeacherSettlementsTab />
+      ) : tab === 'history' ? (
+        <StudentPaymentHistory onChanged={() => void load()} />
       ) : loading ? (
         <div className="space-y-3">
           {sections.map((section) => (
@@ -252,26 +257,26 @@ export function PaymentsPage() {
                     </div>
                   ) : section.key === 'current' ? (
                     <div className="overflow-x-auto border-t border-border">
-                      <table className="w-full text-[13px]" data-testid="payments-current">
+                      <table className="w-full min-w-[600px] text-[13px]" data-testid="payments-current">
                         <thead className="bg-background text-label text-muted">
                           <tr>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.name')}</th>
-                            <th className="px-4 py-2 text-end font-medium">{t('payments.amountPaid')}</th>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.paymentDate')}</th>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.method')}</th>
+                            <th className="whitespace-nowrap px-4 py-3 text-start font-medium">{t('payments.name')}</th>
+                            <th className="whitespace-nowrap px-4 py-3 text-end font-medium">{t('payments.amountPaid')}</th>
+                            <th className="whitespace-nowrap px-4 py-3 text-start font-medium">{t('payments.paymentDate')}</th>
+                            <th className="whitespace-nowrap px-4 py-3 text-start font-medium">{t('payments.method')}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {section.rows.map((row) => (
                             <tr key={row.student_id} className="border-t border-border">
-                              <td className="px-4 py-2 font-medium text-foreground">{row.student_name}</td>
-                              <td className="px-4 py-2 text-end tabular-nums text-success">
+                              <td className="whitespace-nowrap px-4 py-3 font-medium text-foreground">{row.student_name}</td>
+                              <td className="whitespace-nowrap px-4 py-3 text-end tabular-nums text-success">
                                 {formatCurrency(row.total_paid_cents)}
                               </td>
-                              <td className="px-4 py-2 text-muted">
+                              <td className="whitespace-nowrap px-4 py-3 text-muted">
                                 {row.last_payment_date ? formatDateTime(row.last_payment_date) : '—'}
                               </td>
-                              <td className="px-4 py-2 text-muted">
+                              <td className="whitespace-nowrap px-4 py-3 text-muted">
                                 {row.last_payment_method ? methodLabel(t, row.last_payment_method) : '—'}
                               </td>
                             </tr>
@@ -281,57 +286,23 @@ export function PaymentsPage() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto border-t border-border">
-                      <table className="w-full text-[13px]" data-testid={`payments-${section.key}`}>
-                        <thead className="bg-background text-label text-muted">
-                          <tr>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.name')}</th>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.phone')}</th>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.groups')}</th>
-                            <th className="px-4 py-2 text-end font-medium">{t('payments.amountDue')}</th>
-                            <th className="px-4 py-2 text-start font-medium">{t('payments.dueDate')}</th>
-                            {section.key === 'late' ? (
-                              <th className="px-4 py-2 text-end font-medium">{t('payments.daysLate')}</th>
-                            ) : null}
-                            <th className="px-4 py-2 text-end font-medium">{t('common.actions')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {section.rows.map((row) => (
-                            <tr key={row.student_id} className="border-t border-border">
-                              <td className="px-4 py-2 font-medium text-foreground">{row.student_name}</td>
-                              <td className="px-4 py-2 tabular-nums text-muted" dir="ltr">
-                                {formatPhone(row.student_phone)}
-                              </td>
-                              <td className="max-w-[22rem] px-4 py-2 text-muted">{row.groups || '—'}</td>
-                              <td className="px-4 py-2 text-end font-semibold tabular-nums">
-                                {formatCurrency(row.total_due_cents)}
-                              </td>
-                              <td className="px-4 py-2 text-muted">{formatDate(row.due_date)}</td>
-                              {section.key === 'late' ? (
-                                <td className="px-4 py-2 text-end tabular-nums">
-                                  <span
-                                    className={cn(
-                                      'font-semibold',
-                                      row.days_late > 7 ? 'text-destructive' : 'text-warning',
-                                    )}
-                                  >
-                                    {row.days_late}
-                                  </span>
-                                </td>
-                              ) : null}
-                              <td className="px-4 py-2 text-end">
-                                {section.key === 'late' && <WhatsAppLink testId={`late-whatsapp-${row.student_id}`} phone={row.student_phone} message={t('students.reminder', { name: row.student_name, groups: row.groups || t('students.noGroup'), amount: formatCurrency(row.total_due_cents) })} />}{' '}
-                                <Button
-                                  size="sm"
-                                  data-testid="payment-collect"
-                                  onClick={() => startPayment(row.student_id)}
-                                >
-                                  {t('payments.collect')}
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
+                      <table className="w-full min-w-[1050px] text-[13px]" data-testid={`payments-${section.key}`}>
+                        <thead className="bg-background text-label text-muted"><tr>
+                          <th className="min-w-[180px] whitespace-nowrap px-4 py-3 text-start font-medium">{t('students.columns.name')}</th>
+                          <th className="min-w-[300px] whitespace-nowrap px-4 py-3 text-start font-medium">{t('students.guardian_column')}</th>
+                          <th className="min-w-[140px] whitespace-nowrap px-4 py-3 text-start font-medium">{t('payments.groups')}</th>
+                          <th className="min-w-[140px] whitespace-nowrap px-4 py-3 text-start font-medium">{t('payments.period')}</th>
+                          <th className="min-w-[130px] whitespace-nowrap px-4 py-3 text-end font-medium">{t('payments.amountDue')}</th>
+                          <th className="min-w-[200px] whitespace-nowrap px-4 py-3 text-end font-medium">{t('common.actions')}</th>
+                        </tr></thead>
+                        <tbody>{section.rows.map(row => <tr key={row.student_id} className="border-t border-border">
+                          <td className="px-4 py-3"><div className="flex items-center gap-3 whitespace-nowrap"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{row.student_name.split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join('').toUpperCase()}</span><span className="font-medium text-foreground">{row.student_name}</span></div></td>
+                          <td className="px-4 py-3"><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><bdi>{row.guardian_name || '—'}</bdi><span className="whitespace-nowrap tabular-nums" dir="ltr">{row.guardian_phone ? formatPhone(row.guardian_phone) : '—'}</span>{section.key === 'late' && <WhatsAppLink compact label={t('students.guardian_phone')} testId={`late-whatsapp-${row.student_id}`} phone={row.guardian_phone} message={t('students.reminder', { name: row.student_name, groups: row.groups || t('students.noGroup'), amount: formatCurrency(row.total_due_cents) })} />}</div></td>
+                          <td className="whitespace-nowrap px-4 py-3 text-muted">{row.groups || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-muted">{monthLabel(t, month)} {year}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-end font-semibold tabular-nums">{formatCurrency(row.total_due_cents)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-end"><Button size="sm" data-testid="payment-collect" onClick={() => startPayment(row.student_id)}>{t('payments.recordPayment')}</Button></td>
+                        </tr>)}</tbody>
                       </table>
                     </div>
                   )

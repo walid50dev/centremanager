@@ -45,6 +45,9 @@ pub struct CreateStudentInput {
     pub phone: String,
     pub secondary_contact_phone: Option<String>,
     pub guardian_name: Option<String>,
+    pub cin_tuteur: Option<String>,
+    pub nom_pere: Option<String>,
+    pub nom_mere: Option<String>,
     pub level_id: Option<i64>,
     pub branch_id: Option<i64>,
     pub address: Option<String>,
@@ -71,6 +74,9 @@ struct CleanInput {
     phone: String,
     secondary_contact_phone: Option<String>,
     guardian_name: Option<String>,
+    cin_tuteur: Option<String>,
+    nom_pere: Option<String>,
+    nom_mere: Option<String>,
     level_id: Option<i64>,
     branch_id: Option<i64>,
     address: Option<String>,
@@ -209,6 +215,9 @@ fn clean_input(conn: &Connection, data: &CreateStudentInput) -> Result<CleanInpu
         phone,
         secondary_contact_phone,
         guardian_name: optional_text(&data.guardian_name),
+        cin_tuteur: optional_text(&data.cin_tuteur),
+        nom_pere: optional_text(&data.nom_pere),
+        nom_mere: optional_text(&data.nom_mere),
         level_id: data.level_id,
         branch_id: data.branch_id,
         address: optional_text(&data.address),
@@ -290,6 +299,9 @@ fn input_json(clean: &CleanInput) -> Value {
         "phone": clean.phone,
         "secondary_contact_phone": clean.secondary_contact_phone,
         "guardian_name": clean.guardian_name,
+        "cin_tuteur": clean.cin_tuteur,
+        "nom_pere": clean.nom_pere,
+        "nom_mere": clean.nom_mere,
         "level_id": clean.level_id,
         "branch_id": clean.branch_id,
         "address": clean.address,
@@ -306,7 +318,7 @@ const SELECT_STUDENT: &str = "SELECT s.id, s.full_name, s.birth_date, s.phone, s
             s.branch_id, b.name AS branch_name,
             s.address, s.notes, s.status, s.created_at, s.updated_at,
             s.first_name, s.last_name, s.guardian_phone, s.guardian_relation,
-            s.secondary_contact_name, s.school_name, s.enrollment_date, s.enrollment_fee_cents
+            s.secondary_contact_name, s.school_name, s.enrollment_date, s.enrollment_fee_cents, s.cin_tuteur, s.nom_pere, s.nom_mere
      FROM students s
      LEFT JOIN levels l ON l.id = s.level_id
      LEFT JOIN branches b ON b.id = s.branch_id";
@@ -314,6 +326,9 @@ const SELECT_STUDENT: &str = "SELECT s.id, s.full_name, s.birth_date, s.phone, s
 fn map_student(row: &Row<'_>) -> rusqlite::Result<StudentRow> {
     Ok(StudentRow {
         enrollment_fee_cents: row.get(22)?,
+        cin_tuteur: row.get(23)?,
+        nom_pere: row.get(24)?,
+        nom_mere: row.get(25)?,
         id: row.get(0)?,
         full_name: row.get(1)?,
         first_name: row.get(15)?,
@@ -496,12 +511,12 @@ pub fn create_student(conn: &Connection, data: &CreateStudentInput) -> Result<i6
     conn.execute(
         "INSERT INTO students (full_name, birth_date, phone, secondary_contact_phone, guardian_name,
          level_id, branch_id, address, notes, status, first_name, last_name, guardian_phone,
-         guardian_relation, secondary_contact_name, school_name, enrollment_date, enrollment_fee_cents)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,COALESCE(?18,0))",
+         guardian_relation, secondary_contact_name, school_name, enrollment_date, enrollment_fee_cents, cin_tuteur, nom_pere, nom_mere)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,COALESCE(?18,0),?19,?20,?21)",
         params![clean.full_name, clean.birth_date, clean.phone, clean.secondary_contact_phone,
             clean.guardian_name, clean.level_id, clean.branch_id, clean.address, clean.notes,
             clean.status, clean.first_name, clean.last_name, clean.guardian_phone, clean.guardian_relation,
-            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, clean.enrollment_fee_cents],
+            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, clean.enrollment_fee_cents, clean.cin_tuteur, clean.nom_pere, clean.nom_mere],
     )
     .map_err(|err| db_err("Création de l'élève", err))?;
 
@@ -519,12 +534,12 @@ pub fn update_student(conn: &Connection, id: i64, data: &UpdateStudentInput) -> 
         "UPDATE students SET full_name=?1, birth_date=?2, phone=?3, secondary_contact_phone=?4,
          guardian_name=?5, level_id=?6, branch_id=?7, address=?8, notes=?9, status=?10,
          first_name=?11, last_name=?12, guardian_phone=?13, guardian_relation=?14,
-         secondary_contact_name=?15, school_name=?16, enrollment_date=?17, enrollment_fee_cents=COALESCE(?19,enrollment_fee_cents), updated_at=CURRENT_TIMESTAMP
+         secondary_contact_name=?15, school_name=?16, enrollment_date=?17, enrollment_fee_cents=COALESCE(?19,enrollment_fee_cents), cin_tuteur=?20, nom_pere=?21, nom_mere=?22, updated_at=CURRENT_TIMESTAMP
          WHERE id=?18",
         params![clean.full_name, clean.birth_date, clean.phone, clean.secondary_contact_phone,
             clean.guardian_name, clean.level_id, clean.branch_id, clean.address, clean.notes,
             clean.status, clean.first_name, clean.last_name, clean.guardian_phone, clean.guardian_relation,
-            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, id, clean.enrollment_fee_cents],
+            clean.secondary_contact_name, clean.school_name, clean.enrollment_date, id, clean.enrollment_fee_cents, clean.cin_tuteur, clean.nom_pere, clean.nom_mere],
     )
     .map_err(|err| db_err("Mise à jour de l'élève", err))?;
 
@@ -837,6 +852,19 @@ mod tests {
         assert_eq!(history[0].action, "CREATE");
         assert_eq!(history[0].entity_type, "student");
         assert!(history[0].details.as_deref().unwrap().contains("Yassine"));
+    }
+
+    #[test]
+    fn optional_parent_fields_round_trip_and_audit() {
+        let conn = test_conn();
+        let mut data = sample("Salma Essai", "0612345678");
+        data.cin_tuteur = Some(" AB12 ".into()); data.nom_pere = Some("Père".into()); data.nom_mere = Some("Mère".into());
+        let id = create_student(&conn, &data).unwrap();
+        let row = get_student(&conn, id).unwrap();
+        assert_eq!(row.cin_tuteur.as_deref(), Some("AB12")); assert_eq!(row.nom_pere.as_deref(), Some("Père"));
+        data.nom_mere = Some("Autre mère".into()); update_student(&conn, id, &data).unwrap();
+        assert_eq!(get_student(&conn, id).unwrap().nom_mere.as_deref(), Some("Autre mère"));
+        assert!(student_history(&conn, id).unwrap()[0].details.as_deref().unwrap().contains("nom_mere"));
     }
 
     #[test]

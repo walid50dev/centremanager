@@ -93,6 +93,9 @@ pub struct StudentRow {
     pub phone: String,
     pub secondary_contact_phone: Option<String>,
     pub guardian_name: Option<String>,
+    pub cin_tuteur: Option<String>,
+    pub nom_pere: Option<String>,
+    pub nom_mere: Option<String>,
     pub level_id: Option<i64>,
     pub level_name: Option<String>,
     pub branch_id: Option<i64>,
@@ -272,6 +275,8 @@ pub struct StudentInvoice {
 /// One student's outstanding (or settled) balance for a given month.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvoiceAlert {
+    pub guardian_name: Option<String>,
+    pub guardian_phone: Option<String>,
     pub student_id: i64,
     pub student_name: String,
     pub student_phone: String,
@@ -301,6 +306,11 @@ pub struct PaymentAlerts {
 /// One row of the payments history (`cmd_get_payments_history`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentRow {
+    pub period_month: Option<i32>,
+    pub period_year: Option<i32>,
+    pub group_name: Option<String>,
+    pub invoice_kind: String,
+    pub school_year_label: Option<String>,
     pub id: i64,
     pub student_id: i64,
     pub student_name: String,

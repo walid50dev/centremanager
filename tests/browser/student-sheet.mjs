@@ -40,7 +40,7 @@ try {
   await id(`student-receipt-${payment}`).click();
   await id('receipt-template-thermal').waitFor(); await id('receipt-template-thermal58').click();
   const receiptDialog = page.getByRole('dialog').last(); await receiptDialog.getByRole('button', { name: 'Fermer' }).first().click(); await id('receipt-template-thermal58').waitFor({ state: 'hidden' });
-  await sheet.getByRole('tab', { name: 'Absences et suivi' }).click(); assert.match(await sheet.innerText(), /Module de suivi des absences : Prochainement disponible/);
+  await sheet.getByRole('tab', { name: 'Absences et suivi' }).click(); await page.getByText('Aucune absence enregistrée').waitFor();
   // Edit within the sheet and verify real persisted data.
   await sheet.getByRole('button', { name: 'Modifier' }).click(); await id('student-first-name').fill('Sara'); await id('student-save').click();
   await page.waitForFunction(() => document.querySelector('[data-testid="student-sheet"]')?.textContent.includes('Sara Essai'));
