@@ -590,7 +590,8 @@ pub fn set_student_status(conn: &Connection, id: i64, status: &str) -> Result<()
     )
 }
 
-/// Send a student to the current year's trash. No financial data is removed.
+/// Test helper for sending a student to the current year's trash.
+#[cfg(test)]
 pub fn delete_student(conn: &Connection, id: i64) -> Result<(), String> {
     super::trash::delete_to_trash(conn, "student", id)
 }
@@ -606,8 +607,6 @@ pub(crate) fn purge_student_data(conn: &Connection, id: i64) -> Result<(), Strin
     Ok(())
 }
 
-#[tauri::command]
-pub fn cmd_delete_student(db: State<'_, Db>, id: i64) -> Result<(), String> { delete_student(&db.conn(), id) }
 
 // ---------------------------------------------------------------------------
 // Tauri commands

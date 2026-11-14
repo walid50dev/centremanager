@@ -1,6 +1,6 @@
 import { api, isTauri } from './api';
 import { devInvoke } from './settingsDevBackend';
-import type { GroupSchedule, TimetableEntry, TimetableFilters } from '../types';
+import type { TimetableEntry, TimetableFilters } from '../types';
 
 /**
  * Typed wrappers for the scheduling commands
@@ -16,22 +16,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   return api<T>(cmd, args);
 }
 
-/** A slot as the form sends it (no id yet). */
-export interface SchedulePayload {
-  day_of_week: string;
-  start_time: string;
-  end_time: string;
-}
-
 export const schedulesApi = {
-  /** The weekly slots of one group, Monday first. */
-  forGroup: (groupId: number) =>
-    call<GroupSchedule[]>('cmd_get_group_schedules', { groupId }),
-
-  /** Replace every slot of a group; returns the stored rows. */
-  set: (groupId: number, schedules: SchedulePayload[]) =>
-    call<GroupSchedule[]>('cmd_set_group_schedules', { groupId, schedules }),
-
   /** Every active class, optionally filtered (filters are ANDed server-side). */
   timetable: (filters: Partial<TimetableFilters> = {}) =>
     call<TimetableEntry[]>('cmd_get_timetable', {

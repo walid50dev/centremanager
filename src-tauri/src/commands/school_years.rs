@@ -151,12 +151,6 @@ pub fn cmd_create_school_year(
 }
 
 #[tauri::command]
-pub fn cmd_set_active_year(db: State<'_, Db>, id: i64) -> Result<(), String> {
-    let conn = db.conn();
-    set_active(&conn, id)
-}
-
-#[tauri::command]
 pub fn cmd_get_active_school_year(db: State<'_, Db>) -> Result<Option<SchoolYear>, String> {
     let conn = db.conn();
     Ok(list(&conn).map_err(|err| db_err("Lecture de l'année active", err))?

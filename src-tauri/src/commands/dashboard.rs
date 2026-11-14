@@ -578,11 +578,8 @@ mod tests {
         teacher(&conn, "Zineb", "actif");
         conn.execute("UPDATE groups SET teacher_id = 2 WHERE id = ?1", params![g])
             .unwrap();
-        crate::commands::compensation::set_compensation(&conn, 1, "fixed_monthly", 70_000, None)
-            .unwrap();
-        // 10 % is stored as 1000 hundredths (see `compensation::percentage_of`).
-        crate::commands::compensation::set_compensation(&conn, 2, "percentage", 1_000, None)
-            .unwrap();
+        conn.execute("UPDATE teachers SET compensation_mode='fixed_monthly',compensation_value_cents=70000 WHERE id=1", []).unwrap();
+        conn.execute("UPDATE teachers SET compensation_mode='percentage',compensation_value_cents=1000 WHERE id=2", []).unwrap();
 
         // Configurations are estimates, not payments.
         let kpis = dashboard_kpis(&conn, 2, 2026).unwrap();

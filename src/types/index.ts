@@ -168,18 +168,6 @@ export interface EnrollmentInput {
   custom_monthly_fee_cents?: number | null;
 }
 
-export interface Receipt {
-  id: number;
-  payment_id: number;
-  receipt_number: string;
-  student_name: string | null;
-  amount_cents: number | null;
-  payment_date: string | null;
-  groups_text: string | null;
-  center_name: string | null;
-  created_at: string | null;
-}
-
 /** Database file snapshot shown in Settings → Sauvegarde. */
 export interface DbInfo {
   path: string;
@@ -455,12 +443,7 @@ export interface TeacherInput {
 }
 
 /** Main compensation modes, in the order the select shows them. */
-export const COMPENSATION_MODES = [
-  'fixed_monthly',
-  'hourly',
-  'per_session',
-  'percentage',
-] as const;
+
 
 // ---------------------------------------------------------------------------
 // Dashboard (Phase 7)

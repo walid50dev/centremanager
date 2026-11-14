@@ -11,23 +11,16 @@
 //! - `enrollments`   — enrollment workflow + first invoice (Phase 4)
 //! - `invoices`      — monthly generation, student invoices, collection alerts (Phase 5)
 //! - `payments`      — payment allocation, history, frozen receipts (Phase 5)
-//! - `teachers`      — teacher directory & payroll configuration (Phase 6)
-//! - `compensation`  — monthly payroll calculation & settlements (Phase 6)
+//! - `teachers`      — teacher directory
+//! - `teacher_payments` — manual teacher payments
 //! - `dashboard`     — read-only home page aggregates (Phase 7)
 //! - `expenses`      — monthly charges, totals & editable categories (Phase 11)
 
-#[cfg(test)]
-pub mod activities;
 pub mod absences;
 pub mod auth;
 pub mod backup;
-pub mod compensation;
 pub mod dashboard;
-#[cfg(test)]
-pub mod demo;
 pub mod duplicates;
-#[cfg(test)]
-mod edge_cases;
 pub mod enrollments;
 pub mod expenses;
 pub mod groups;
@@ -50,22 +43,4 @@ pub mod year_export;
 /// Shared by every command module so error wording stays consistent.
 pub(crate) fn db_err(context: &str, err: rusqlite::Error) -> String {
     format!("{context} : {err}")
-}
-
-/// Health check: the frontend should receive "pong".
-///
-/// Debug console: `window.__TAURI__.core.invoke('cmd_ping')`
-#[tauri::command]
-pub fn cmd_ping() -> String {
-    "pong".to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ping_returns_pong() {
-        assert_eq!(cmd_ping(), "pong");
-    }
 }

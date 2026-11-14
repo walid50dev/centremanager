@@ -1,7 +1,6 @@
 import { api, isTauri } from './api';
 import { devInvoke } from './settingsDevBackend';
 import type {
-  CompensationMode,
   Teacher,
   TeacherDetail,
   TeacherInput,
@@ -10,7 +9,7 @@ import type {
 
 /**
  * Typed wrappers for the Phase 6 commands (`commands/teachers.rs`,
- * `compensation.rs`, `teacher_payments.rs`).
+ * `teacher_payments.rs`).
  *
  * Teachers and settlements are never deleted: there is deliberately no
  * `remove` in this API.
@@ -39,22 +38,6 @@ export const teachersApi = {
 
   setStatus: (id: number, status: 'actif' | 'inactif') =>
     call<void>('cmd_set_teacher_status', { id, status }),
-};
-
-export const compensationApi = {
-  /** `valueCents` is a percentage × 100 for the `percentage` mode. */
-  set: (input: {
-    teacherId: number;
-    mode: CompensationMode;
-    valueCents: number;
-    bonusPct: number | null;
-  }) =>
-    call<void>('cmd_set_compensation', {
-      teacherId: input.teacherId,
-      mode: input.mode,
-      valueCents: input.valueCents,
-      bonusPct: input.bonusPct,
-    }),
 };
 
 export const teacherPaymentsApi = {
