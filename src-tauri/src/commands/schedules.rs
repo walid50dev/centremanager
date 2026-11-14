@@ -5,13 +5,11 @@
 //! with the labels a grid needs (subject, level, teacher, room, capacity).
 //!
 //! The legacy `groups.day_of_week/start_time/end_time` columns stay — V1 never
-//! drops a column — and [`sync_legacy_columns`] keeps them pointing at the first
+//! drops a column — and group updates keep them pointing at the first
 //! schedule so any older read path still shows a plausible slot.
 //!
 //! | Command | Effect |
 //! | --- | --- |
-//! | [`cmd_set_group_schedules`] | replace every slot of one group |
-//! | [`cmd_get_group_schedules`] | the slots of one group, week order |
 //! | [`cmd_get_timetable`] | every active slot, filtered, for the grid |
 //! | [`cmd_get_timetable_rooms`] | the rooms that have classes, for the filter |
 
@@ -377,6 +375,7 @@ pub fn timetable_rooms(conn: &Connection) -> Result<Vec<String>, String> {
 ///
 /// They are no longer written by the form, but nothing in V1 may read `NULL`
 /// there: receipts, exports and older queries still look at them.
+#[cfg(test)]
 fn sync_legacy_columns(conn: &Connection, group_id: i64) -> Result<(), String> {
     let first = group_schedules(conn, group_id)?.into_iter().next();
     match first {
@@ -397,7 +396,8 @@ fn sync_legacy_columns(conn: &Connection, group_id: i64) -> Result<(), String> {
     }
 }
 
-/// Replace every slot of a group. Returns the stored rows in week order.
+/// Test helper: replace every slot of a group.
+#[cfg(test)]
 pub fn set_group_schedules(
     conn: &Connection,
     group_id: i64,
@@ -438,8 +438,7 @@ pub fn set_group_schedules(
 
 /// Slots read from a payload, falling back to the legacy single slot.
 ///
-/// The form always sends `schedules`; older callers (tests, the demo seeder,
-/// anything scripted) still send `day_of_week` + `start_time` + `end_time`.
+/// The form sends `schedules`; older callers can still send the legacy fields.
 pub fn schedules_from_payload(
     schedules: Option<&[ScheduleInput]>,
     day_of_week: &str,
@@ -461,25 +460,6 @@ pub fn schedules_from_payload(
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
-
-#[tauri::command]
-pub fn cmd_set_group_schedules(
-    db: State<'_, Db>,
-    group_id: i64,
-    schedules: Vec<ScheduleInput>,
-) -> Result<Vec<GroupSchedule>, String> {
-    let conn = db.conn();
-    set_group_schedules(&conn, group_id, &schedules)
-}
-
-#[tauri::command]
-pub fn cmd_get_group_schedules(
-    db: State<'_, Db>,
-    group_id: i64,
-) -> Result<Vec<GroupSchedule>, String> {
-    let conn = db.conn();
-    group_schedules(&conn, group_id)
-}
 
 #[tauri::command]
 pub fn cmd_get_timetable(

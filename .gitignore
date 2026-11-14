@@ -12,6 +12,7 @@ src-tauri/gen
 *.tmp.*
 *.bak
 
-# Generated synthetic load-test databases
+# Persistent local development database (never commit user data)
 test-data/*.db
-!test-data/centremanager-charge.db
+test-data/*.db-wal
+test-data/*.db-shm

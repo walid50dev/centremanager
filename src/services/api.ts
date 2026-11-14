@@ -25,9 +25,4 @@ export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
-/** Health check — the backend must answer "pong". */
-export function ping(): Promise<string> {
-  return api<string>('cmd_ping');
-}
-
 export default api;

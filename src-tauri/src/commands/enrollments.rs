@@ -457,18 +457,6 @@ pub fn available_groups(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn cmd_enroll_student(
-    db: State<'_, Db>,
-    student_id: i64,
-    group_id: i64,
-    start_date: String,
-) -> Result<EnrollmentResult, String> {
-    let conn = db.conn();
-    let item = BatchEnrollmentInput { student_id, group_id, start_date, custom_monthly_fee_cents: None };
-    enroll_student_batch_details(&conn, &[item]).map(|mut rows| rows.remove(0))
-}
-
-#[tauri::command]
 pub fn cmd_enroll_student_batch(
     db: State<'_, Db>,
     enrollments: Vec<BatchEnrollmentInput>,

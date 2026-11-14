@@ -5,9 +5,8 @@
 //! (`status = 'inactif'`) so that the groups, activities and settlements that
 //! point at them keep a real person behind the id.
 //!
-//! Payroll configuration lives on the `teachers` row
-//! (`compensation_mode` / `compensation_value_cents` / `bonus_pct`); the
-//! calculation itself is in `commands::compensation`.
+//! Legacy payroll configuration remains readable on the `teachers` row;
+//! current teacher payments are recorded manually.
 //!
 //! Like the other modules the core functions take `&Connection` so the tests
 //! can run against an in-memory database; the `#[tauri::command]` wrappers only

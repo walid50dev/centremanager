@@ -16,9 +16,6 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 export interface EnrollmentResult { id: number; enrollment_fee_invoice_id: number | null; enrollment_fee_amount_cents: number | null }
 
 export const enrollmentsApi = {
-  enroll: (studentId: number, groupId: number, startDate: string) =>
-    call<EnrollmentResult>('cmd_enroll_student', { studentId, groupId, startDate }),
-
   /** One transaction for the whole list — a single failure rolls it all back. */
   enrollBatch: (enrollments: EnrollmentInput[]) =>
     call<EnrollmentResult[]>('cmd_enroll_student_batch', { enrollments }),

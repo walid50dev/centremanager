@@ -27,7 +27,6 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::cmd_ping,
             commands::duplicates::cmd_check_duplicates,
             commands::trash::cmd_delete_to_trash,
             commands::trash::cmd_list_trash,
@@ -54,8 +53,6 @@ fn main() {
             commands::settings::cmd_get_setting,
             // Weekly timetable (Phase 13)
             commands::schedule_conflicts::cmd_check_schedule_conflicts,
-            commands::schedules::cmd_set_group_schedules,
-            commands::schedules::cmd_get_group_schedules,
             commands::schedules::cmd_get_timetable,
             commands::schedules::cmd_get_timetable_rooms,
             commands::settings::cmd_set_setting,
@@ -74,7 +71,6 @@ fn main() {
             commands::school_years::cmd_switch_school_year,
             commands::school_years::cmd_create_school_year,
             commands::school_years::cmd_delete_school_year,
-            commands::school_years::cmd_set_active_year,
             // Levels & branches
             commands::levels::cmd_get_levels,
             commands::levels::cmd_create_level,
@@ -95,7 +91,6 @@ fn main() {
             commands::absences::cmd_delete_absence,
             // Students (Phase 3)
             commands::students::cmd_create_student,
-            commands::students::cmd_delete_student,
             commands::students::cmd_update_student,
             commands::students::cmd_get_students,
             commands::students::cmd_get_student_detail,
@@ -107,7 +102,6 @@ fn main() {
             commands::groups::cmd_update_group,
             commands::groups::cmd_get_teacher_options,
             // Enrollments (Phase 4)
-            commands::enrollments::cmd_enroll_student,
             commands::enrollments::cmd_enroll_student_batch,
             commands::enrollments::cmd_end_enrollment,
             commands::enrollments::cmd_get_student_enrollments,
@@ -130,8 +124,6 @@ fn main() {
             commands::teachers::cmd_get_teachers,
             commands::teachers::cmd_get_teacher_detail,
             commands::teachers::cmd_set_teacher_status,
-            // Compensation & settlements (Phase 6)
-            commands::compensation::cmd_set_compensation,
             // Manual teacher payments
             commands::teacher_payments::cmd_create_teacher_payment,
             commands::teacher_payments::cmd_list_teacher_payments,

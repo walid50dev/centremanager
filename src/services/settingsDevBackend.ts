@@ -278,44 +278,6 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   'Autre',
 ];
 
-/** A few charges so the Frais page and the net card are not empty on day one. */
-function seedExpenses(): DevExpense[] {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const previous = month === 1 ? 12 : month - 1;
-  const previousYear = month === 1 ? year - 1 : year;
-
-  const row = (
-    id: number,
-    label: string,
-    dirhams: number,
-    category: string,
-    periodMonth: number,
-    periodYear: number,
-    notes: string | null = null,
-  ): DevExpense => ({
-    id,
-    label,
-    amount_cents: dirhams * 100,
-    category,
-    month: periodMonth,
-    year: periodYear,
-    notes,
-    created_at: now.toISOString().slice(0, 19).replace('T', ' '),
-  });
-
-  return [
-    row(1, 'Loyer local principal', 1200, 'Loyer', month, year),
-    row(2, 'Abonnement fibre', 250, 'WiFi', month, year),
-    row(3, 'Facture électricité', 380, 'Électricité', month, year),
-    row(4, 'Salaire assistante', 800, 'Assistance', month, year),
-    row(5, 'Facture eau', 150, 'Eau', month, year),
-    row(6, 'Fournitures pédagogiques', 220, 'Fournitures', month, year),
-    row(7, 'Loyer local principal', 1200, 'Loyer', previous, previousYear, 'Mois précédent'),
-  ];
-}
-
 function seed(): DevStore {
   const levels: Level[] = SEED_LEVELS.map(([name, category], index) => ({
     id: index + 1,
@@ -336,7 +298,6 @@ function seed(): DevStore {
     is_active: true,
   }));
 
-  const demo = import.meta.env.VITE_LOAD_TEST_FIXTURE === '1';
   const now = new Date();
   const startYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
   return {
@@ -353,409 +314,22 @@ function seed(): DevStore {
     branches,
     subjects,
     schoolYears: [
-      demo ? { id: 1, label: '2024-2025', start_date: '2024-09-01', end_date: '2025-06-30', is_active: true } : { id: 1, label: `${startYear}-${startYear + 1}`, start_date: `${startYear}-09-01`, end_date: `${startYear + 1}-08-31`, is_active: true },
+      { id: 1, label: `${startYear}-${startYear + 1}`, start_date: `${startYear}-09-01`, end_date: `${startYear + 1}-08-31`, is_active: true },
     ],
     nextLevelId: levels.length + 1,
     nextBranchId: branches.length + 1,
     nextSubjectId: subjects.length + 1,
     nextYearId: 2,
-    students: demo ? seedStudents(levels, branches) : [],
-    ...seedGroups(levels, branches),
-    ...seedTeachers(),
-    expenses: demo ? seedExpenses() : [],
-    ...(demo ? {} : { groups: [], enrollments: [], invoices: [], payments: [], receipts: [], teachers: [], teacherActivities: [], teacherSettlements: [], nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1, nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1 }),
+    students: [], groups: [], enrollments: [], invoices: [], payments: [], receipts: [],
+    teachers: [], teacherActivities: [], teacherSettlements: [], expenses: [],
+    nextGroupId: 1, nextScheduleId: 1, nextEnrollmentId: 1, nextInvoiceId: 1,
+    nextPaymentId: 1, nextReceiptId: 1, nextTeacherId: 1, nextActivityId: 1, nextSettlementId: 1,
     absences: [], nextAbsenceId: 1,
     auditLog: [],
-    nextStudentId: demo ? 5 : 1,
-    nextExpenseId: demo ? 8 : 1,
+    nextStudentId: 1,
+    nextExpenseId: 1,
     nextAuditId: 1,
   };
-}
-
-/** Three groups plus one enrollment + invoice so every screen has content. */
-function seedGroups(
-  levels: Level[],
-  branches: Branch[],
-): Pick<
-  DevStore,
-  | 'groups'
-  | 'enrollments'
-  | 'invoices'
-  | 'payments'
-  | 'receipts'
-  | 'nextGroupId'
-  | 'nextScheduleId'
-  | 'nextEnrollmentId'
-  | 'nextInvoiceId'
-  | 'nextPaymentId'
-  | 'nextReceiptId'
-> {
-  const levelId = (name: string) => levels.find((level) => level.name === name)?.id ?? null;
-  const branchId = (name: string) =>
-    branches.find((branch) => branch.name === name)?.id ?? null;
-
-  const group = (
-    id: number,
-    subject_id: number,
-    subject_name: string,
-    level: string,
-    branch: string | null,
-    day_of_week: string,
-    start_time: string,
-    end_time: string,
-    room: string,
-    monthly_fee_cents: number,
-    capacity: number,
-  ): Group => ({
-    id,
-    subject_id,
-    subject_name,
-    level_id: levelId(level),
-    level_name: level,
-    branch_id: branch ? branchId(branch) : null,
-    branch_name: branch,
-    teacher_id: null,
-    teacher_name: null,
-    school_year_id: 1,
-    day_of_week,
-    start_time,
-    end_time,
-    room,
-    monthly_fee_cents,
-    capacity,
-    enrolled_count: 0,
-    status: 'actif',
-    // Phase 13: a seeded group meets once a week.
-    schedules: [{ id: id * 10, day_of_week, start_time, end_time }],
-    schedule_text: '',
-  });
-
-  const groups: Group[] = [
-    group(1, 1, 'Mathématiques', 'Tronc Commun', null, 'Lundi', '16:00', '18:00', 'Salle 3', 30000, 10),
-    group(2, 2, 'Physique-Chimie', '2ème Bac', 'Sciences Maths', 'Mardi', '17:30', '19:30', 'Salle 1', 35000, 20),
-    group(3, 4, 'Français', '6ème année', null, 'Samedi', '10:00', '12:00', 'Salle 2', 25000, 8),
-  ];
-
-  // Phase 6: group 1 & 2 belong to teacher 1, group 3 to teacher 2.
-  groups[0].teacher_id = 1;
-  groups[1].teacher_id = 1;
-  groups[2].teacher_id = 2;
-
-  // ---------------------------------------------------------------------
-  // Phase 7 — a current month and a previous month, relative to “today”, so
-  // the dashboard always shows real KPIs, trends and échéances in the browser.
-  // ---------------------------------------------------------------------
-  const now = new Date();
-  const curMonth = now.getMonth() + 1;
-  const curYear = now.getFullYear();
-  const prev =
-    curMonth === 1 ? { month: 12, year: curYear - 1 } : { month: curMonth - 1, year: curYear };
-  const pad2 = (value: number) => String(value).padStart(2, '0');
-  const isoOf = (year: number, month: number, day: number) =>
-    `${year}-${pad2(month)}-${pad2(day)}`;
-  /** `YYYY-MM-DD` of today shifted by `offset` days. */
-  const isoFromToday = (offset: number) => {
-    const shifted = new Date(now.getTime() + offset * 86_400_000);
-    const local = new Date(shifted.getTime() - shifted.getTimezoneOffset() * 60_000);
-    return local.toISOString().slice(0, 10);
-  };
-  const curStamp = `${curYear}-${pad2(curMonth)}`;
-
-  const enrollments: DevEnrollment[] = [
-    { id: 1, student_id: 1, group_id: 2, start_date: '2025-09-12', end_date: null, status: 'actif' },
-    { id: 2, student_id: 2, group_id: 3, start_date: '2025-09-14', end_date: null, status: 'actif' },
-    // Phase 7: two more students so the Matières group (and the dashboard) has
-    // a realistic student count and a “nothing left to pay” balance.
-    { id: 3, student_id: 3, group_id: 1, start_date: isoOf(curYear, curMonth, 1), end_date: null, status: 'actif' },
-    { id: 4, student_id: 4, group_id: 1, start_date: isoOf(curYear, curMonth, 2), end_date: null, status: 'actif' },
-  ];
-
-  const invoices: DevInvoice[] = [
-    {
-      id: 1,
-      enrollment_id: 1,
-      period_month: 9,
-      period_year: 2025,
-      amount_cents: 35000,
-      paid_amount_cents: 20000,
-      status: 'partiel',
-      due_date: '2025-09-12',
-      created_at: '2025-09-12 09:20:00',
-    },
-    {
-      id: 2,
-      enrollment_id: 2,
-      period_month: 9,
-      period_year: 2025,
-      amount_cents: 25000,
-      paid_amount_cents: 25000,
-      status: 'payé',
-      due_date: '2025-09-14',
-      created_at: '2025-09-14 11:45:00',
-    },
-  ];
-
-  const curInvoice = (
-    id: number,
-    enrollment_id: number,
-    amount_cents: number,
-    paid_amount_cents: number,
-    due_date: string,
-  ): DevInvoice => ({
-    id,
-    enrollment_id,
-    period_month: curMonth,
-    period_year: curYear,
-    amount_cents,
-    paid_amount_cents,
-    status: invoiceStatus(paid_amount_cents, amount_cents),
-    due_date,
-    created_at: `${curStamp}-01 08:00:00`,
-  });
-
-  const prevInvoice = (
-    id: number,
-    enrollment_id: number,
-    amount_cents: number,
-    paid_amount_cents: number,
-    day: number,
-  ): DevInvoice => ({
-    id,
-    enrollment_id,
-    period_month: prev.month,
-    period_year: prev.year,
-    amount_cents,
-    paid_amount_cents,
-    status: invoiceStatus(paid_amount_cents, amount_cents),
-    due_date: isoOf(prev.year, prev.month, day),
-    created_at: `${isoOf(prev.year, prev.month, 1)} 08:00:00`,
-  });
-
-  invoices.push(
-    // Current month: 1 200 DH invoiced, 1 000 DH collected → 83.33 %.
-    curInvoice(3, 1, 35000, 35000, isoFromToday(0)),
-    curInvoice(4, 2, 25000, 25000, isoFromToday(0)),
-    curInvoice(5, 3, 30000, 15000, isoFromToday(1)), // due tomorrow → upcoming
-    curInvoice(6, 4, 30000, 25000, isoFromToday(5)), // in five days → ok
-    // Previous month: one invoice still unpaid and already three days late.
-    prevInvoice(7, 1, 35000, 0, 1),
-    prevInvoice(8, 2, 25000, 25000, 14),
-    prevInvoice(9, 3, 30000, 30000, 14),
-  );
-  // The late one is due relative to today, whatever the month boundary is.
-  const lateInvoice = invoices.find((invoice) => invoice.id === 7);
-  if (lateInvoice) lateInvoice.due_date = isoFromToday(-3);
-
-  // Four payments this month (1 000 DH) and two last month (550 DH).
-  const payments: DevPayment[] = [
-    {
-      id: 1,
-      student_id: 2,
-      invoice_id: 2,
-      amount_cents: 25000,
-      payment_method: 'espèces',
-      notes: null,
-      created_at: '2025-09-14 11:45:00',
-    },
-    {
-      id: 2,
-      student_id: 1,
-      invoice_id: 1,
-      amount_cents: 20000,
-      payment_method: 'virement',
-      notes: 'Acompte',
-      created_at: '2025-09-15 16:10:00',
-    },
-    {
-      id: 3,
-      student_id: 1,
-      invoice_id: 3,
-      amount_cents: 35000,
-      payment_method: 'espèces',
-      notes: null,
-      created_at: `${isoFromToday(0)} 08:15:00`,
-    },
-    {
-      id: 4,
-      student_id: 2,
-      invoice_id: 4,
-      amount_cents: 25000,
-      payment_method: 'virement',
-      notes: null,
-      created_at: `${isoFromToday(0)} 08:40:00`,
-    },
-    {
-      id: 5,
-      student_id: 3,
-      invoice_id: 5,
-      amount_cents: 15000,
-      payment_method: 'chèque',
-      notes: 'Premier versement',
-      created_at: `${isoFromToday(0)} 09:05:00`,
-    },
-    {
-      id: 6,
-      student_id: 4,
-      invoice_id: 6,
-      amount_cents: 25000,
-      payment_method: 'espèces',
-      notes: null,
-      created_at: `${isoFromToday(0)} 11:20:00`,
-    },
-    {
-      id: 7,
-      student_id: 2,
-      invoice_id: 8,
-      amount_cents: 25000,
-      payment_method: 'espèces',
-      notes: null,
-      created_at: `${isoOf(prev.year, prev.month, 14)} 10:00:00`,
-    },
-    {
-      id: 8,
-      student_id: 3,
-      invoice_id: 9,
-      amount_cents: 30000,
-      payment_method: 'virement',
-      notes: null,
-      created_at: `${isoOf(prev.year, prev.month, 20)} 15:30:00`,
-    },
-  ];
-
-  return {
-    groups,
-    enrollments,
-    invoices,
-    payments,
-    receipts: [],
-    nextGroupId: groups.length + 1,
-    nextScheduleId: groups.length * 10 + 1,
-    nextEnrollmentId: enrollments.length + 1,
-    nextInvoiceId: invoices.length + 1,
-    nextPaymentId: payments.length + 1,
-    nextReceiptId: 1,
-  };
-}
-
-/** Two sample teachers and one manually recorded payment. */
-function seedTeachers(): Pick<
-  DevStore,
-  'teachers' | 'teacherActivities' | 'teacherSettlements' | 'nextTeacherId' | 'nextActivityId' | 'nextSettlementId'
-> {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const day = (value: number) => `${year}-${String(month).padStart(2, '0')}-${String(value).padStart(2, '0')}`;
-  const stamp = nowTimestamp();
-
-  const teachers: DevTeacher[] = [
-    {
-      id: 1,
-      full_name: 'Karim Idrissi',
-      phone: '0661234567',
-      email: 'karim.idrissi@centre.ma',
-      notes: 'Maths & physique, 2ème Bac.',
-      status: 'actif',
-      subject_ids: [1, 2],
-      compensation_mode: 'percentage',
-      compensation_value_cents: 4000,
-      bonus_pct: 5,
-      created_at: stamp,
-      updated_at: stamp,
-    },
-    {
-      id: 2,
-      full_name: 'Zineb Alami',
-      phone: '0712345678',
-      email: null,
-      notes: null,
-      status: 'actif',
-      subject_ids: [4],
-      compensation_mode: 'hourly',
-      compensation_value_cents: 8000,
-      bonus_pct: null,
-      created_at: stamp,
-      updated_at: stamp,
-    },
-  ];
-
-  const teacherActivities: DevActivity[] = [];
-
-  const teacherSettlements: DevSettlement[] = [
-    {
-      id: 1,
-      teacher_id: 2,
-      amount_cents: 10000,
-      payment_method: 'espèces',
-      notes: 'Acompte',
-      month,
-      year,
-      payment_date: day(10),
-      school_year_id: 1,
-      created_at: stamp,
-    },
-  ];
-
-  return {
-    teachers,
-    teacherActivities,
-    teacherSettlements,
-    nextTeacherId: teachers.length + 1,
-    nextActivityId: teacherActivities.length + 1,
-    nextSettlementId: teacherSettlements.length + 1,
-  };
-}
-
-/** A few students so the list, filters and pagination are explorable. */
-function seedStudents(levels: Level[], branches: Branch[]): Student[] {
-  const twoBac = levels.find((level) => level.name === '2ème Bac')?.id ?? null;
-  const sixieme = levels.find((level) => level.name === '6ème année' && level.category === 'primaire')?.id ?? null;
-  const branchSciences = branches.find((branch) => branch.name === 'Sciences Maths')?.id ?? null;
-
-  const row = (
-    id: number,
-    full_name: string,
-    phone: string,
-    secondary_contact_phone: string | null,
-    level_id: number | null,
-    branch_id: number | null,
-    address: string | null,
-    notes: string | null,
-    status: 'actif' | 'inactif',
-    created_at: string,
-    birth_date: string | null,
-    guardian_name: string | null = null,
-  ): Student => ({
-    id,
-    full_name,
-    first_name: full_name.split(' ')[0],
-    last_name: full_name.split(' ').slice(1).join(' '),
-    birth_date,
-    phone,
-    guardian_phone: phone,
-    guardian_relation: null,
-    secondary_contact_name: null,
-    school_name: null,
-    enrollment_date: created_at.slice(0, 10),
-    secondary_contact_phone,
-    guardian_name,
-    level_id,
-    level_name: levels.find((level) => level.id === level_id)?.name ?? null,
-    branch_id,
-    branch_name: branches.find((branch) => branch.id === branch_id)?.name ?? null,
-    address,
-    notes,
-    status,
-    created_at,
-    updated_at: created_at,
-  });
-
-  return [
-    row(1, 'Yassine El Amrani', '0612345678', '0661112233', twoBac, branchSciences, '12 rue des Écoles, Casablanca', 'Inscrit en septembre', 'actif', '2025-09-12 09:15:00', '2007-04-18', 'Rachid El Amrani'),
-    row(2, 'Salma Benjelloun', '0723456789', '0611223344', sixieme, null, '45 bd Zerktouni, Casablanca', null, 'actif', '2025-09-14 11:40:00', '2013-11-02', 'Mustapha Benjelloun'),
-    row(3, 'Omar Tazi', '0698765432', null, sixieme, null, null, null, 'actif', '2025-09-20 16:05:00', '2013-02-25', null),
-    row(4, 'Nadia Chraibi', '0655443322', '0677889900', twoBac, branchSciences, '8 rue Ibn Sina, Rabat', 'A quitté le centre', 'inactif', '2025-09-02 10:00:00', '2007-09-30', 'Driss Chraibi'),
-  ];
 }
 
 /** Dev-mode equivalent of the Rust `audit_log` insert. */
@@ -1687,7 +1261,6 @@ function devReceiptData(store: DevStore, receiptId: number): ReceiptData {
 // Phase 6 — teachers, activities & compensation
 // ---------------------------------------------------------------------------
 
-const TEACHER_MODES = ['fixed_monthly', 'hourly', 'per_session', 'percentage'] as const;
 
 function teacherRow(store: DevStore, teacher: DevTeacher): Teacher {
   const subjects = teacher.subject_ids
@@ -2182,10 +1755,9 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       const rank = { both: 0, name: 1, phone: 2 };
       return result.sort((a, b) => rank[a.match_type] - rank[b.match_type] || a.entity_id - b.entity_id);
     }
-    case 'cmd_delete_to_trash':
-    case 'cmd_delete_student': {
-      const type = (cmd === 'cmd_delete_student' ? 'student' : asString(args, 'entityType')) as TrashEntityType;
-      const id = cmd === 'cmd_delete_student' ? asNumber(args, 'id') : asNumber(args, 'entityId');
+    case 'cmd_delete_to_trash': {
+      const type = asString(args, 'entityType') as TrashEntityType;
+      const id = asNumber(args, 'entityId');
       const year = activeYearId(store);
       if (year === null) throw new Error('Type de corbeille invalide');
       if (type === 'student') {
@@ -2346,9 +1918,8 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       save(store); return undefined;
     }
 
-    case 'cmd_set_active_year':
     case 'cmd_switch_school_year': {
-      const id = cmd === 'cmd_switch_school_year' ? asNumber(args, 'yearId') : asNumber(args, 'id');
+      const id = asNumber(args, 'yearId');
       if (!store.schoolYears.some((year) => year.id === id)) {
         throw new Error('Année scolaire introuvable');
       }
@@ -2879,35 +2450,6 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     // -- Weekly timetable (Phase 13) ---------------------------------------
-    case 'cmd_get_group_schedules': {
-      const groupId = asNumber(args, 'groupId');
-      const group = store.groups.find((entry) => entry.id === groupId);
-      return clone(sortSchedules(group?.schedules));
-    }
-
-    case 'cmd_set_group_schedules': {
-      const groupId = asNumber(args, 'groupId');
-      const raw = store.groups.find((entry) => entry.id === groupId);
-      if (!raw) throw new Error('Groupe introuvable');
-
-      const payload = Array.isArray(args?.schedules)
-        ? (args?.schedules as Array<Record<string, unknown>>)
-        : [];
-      const schedules = cleanSchedules(payload).map((slot) => ({
-        ...slot,
-        id: store.nextScheduleId++,
-      }));
-
-      // The legacy columns follow the first slot, exactly like `sync_legacy_columns`.
-      raw.schedules = schedules;
-      raw.schedule_text = scheduleText(schedules);
-      raw.day_of_week = schedules[0]?.day_of_week ?? '';
-      raw.start_time = schedules[0]?.start_time ?? '';
-      raw.end_time = schedules[0]?.end_time ?? '';
-      save(store);
-      return clone(schedules);
-    }
-
     case 'cmd_get_timetable': {
       const filters = (args?.filters ?? {}) as Record<string, unknown>;
       const optionalNumber = (key: string): number | null => {
@@ -3073,56 +2615,6 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
       return undefined;
     }
 
-    // -- Compensation & settlements (Phase 6) ------------------------------
-    case 'cmd_set_compensation': {
-      const teacherId = asNumber(args, 'teacherId');
-      const mode = asString(args, 'mode').trim();
-      const valueCents = asNumber(args, 'valueCents');
-      const rawBonus = args?.bonusPct;
-      const bonusPct = typeof rawBonus === 'number' ? rawBonus : null;
-
-      if (!TEACHER_MODES.includes(mode as (typeof TEACHER_MODES)[number])) {
-        throw new Error(
-          'Mode de compensation invalide (fixed_monthly, hourly, per_session, percentage)',
-        );
-      }
-      if (!(valueCents > 0)) {
-        throw new Error('La valeur de la compensation doit être supérieure à 0');
-      }
-      if (mode === 'percentage' && valueCents > 10_000) {
-        throw new Error('Le pourcentage doit être compris entre 0 et 100');
-      }
-      if (bonusPct !== null && (Number.isNaN(bonusPct) || bonusPct < 0 || bonusPct > 100)) {
-        throw new Error('Le pourcentage de bonus doit être compris entre 0 et 100');
-      }
-
-      const teacher = findTeacher(store, teacherId);
-      const previous = {
-        mode: teacher.compensation_mode,
-        value_cents: teacher.compensation_value_cents,
-        bonus_pct: teacher.bonus_pct,
-      };
-      const bonus = bonusPct !== null && bonusPct > 0 ? bonusPct : null;
-
-      teacher.compensation_mode = mode;
-      teacher.compensation_value_cents = valueCents;
-      teacher.bonus_pct = bonus;
-      teacher.updated_at = nowTimestamp();
-
-      logAudit(
-        store,
-        'SET_COMPENSATION',
-        teacherId,
-        JSON.stringify({
-          from: previous,
-          to: { mode, value_cents: valueCents, bonus_pct: bonus },
-        }),
-        'teacher',
-      );
-      save(store);
-      return undefined;
-    }
-
     case 'cmd_create_teacher_payment': {
       const teacherId = asNumber(args, 'teacherId');
       const amount = asNumber(args, 'amountCents');
@@ -3153,15 +2645,6 @@ export async function devInvoke(cmd: string, args?: Args): Promise<unknown> {
     }
 
     // -- Enrollments (Phase 4) --------------------------------------------
-    case 'cmd_enroll_student': {
-      const studentId = asNumber(args, 'studentId');
-      const groupId = asNumber(args, 'groupId');
-      const startDate = asString(args, 'startDate');
-      const id = enrollOne(store, studentId, groupId, startDate);
-      save(store);
-      return id;
-    }
-
     case 'cmd_enroll_student_batch': {
       const items = (args?.enrollments ?? []) as EnrollmentInput[];
       if (!Array.isArray(items) || items.length === 0) {

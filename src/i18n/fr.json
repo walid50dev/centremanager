@@ -45,9 +45,7 @@
       "12": "Décembre"
     },
     "refresh": "Actualiser",
-    "suffix": {
-      "percent": "%"
-    },
+    "suffix": {},
     "createNew": "+ Nouveau…",
     "creating": "Création…",
     "create": "Créer",
@@ -854,11 +852,6 @@
     "notFound": "Enseignant introuvable",
     "groupCount_one": "{{count}} groupe",
     "groupCount_other": "{{count}} groupes",
-    "compMode": "Compensation",
-    "fixedMonthly": "Fixe mensuel",
-    "hourly": "Horaire",
-    "perSession": "Par séance",
-    "percentage": "Pourcentage",
     "notConfigured": "Non configuré",
     "badgeFixed": "Fixe : {{amount}}/mois",
     "badgeHourly": "Horaire : {{amount}}/h",
@@ -867,21 +860,6 @@
     "tabInfo": "Informations",
     "tabGroups": "Groupes",
     "tabCompensation": "Paiements",
-    "compConfig": "Estimation de rémunération",
-    "mainMode": "Mode principal",
-    "valueFixed": "Montant mensuel (DH)",
-    "valueHourly": "Taux horaire (DH)",
-    "valueSession": "Taux par séance (DH)",
-    "valuePercentage": "Pourcentage (%)",
-    "bonus": "Bonus recrutement",
-    "bonusPct": "Pourcentage bonus (%)",
-    "bonusHint": "Appliqué sur le chiffre théorique total des groupes.",
-    "compRuntimeNote": "Estimation indicative : le paiement réel est saisi manuellement.",
-    "saveComp": "Sauvegarder la compensation",
-    "estimate": "Estimation basée sur les groupes actuels :",
-    "estimateGroups_one": "{{count}} groupe · {{theoretical}} théoriques",
-    "estimateGroups_other": "{{count}} groupes · {{theoretical}} théoriques",
-    "estimateBonus": "dont bonus {{bonus}}",
     "noGroups": "Aucun groupe assigné",
     "noGroupsHint": "Assignez des groupes depuis la page Groupes.",
     "summaryLine_one": "{{count}} enseignant · {{active}} actif",
@@ -910,13 +888,11 @@
       "nameRequired": "Le nom complet est obligatoire",
       "nameTooShort": "Le nom complet est trop court",
       "phoneFormat": "Format invalide (06XXXXXXXX, 07XXXXXXXX ou +212…)",
-      "emailFormat": "Format d'email invalide",
-      "pctRange": "Le pourcentage doit être compris entre 0 et 100"
+      "emailFormat": "Format d'email invalide"
     },
     "toast": {
       "created": "Enseignant ajouté ✓",
       "updated": "Enseignant modifié ✓",
-      "compSaved": "Compensation enregistrée ✓",
       "reactivated": "Enseignant réactivé ✓",
       "deactivated": "Enseignant désactivé ✓",
       "error": "Enregistrement impossible :"
@@ -930,7 +906,6 @@
       "total": "Total payé",
       "empty": "Aucun paiement enregistré",
       "emptyHint": "Les paiements enregistrés apparaîtront ici.",
-      "rateOnly": "Taux indicatif uniquement ; le montant est saisi manuellement.",
       "unattributed_one": "{{count}} paiement historique sans année identifiable",
       "unattributed_other": "{{count}} paiements historiques sans année identifiable",
       "unattributedHint": "Ces paiements conservés ne sont inclus dans aucun total annuel."

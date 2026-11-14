@@ -5,7 +5,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import AppLayout from './components/layout/AppLayout';
 import ToastViewport from './components/ui/Toast';
 import DashboardPage from './pages/DashboardPage';
-import DevCrashPage from './pages/DevCrashPage';
 import ExpensesPage from './pages/ExpensesPage';
 import GroupsPage from './pages/GroupsPage';
 import LoginPage from './pages/LoginPage';
@@ -162,18 +161,6 @@ export function App() {
             }
           />
 
-          {/* Dev-only: exercises the ErrorBoundary (never registered in a
-              production build). */}
-          {import.meta.env.DEV ? (
-            <Route
-              path="/__error"
-              element={
-                <ErrorBoundary key="error-boundary-demo" scope="error-boundary-demo">
-                  <DevCrashPage />
-                </ErrorBoundary>
-              }
-            />
-          ) : null}
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

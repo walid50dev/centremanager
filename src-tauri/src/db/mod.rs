@@ -624,28 +624,6 @@ fn migrate_legacy_data_dir(app: &tauri::AppHandle, data_dir: &Path) -> Result<()
     Ok(())
 }
 
-/// Install the debug fixture once, without replacing an existing development DB.
-#[cfg(debug_assertions)]
-fn ensure_debug_fixture(fixture: &Path, target: &Path) -> Result<bool, String> {
-    match fs::OpenOptions::new().write(true).create_new(true).open(target) {
-        Ok(mut out) => {
-            let copy = (|| -> std::io::Result<()> {
-                let mut input = fs::File::open(fixture)?;
-                std::io::copy(&mut input, &mut out)?;
-                out.sync_all()
-            })();
-            if let Err(err) = copy {
-                drop(out);
-                let _ = fs::remove_file(target);
-                return Err(format!("Impossible de copier la base de test {} : {err}", fixture.display()));
-            }
-            Ok(true)
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-        Err(err) => Err(format!("Impossible de créer la base {} : {err}", target.display())),
-    }
-}
-
 /// Create/upgrade the database and hand back a ready-to-use connection.
 ///
 /// Called from the Tauri `setup` hook.
@@ -653,20 +631,14 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     #[cfg(not(debug_assertions))]
     use tauri::Manager;
 
-    // Debug builds use a persistent project-local database. A synthetic fixture
-    // is copied only on explicit opt-in and only if the target does not exist.
-    // Never replace edits or touch production app-data (including WAL/SHM).
+    // Keep the existing persistent development database path and its data.
     #[cfg(debug_assertions)]
     let path = {
         let _ = app;
         let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("test-data");
         fs::create_dir_all(&test_dir)
             .map_err(|err| format!("Impossible de créer {} : {err}", test_dir.display()))?;
-        let target = test_dir.join("centremanager-dev.db");
-        if std::env::var("CENTREMANAGER_LOAD_TEST_FIXTURE").as_deref() == Ok("1") {
-            ensure_debug_fixture(&test_dir.join("centremanager-charge.db"), &target)?;
-        }
-        target
+        test_dir.join("centremanager-dev.db")
     };
     #[cfg(not(debug_assertions))]
     let path = {
@@ -686,13 +658,6 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<Connection, String> {
 
     // Seed sensible defaults on first launch (idempotent).
     seed_defaults(&conn).map_err(|err| format!("Échec de l'initialisation des données : {err}"))?;
-
-    // Only an explicitly requested fixture gets a test password, and only
-    // when credentials are missing.
-    #[cfg(debug_assertions)]
-    if std::env::var("CENTREMANAGER_LOAD_TEST_FIXTURE").as_deref() == Ok("1") && !crate::commands::auth::check_setup(&conn)? {
-        crate::commands::auth::setup(&conn, "Centre Test Marrakech", "test1234")?;
-    }
 
     println!("[CentreManager] base de données prête : {}", path.display());
     Ok(conn)
@@ -778,26 +743,6 @@ mod tests {
                 .unwrap(),
             1
         );
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    fn debug_fixture_is_copied_once_without_overwriting_changes() {
-        let dir = std::env::temp_dir().join(format!("cm-debug-fixture-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        let fixture = dir.join("fixture.db");
-        let target = dir.join("dev.db");
-        fs::write(&fixture, b"fixture").unwrap();
-        assert!(ensure_debug_fixture(&fixture, &target).unwrap());
-        assert_eq!(fs::read(&target).unwrap(), b"fixture");
-        fs::write(&target, b"edited").unwrap();
-        assert!(!ensure_debug_fixture(&fixture, &target).unwrap());
-        assert_eq!(fs::read(&target).unwrap(), b"edited");
-        fs::remove_file(&target).unwrap();
-        fs::remove_file(&fixture).unwrap();
-        assert!(ensure_debug_fixture(&fixture, &target).is_err());
-        assert!(!target.exists());
-        fs::remove_dir(&dir).unwrap();
     }
 
     #[test]
