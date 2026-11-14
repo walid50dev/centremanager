@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { UserRound } from 'lucide-react';
+import { ChevronDown, Plus, UserRound } from 'lucide-react';
 import Button from '../ui/Button';
 import DuplicateWarnings from '../duplicates/DuplicateWarnings';
 import Input from '../ui/Input';
@@ -15,6 +15,7 @@ import LevelModal from '../entity-modals/LevelModal';
 import BranchModal from '../entity-modals/BranchModal';
 import { isValidPhone, studentsApi } from '../../services/students';
 import { formatPhone, stripPhone } from '../../utils/format';
+import { todayIsoDate } from '../../utils/billing';
 import type { Branch, Level, Student, StudentInput } from '../../types';
 
 export interface StudentModalProps {
@@ -29,13 +30,12 @@ export interface StudentModalProps {
 type Form = { first: string; last: string; level: string; branch: string; school: string; birth: string;
   enrollment: string; guardian: string; phone: string; relation: string; secondary: string;
   secondaryPhone: string; cin: string; father: string; mother: string; studentPhone: string; fee: number; status: 'actif' | 'inactif'; address: string; notes: string };
-const today = () => new Date().toISOString().split('T')[0];
 function toForm(student?: Student | null): Form {
   const names = (student?.full_name ?? '').trim().split(/\s+/);
   return {
     first: student?.first_name ?? names[0] ?? '', last: student?.last_name ?? names.slice(1).join(' '),
     level: student?.level_id ? String(student.level_id) : '', branch: student?.branch_id ? String(student.branch_id) : '',
-    school: student?.school_name ?? '', birth: student?.birth_date ?? '', enrollment: student?.enrollment_date || today(),
+    school: student?.school_name ?? '', birth: student?.birth_date ?? '', enrollment: student?.enrollment_date || todayIsoDate(),
     guardian: student?.guardian_name ?? '', phone: student?.guardian_phone ? formatPhone(student.guardian_phone) : (student?.phone ? formatPhone(student.phone) : ''),
     studentPhone: student?.phone ? formatPhone(student.phone) : '', fee: student?.enrollment_fee_cents ?? 0,
     cin: student?.cin_tuteur ?? '', father: student?.nom_pere ?? '', mother: student?.nom_mere ?? '',
@@ -47,6 +47,7 @@ function toForm(student?: Student | null): Form {
 
 export function StudentModal({ open, student = null, onClose, onSaved, onCreated, zIndex = 50 }: StudentModalProps) {
   const { t } = useTranslation();
+  const detailsId = useId();
   const [form, setForm] = useState<Form>(() => toForm(student));
   const [levels, setLevels] = useState<Level[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -54,7 +55,8 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
   const [quickBranch, setQuickBranch] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
-  useEffect(() => { if (open) { setForm(toForm(student)); setSubmitting(false); setShowErrors(false); } else { setQuickLevel(false); setQuickBranch(false); } }, [open, student]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  useEffect(() => { if (open) { setForm(toForm(student)); setSubmitting(false); setShowErrors(false); setDetailsOpen(false); } else { setQuickLevel(false); setQuickBranch(false); } }, [open, student]);
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -72,7 +74,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
   const relations = useMemo(() => ['father', 'mother', 'guardian', 'brother', 'sister', 'other'].map(value => ({ value, label: t(`students.relation_${value}`) })), [t]);
   const update = (key: keyof Form, value: string | number) => setForm(previous => ({ ...previous, [key]: value, ...(key === 'level' && value !== previous.level ? { branch: '' } : {}) }));
   const save = async () => {
-    if (!valid) { setShowErrors(true); return; }
+    if (!valid) { setShowErrors(true); if (form.secondaryPhone.trim() && !isValidPhone(form.secondaryPhone)) setDetailsOpen(true); return; }
     const phone = stripPhone(form.phone);
     const data: StudentInput = {
       full_name: `${form.first.trim()} ${form.last.trim()}`, first_name: form.first.trim(), last_name: form.last.trim(),
@@ -99,35 +101,40 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
       footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button><Button data-testid="student-save" onClick={() => void save()} loading={submitting} disabled={submitting}>{t('students.save')}</Button></>}>
       <form noValidate className="space-y-6" onSubmit={event => { event.preventDefault(); void save(); }}>
         <DuplicateWarnings open={open} type="student" id={student?.id} first={form.first} last={form.last} phone={form.phone} />
-        <fieldset data-testid="student-section-identity" className="grid gap-4 sm:grid-cols-2"><legend className="mb-3 text-base font-semibold">{t('students.section_identity')}</legend>
+        <div data-testid="student-section-essential" className="grid gap-4 sm:grid-cols-2">
           <Input label={t('students.last_name')} data-testid="student-last-name" error={showErrors && !form.last.trim() ? t('common.required') : undefined} required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
           <Input label={t('students.first_name')} data-testid="student-first-name" error={showErrors && !form.first.trim() ? t('common.required') : undefined} required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />
           <CreatableEntitySelect testId="student-level" error={showErrors && !form.level ? t('common.required') : undefined} required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} disableCreate={zIndex >= 70} searchable />
-          <CreatableEntitySelect testId="student-branch" label={t('students.branch')} placeholder={t('students.selectBranch')}
-            options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
-            onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}
-            getOptionValue={branch => branch.id} clearable onCreate={() => setQuickBranch(true)} disableCreate={zIndex >= 70} />
           <Input type="tel" dir="ltr" label={t('students.student_phone')} required data-testid="student-phone" value={form.studentPhone} onChange={e => update('studentPhone', e.target.value)} error={showErrors && !form.studentPhone.trim() ? t('common.required') : form.studentPhone && !isValidPhone(form.studentPhone) ? t('students.validation.phoneFormat') : undefined} />
-          <Input label={t('students.school_name')} data-testid="student-school-name" placeholder="Lycée Moulay Youssef" value={form.school} onChange={e => update('school', e.target.value)} />
-          <Input type="date" label={t('students.birth_date')} data-testid="student-birth-date" value={form.birth} onChange={e => update('birth', e.target.value)} />
-          <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
-        </fieldset>
-        <fieldset data-testid="student-section-guardian" className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2"><legend className="text-base font-semibold">{t('students.section_guardian')}</legend>
           <Input label={t('students.guardian_name')} data-testid="student-guardian-name" error={showErrors && !form.guardian.trim() ? t('common.required') : undefined} required placeholder="Rachid El Mansouri" value={form.guardian} onChange={e => update('guardian', e.target.value)} />
           <Input type="tel" dir="ltr" label={t('students.guardian_phone')} data-testid="student-guardian-phone" required placeholder="06 61 23 45 67" value={form.phone} onChange={e => update('phone', e.target.value)} onBlur={() => { if (isValidPhone(form.phone)) update('phone', formatPhone(form.phone)); }} error={showErrors && !form.phone.trim() ? t('common.required') : form.phone && !isValidPhone(form.phone) ? t('students.validation.phoneFormat') : undefined} />
-          <Input label={t('students.guardianCin')} data-testid="student-cin" value={form.cin} onChange={e => update('cin', e.target.value)} />
-          <Input label={t('students.fatherName')} data-testid="student-father" value={form.father} onChange={e => update('father', e.target.value)} />
-          <Input label={t('students.motherName')} data-testid="student-mother" value={form.mother} onChange={e => update('mother', e.target.value)} />
-          <Select label={t('students.guardian_relation')} data-testid="student-guardian-relation" placeholder="—" options={relations} value={form.relation} onChange={e => update('relation', e.target.value)} />
-          <Input label={t('students.secondary_contact')} data-testid="student-secondary-name" value={form.secondary} onChange={e => update('secondary', e.target.value)} />
-          <Input type="tel" dir="ltr" label={t('students.secondary_phone')} data-testid="student-secondary-phone" placeholder="06 61 23 45 67" value={form.secondaryPhone} onChange={e => update('secondaryPhone', e.target.value)} onBlur={() => { if (isValidPhone(form.secondaryPhone)) update('secondaryPhone', formatPhone(form.secondaryPhone)); }} error={form.secondaryPhone && !isValidPhone(form.secondaryPhone) ? t('students.validation.phoneFormat') : undefined} />
-        </fieldset>
-        <fieldset data-testid="student-section-admin" className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2"><legend className="text-base font-semibold">{t('students.section_admin')}</legend>
           <MoneyInput label={t('students.enrollment_fee_dh')} hint={t('students.enrollment_fee_future')} data-testid="student-enrollment-fee" valueCents={form.fee} onChange={value => update('fee', value)} />
+          <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
           <Select label={t('students.status')} data-testid="student-status" required value={form.status} options={[{ value: 'actif', label: t('students.active') }, { value: 'inactif', label: t('students.inactive') }]} onChange={e => update('status', e.target.value)} />
-          <Input label={t('students.address')} data-testid="student-address" placeholder={t('students.address_placeholder')} value={form.address} onChange={e => update('address', e.target.value)} />
-          <Textarea containerClassName="sm:col-span-2" label={t('students.notes')} data-testid="student-notes" placeholder={t('students.notes_placeholder')} value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
-        </fieldset>
+        </div>
+        <section className="rounded-lg border border-border">
+          <button type="button" data-testid="student-complementary-toggle" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen(open => !open)} className="flex w-full items-center gap-2 rounded-lg px-4 py-3 text-start font-semibold text-primary hover:bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />{t('students.complementary')}<ChevronDown className={`ms-auto h-4 w-4 shrink-0 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </button>
+          <div id={detailsId} data-testid={detailsId} hidden={!detailsOpen}>
+            <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
+              <CreatableEntitySelect testId="student-branch" label={t('students.branch')} placeholder={t('students.selectBranch')}
+                options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
+                onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}
+                getOptionValue={branch => branch.id} clearable onCreate={() => setQuickBranch(true)} disableCreate={zIndex >= 70} />
+              <Input type="date" label={t('students.birth_date')} data-testid="student-birth-date" value={form.birth} onChange={e => update('birth', e.target.value)} />
+              <Input label={t('students.school_name')} data-testid="student-school-name" placeholder="Lycée Moulay Youssef" value={form.school} onChange={e => update('school', e.target.value)} />
+              <Input label={t('students.address')} data-testid="student-address" placeholder={t('students.address_placeholder')} value={form.address} onChange={e => update('address', e.target.value)} />
+              <Input label={t('students.guardianCin')} data-testid="student-cin" value={form.cin} onChange={e => update('cin', e.target.value)} />
+              <Select label={t('students.guardian_relation')} data-testid="student-guardian-relation" placeholder="—" options={relations} value={form.relation} onChange={e => update('relation', e.target.value)} />
+              <Input label={t('students.fatherName')} data-testid="student-father" value={form.father} onChange={e => update('father', e.target.value)} />
+              <Input label={t('students.motherName')} data-testid="student-mother" value={form.mother} onChange={e => update('mother', e.target.value)} />
+              <Input label={t('students.secondary_contact')} data-testid="student-secondary-name" value={form.secondary} onChange={e => update('secondary', e.target.value)} />
+              <Input type="tel" dir="ltr" label={t('students.secondary_phone')} data-testid="student-secondary-phone" placeholder="06 61 23 45 67" value={form.secondaryPhone} onChange={e => update('secondaryPhone', e.target.value)} onBlur={() => { if (isValidPhone(form.secondaryPhone)) update('secondaryPhone', formatPhone(form.secondaryPhone)); }} error={form.secondaryPhone && !isValidPhone(form.secondaryPhone) ? t('students.validation.phoneFormat') : undefined} />
+              <Textarea containerClassName="sm:col-span-2" label={t('students.notes')} data-testid="student-notes" placeholder={t('students.notes_placeholder')} value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
+            </div>
+          </div>
+        </section>
       </form>
     </Modal>
     {quickBranch && <BranchModal levels={levels} zIndex={zIndex + 10} onClose={() => setQuickBranch(false)} onCreated={branch => {
