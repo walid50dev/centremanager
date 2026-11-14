@@ -99,7 +99,10 @@ function AuditDetails({ entry, lookups }: { entry: AuditEntry; lookups: NameLook
       return String(value);
     };
 
-    const record = parsed as Record<string, unknown>;
+    // Keep legacy data in the audit log, but do not surface removed parent-name fields in the sheet.
+    const record = Object.fromEntries(Object.entries(parsed as Record<string, unknown>)
+      .filter(([key]) => key !== 'nom_pere' && key !== 'nom_mere'));
+    if (Object.keys(record).length === 0) return [];
 
     // STATUS_CHANGE -> { from, to }
     if (entry.action === 'STATUS_CHANGE' && 'from' in record && 'to' in record) {
@@ -334,8 +337,6 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
             <InfoRow label={t('students.guardian_name')}>{student.guardian_name ?? '—'}</InfoRow>
             <InfoRow label={t('students.student_phone')}><span className="whitespace-nowrap" dir="ltr" data-testid="student-detail-phone">{student.phone ? formatPhone(student.phone) : '—'}</span></InfoRow>
             <InfoRow label={t('students.guardian_phone')}><span dir="ltr" className="whitespace-nowrap" data-testid="student-detail-guardian-phone">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span></InfoRow>
-            <InfoRow label={t('students.fatherName')}>{student.nom_pere || '—'}</InfoRow>
-            <InfoRow label={t('students.motherName')}>{student.nom_mere || '—'}</InfoRow>
             <InfoRow label={t('students.guardianCin')}>{student.cin_tuteur || '—'}</InfoRow>
             <InfoRow label={t('students.guardian_relation')}>{student.guardian_relation ? t(`students.relation_${student.guardian_relation}`) : '—'}</InfoRow>
             <InfoRow label={t('students.secondary_contact')}>{student.secondary_contact_name ?? '—'}</InfoRow>

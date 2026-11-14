@@ -29,7 +29,7 @@ export interface StudentModalProps {
 
 type Form = { first: string; last: string; level: string; branch: string; school: string; birth: string;
   enrollment: string; guardian: string; phone: string; relation: string; secondary: string;
-  secondaryPhone: string; cin: string; father: string; mother: string; studentPhone: string; fee: number; status: 'actif' | 'inactif'; address: string; notes: string };
+  secondaryPhone: string; cin: string; studentPhone: string; fee: number; status: 'actif' | 'inactif'; address: string; notes: string };
 function toForm(student?: Student | null): Form {
   const names = (student?.full_name ?? '').trim().split(/\s+/);
   return {
@@ -38,7 +38,7 @@ function toForm(student?: Student | null): Form {
     school: student?.school_name ?? '', birth: student?.birth_date ?? '', enrollment: student?.enrollment_date || todayIsoDate(),
     guardian: student?.guardian_name ?? '', phone: student?.guardian_phone ? formatPhone(student.guardian_phone) : (student?.phone ? formatPhone(student.phone) : ''),
     studentPhone: student?.phone ? formatPhone(student.phone) : '', fee: student?.enrollment_fee_cents ?? 0,
-    cin: student?.cin_tuteur ?? '', father: student?.nom_pere ?? '', mother: student?.nom_mere ?? '',
+    cin: student?.cin_tuteur ?? '',
     relation: student?.guardian_relation ?? '', secondary: student?.secondary_contact_name ?? '',
     secondaryPhone: student?.secondary_contact_phone ? formatPhone(student.secondary_contact_phone) : '',
     status: student?.status ?? 'actif', address: student?.address ?? '', notes: student?.notes ?? '',
@@ -79,7 +79,8 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
     const data: StudentInput = {
       full_name: `${form.first.trim()} ${form.last.trim()}`, first_name: form.first.trim(), last_name: form.last.trim(),
       birth_date: form.birth || null, phone: stripPhone(form.studentPhone), guardian_phone: phone, enrollment_fee_cents: form.fee, guardian_name: form.guardian.trim(),
-      cin_tuteur: form.cin.trim() || null, nom_pere: form.father.trim() || null, nom_mere: form.mother.trim() || null,
+      // Legacy parent names are no longer editable, but saving other fields must not erase them.
+      cin_tuteur: form.cin.trim() || null, nom_pere: student?.nom_pere ?? null, nom_mere: student?.nom_mere ?? null,
       guardian_relation: form.relation || null, secondary_contact_name: form.secondary.trim() || null,
       secondary_contact_phone: stripPhone(form.secondaryPhone) || null, school_name: form.school.trim() || null,
       enrollment_date: form.enrollment, level_id: Number(form.level), branch_id: form.branch ? Number(form.branch) : null,
@@ -116,7 +117,7 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
           <button type="button" data-testid="student-complementary-toggle" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen(open => !open)} className="flex w-full items-center gap-2 rounded-lg px-4 py-3 text-start font-semibold text-primary hover:bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />{t('students.complementary')}<ChevronDown className={`ms-auto h-4 w-4 shrink-0 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
-          <div id={detailsId} data-testid={detailsId} hidden={!detailsOpen}>
+          <div id={detailsId} data-testid="student-complementary-fields" hidden={!detailsOpen}>
             <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
               <CreatableEntitySelect testId="student-branch" label={t('students.branch')} placeholder={t('students.selectBranch')}
                 options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
@@ -127,8 +128,6 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
               <Input label={t('students.address')} data-testid="student-address" placeholder={t('students.address_placeholder')} value={form.address} onChange={e => update('address', e.target.value)} />
               <Input label={t('students.guardianCin')} data-testid="student-cin" value={form.cin} onChange={e => update('cin', e.target.value)} />
               <Select label={t('students.guardian_relation')} data-testid="student-guardian-relation" placeholder="—" options={relations} value={form.relation} onChange={e => update('relation', e.target.value)} />
-              <Input label={t('students.fatherName')} data-testid="student-father" value={form.father} onChange={e => update('father', e.target.value)} />
-              <Input label={t('students.motherName')} data-testid="student-mother" value={form.mother} onChange={e => update('mother', e.target.value)} />
               <Input label={t('students.secondary_contact')} data-testid="student-secondary-name" value={form.secondary} onChange={e => update('secondary', e.target.value)} />
               <Input type="tel" dir="ltr" label={t('students.secondary_phone')} data-testid="student-secondary-phone" placeholder="06 61 23 45 67" value={form.secondaryPhone} onChange={e => update('secondaryPhone', e.target.value)} onBlur={() => { if (isValidPhone(form.secondaryPhone)) update('secondaryPhone', formatPhone(form.secondaryPhone)); }} error={form.secondaryPhone && !isValidPhone(form.secondaryPhone) ? t('students.validation.phoneFormat') : undefined} />
               <Textarea containerClassName="sm:col-span-2" label={t('students.notes')} data-testid="student-notes" placeholder={t('students.notes_placeholder')} value={form.notes} onChange={e => update('notes', e.target.value)} rows={3} />
