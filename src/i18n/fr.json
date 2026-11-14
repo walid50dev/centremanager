@@ -340,7 +340,7 @@
     "save": "Enregistrer",
     "edit": "Modifier",
     "deactivate": "Désactiver",
-    "reactivate": "Réactiver",
+    "reactivate": "Activer",
     "confirmDeactivate": "Désactiver « {{name}} » ? L'élève restera dans la base et pourra être réactivé.",
     "confirmReactivate": "Réactiver « {{name}} » ?",
     "count": "{{count}} élève(s)",
@@ -449,7 +449,8 @@
     "studentContact": "Contact Élève",
     "whatsappStudent": "WhatsApp Élève",
     "whatsappGuardian": "WhatsApp Tuteur",
-    "studentReminder": "Bonjour {{name}}, un rappel concernant ton paiement pour le groupe {{groups}}. Le montant restant est de {{amount}}. Merci !"
+    "studentReminder": "Bonjour {{name}}, un rappel concernant ton paiement pour le groupe {{groups}}. Le montant restant est de {{amount}}. Merci !",
+    "complementary": "Informations complémentaires (optionnel)"
   },
   "groups": {
     "title": "Groupes",
@@ -623,7 +624,6 @@
       "overdue": "en retard"
     },
     "whatsapp": "WhatsApp",
-    "whatsappMessage": "Bonjour, nous vous rappelons courtoisement que le paiement de {{name}} pour le groupe {{group}} reste en attente. Merci de votre attention.",
     "sendWhatsApp": "Envoyer un message WhatsApp"
   },
   "payments": {

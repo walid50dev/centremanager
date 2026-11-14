@@ -43,8 +43,8 @@ export async function captureModalScreens({ page, step, nav }) {
   const scroll = locator => locator.evaluate(element => element.scrollIntoView({ block: 'start' }));
 
   await modalStep('22-modal-add-student-step1', async () => { await studentForm(); });
-  await modalStep('23-modal-add-student-step2', async () => { await studentForm(); await tid('student-section-guardian').evaluate(element => { element.closest('form').parentElement.scrollTop = 155; }); });
-  await modalStep('24-modal-add-student-step3', async () => { await studentForm(); await scroll(tid('student-section-admin')); });
+  await modalStep('23-modal-add-student-step2', async () => { await studentForm(); await scroll(tid('student-guardian-name'));  });
+  await modalStep('24-modal-add-student-step3', async () => { await studentForm(); await tid('student-complementary-toggle').click(); await scroll(tid('student-complementary-toggle')); });
   await modalStep('25-modal-edit-student', async () => { await studentDetail(); await page.getByRole('button', { name: 'Modifier', exact: true }).click(); await tid('student-first-name').waitFor(); });
   await modalStep('26-modal-add-group', async () => { await groupForm(); });
   await modalStep('27-modal-add-group-schedules', async () => { await nav('timetable'); await tid('timetable-manage').click(); await tid('timetable-group').selectOption('1'); await tid('timetable-slot').first().waitFor(); });

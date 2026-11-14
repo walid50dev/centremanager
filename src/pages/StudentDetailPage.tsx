@@ -270,11 +270,11 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-testid="student-sheet-actions">
           <WhatsAppLink label={t('students.whatsappStudent')} testId="sheet-whatsapp-student" phone={student.phone} />
           <WhatsAppLink label={t('students.whatsappGuardian')} testId="sheet-whatsapp-guardian" phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} />
           <Button
-            variant="secondary"
+            variant="primary"
             onClick={() => setModalOpen(true)}
             leftIcon={<Pencil className="h-4 w-4" aria-hidden="true" />}
           >
@@ -332,14 +332,14 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
             <InfoRow label={t('students.birth_date')}>{student.birth_date ? formatDate(student.birth_date) : '—'}</InfoRow>
             <InfoRow label={t('students.enrollment_date')}>{formatDate(student.enrollment_date)}</InfoRow>
             <InfoRow label={t('students.guardian_name')}>{student.guardian_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.student_phone')}><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">{student.phone ? <a href={`tel:${student.phone}`} className="whitespace-nowrap text-primary hover:underline" dir="ltr" data-testid="student-detail-phone">{formatPhone(student.phone)}</a> : '—'}<WhatsAppLink compact label={t('students.student_phone')} testId="detail-whatsapp-student" phone={student.phone} /></div></InfoRow>
-            <InfoRow label={t('students.guardian_phone')}><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><span dir="ltr" className="whitespace-nowrap">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span><WhatsAppLink compact label={t('students.guardian_phone')} testId="detail-whatsapp-guardian" phone={student.guardian_phone} message={t('students.contactMessage', { name: student.full_name })} /></div></InfoRow>
+            <InfoRow label={t('students.student_phone')}><span className="whitespace-nowrap" dir="ltr" data-testid="student-detail-phone">{student.phone ? formatPhone(student.phone) : '—'}</span></InfoRow>
+            <InfoRow label={t('students.guardian_phone')}><span dir="ltr" className="whitespace-nowrap" data-testid="student-detail-guardian-phone">{student.guardian_phone ? formatPhone(student.guardian_phone) : '—'}</span></InfoRow>
             <InfoRow label={t('students.fatherName')}>{student.nom_pere || '—'}</InfoRow>
             <InfoRow label={t('students.motherName')}>{student.nom_mere || '—'}</InfoRow>
             <InfoRow label={t('students.guardianCin')}>{student.cin_tuteur || '—'}</InfoRow>
             <InfoRow label={t('students.guardian_relation')}>{student.guardian_relation ? t(`students.relation_${student.guardian_relation}`) : '—'}</InfoRow>
             <InfoRow label={t('students.secondary_contact')}>{student.secondary_contact_name ?? '—'}</InfoRow>
-            <InfoRow label={t('students.secondary_phone')}>{student.secondary_contact_phone ? <a href={`tel:${student.secondary_contact_phone}`} className="text-primary hover:underline" dir="ltr" data-testid="student-detail-parent-phone">{formatPhone(student.secondary_contact_phone)}</a> : '—'}</InfoRow>
+            <InfoRow label={t('students.secondary_phone')}><span dir="ltr" className="whitespace-nowrap" data-testid="student-detail-parent-phone">{student.secondary_contact_phone ? formatPhone(student.secondary_contact_phone) : '—'}</span></InfoRow>
             <InfoRow label={t('students.status')}>{student.status === 'actif' ? t('students.active') : t('students.inactive')}</InfoRow>
             <InfoRow label={t('students.address')}>{student.address ?? '—'}</InfoRow>
             <InfoRow label={t('students.notes')}>{student.notes ?? '—'}</InfoRow>
@@ -361,7 +361,7 @@ export function StudentDetailPage({ studentIdOverride, onClose }: { studentIdOve
       )}
 
       {tab === 'finances' && (
-        <StudentFinancesTab studentId={student.id} studentName={student.full_name} studentPhone={student.phone} onChanged={() => void load()} />
+        <StudentFinancesTab studentId={student.id} onChanged={() => void load()} />
       )}
 
       {tab === 'attendance' && (

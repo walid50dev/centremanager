@@ -340,7 +340,7 @@
     "save": "حفظ",
     "edit": "تعديل",
     "deactivate": "تعطيل",
-    "reactivate": "إعادة التفعيل",
+    "reactivate": "تفعيل",
     "confirmDeactivate": "تعطيل «{{name}}»؟ سيبقى التلميذ في قاعدة البيانات ويمكن إعادة تفعيله.",
     "confirmReactivate": "إعادة تفعيل «{{name}}»؟",
     "count": "{{count}} تلميذ",
@@ -449,7 +449,8 @@
     "studentContact": "تواصل التلميذ",
     "whatsappStudent": "واتساب التلميذ",
     "whatsappGuardian": "واتساب ولي الأمر",
-    "studentReminder": "مرحباً {{name}}، تذكير بخصوص أدائك للمجموعة {{groups}}. المبلغ المتبقي هو {{amount}}. شكراً لك!"
+    "studentReminder": "مرحباً {{name}}، تذكير بخصوص أدائك للمجموعة {{groups}}. المبلغ المتبقي هو {{amount}}. شكراً لك!",
+    "complementary": "معلومات إضافية (اختياري)"
   },
   "groups": {
     "title": "المجموعات",
@@ -631,7 +632,6 @@
       "overdue": "متأخرة"
     },
     "whatsapp": "WhatsApp",
-    "whatsappMessage": "مرحباً، نذكّركم بلطف بأن أداء {{name}} عن مجموعة {{group}} لا يزال مستحقاً. شكراً لتعاونكم.",
     "sendWhatsApp": "إرسال رسالة عبر واتساب"
   },
   "payments": {

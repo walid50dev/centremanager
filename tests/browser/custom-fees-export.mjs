@@ -29,8 +29,7 @@ try {
  await dialog.getByRole('button',{name:"Confirmer l'inscription"}).click(); await dialog.waitFor({state:'hidden'});
  const invoices=await call('cmd_get_student_invoices',{studentId:sid}); assert.equal(invoices[0].amount_cents,17500);
  await page.getByRole('tab',{name:'Historique des paiements'}).click();
- const link=page.getByTestId(`whatsapp-${invoices[0].id}`); await link.waitFor();
- const href=new URL(await link.getAttribute('href')); assert.equal(href.pathname,'/212612345678'); assert.match(href.searchParams.get('text'),/Salma Essai/); assert.match(href.searchParams.get('text'),/Groupe Atlas/);
+ await page.getByTestId('student-invoices').waitFor(); assert.equal(await page.getByTestId(`whatsapp-${invoices[0].id}`).count(),0); assert.equal(await page.getByTestId('student-sheet').locator('a[href*="wa.me"]').count(),2);
  await page.getByTestId('student-sheet').getByRole('button',{name:'Fermer'}).first().click();
  await page.getByTestId('nav-settings').click();
  await page.getByRole('button',{name:/Année scolaire/}).first().click();
