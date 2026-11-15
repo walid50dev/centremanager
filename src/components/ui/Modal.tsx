@@ -4,6 +4,9 @@ import { X } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { cn } from '../../utils/format';
 
+/** Opt-in layout for long forms: one scrolling body between fixed header and footer. */
+export const scrollableModalClassName = 'flex max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl [&>div:first-child]:shrink-0 [&>div:nth-child(2)]:min-h-0 [&>div:nth-child(2)]:flex-1 [&>div:nth-child(2)]:!max-h-none [&>div:nth-child(2)]:overscroll-contain [&>div:nth-child(3)]:shrink-0 [&>div:nth-child(3)]:flex-wrap [&>div:nth-child(3)]:bg-white';
+
 export type ModalSize = 'sm' | 'md' | 'lg' | 'wide' | 'xl';
 
 export interface ModalProps {
