@@ -58,15 +58,15 @@ export function KpiCard({
 
   return (
     <Card
-      className="flex h-full min-h-[152px] min-w-0 flex-col rounded-xl border-slate-200/90 bg-white p-5 shadow-card transition-[border-color,box-shadow] duration-150 hover:border-slate-300 hover:shadow-sm motion-reduce:transition-none"
+      className="flex h-full min-h-[144px] min-w-0 flex-col rounded-xl border-slate-200/90 bg-white p-5 shadow-card transition-[border-color,box-shadow] duration-150 hover:border-slate-300 hover:shadow-sm motion-reduce:transition-none"
       data-testid={testId}
       title={tooltip}
       data-tooltip={tooltip}
     >
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-h-[36px] min-w-0 items-start justify-between gap-3">
         <span className="min-w-0 pt-1 text-[13px] font-medium leading-5 text-muted">{label}</span>
         <span
-          className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', iconClass)}
+          className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconClass)}
           aria-hidden="true"
         >
           <Icon className="h-[18px] w-[18px]" />
@@ -75,7 +75,7 @@ export function KpiCard({
 
       <div className="mt-auto min-w-0 pt-3">
         <p
-          className={cn('break-words text-[25px] font-semibold leading-tight tracking-tight tabular-nums', valueClass || 'text-foreground')}
+          className={cn('break-words text-[26px] font-semibold leading-tight tracking-tight tabular-nums', valueClass || 'text-foreground')}
           data-testid={testId ? `${testId}-value` : undefined}
         >
           {value}
