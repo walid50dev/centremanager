@@ -50,6 +50,8 @@ const NET_TONE = {
   zero: { value: 'text-warning', icon: 'bg-warning/10 text-warning' },
 } as const;
 
+const EMPTY_STATE_CLASS = 'min-h-[136px] flex-1 !px-5 !py-5 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs';
+
 /** `positive` / `negative` / `zero` — also exposed as `data-net` for tests. */
 function netTone(cents: number): 'positive' | 'negative' | 'zero' {
   if (cents > 0) return 'positive';
@@ -152,10 +154,10 @@ export function DashboardPage() {
       >
         {loading && !kpis
           ? Array.from({ length: 6 }).map((_, index) => (
-              <Card key={index} className="flex min-h-[152px] flex-col rounded-xl p-5" data-testid="dashboard-kpi-skeleton">
+              <Card key={index} className="flex min-h-[144px] flex-col rounded-xl p-5" data-testid="dashboard-kpi-skeleton">
                 <div className="flex items-start justify-between gap-3">
                   <div className="skeleton mt-1 h-3 w-24" />
-                  <div className="skeleton h-10 w-10 rounded-xl" />
+                  <div className="skeleton h-9 w-9 rounded-xl" />
                 </div>
                 <div className="skeleton mt-auto h-7 w-24" />
                 <div className="skeleton mt-2 h-3 w-20" />
@@ -183,12 +185,13 @@ export function DashboardPage() {
                   showTrendHint
                   testId="kpi-revenue"
                 />
+                {/* Without a positive invoice total, the reported rate has no denominator to assess. */}
                 <KpiCard
                   icon={TrendingUp}
                   label={t('dashboard.kpi.collectionRate')}
                   value={<span dir="ltr">{rateLabel(kpis.collection_rate)}</span>}
-                  iconClass={rateBubbleClass(kpis.collection_rate)}
-                  valueClass={rateTextClass(kpis.collection_rate)}
+                  iconClass={kpis.theoretical_revenue_cents > 0 ? rateBubbleClass(kpis.collection_rate) : 'bg-slate-100 text-muted'}
+                  valueClass={kpis.theoretical_revenue_cents > 0 ? rateTextClass(kpis.collection_rate) : 'text-foreground'}
                   hint={
                     kpis.theoretical_revenue_cents > 0
                       ? <span dir="ltr">{`${formatCurrency(kpis.monthly_revenue_cents)} / ${formatCurrency(
@@ -288,7 +291,7 @@ export function DashboardPage() {
               icon={<CalendarCheck className="h-5 w-5" aria-hidden="true" />}
               title={t('dashboard.alerts.empty')}
               description={t('dashboard.alerts.emptyHint')}
-              className="flex-1 px-5 py-7 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs"
+              className={EMPTY_STATE_CLASS}
             />
           ) : (
             <div className="divide-y divide-border" data-testid="dashboard-alert-list">
@@ -380,7 +383,7 @@ export function DashboardPage() {
               icon={<HandCoins className="h-5 w-5" aria-hidden="true" />}
               title={t('dashboard.payments.empty')}
               description={t('dashboard.payments.emptyHint')}
-              className="flex-1 px-5 py-7 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs"
+              className={EMPTY_STATE_CLASS}
             />
           ) : (
             <ul className="divide-y divide-border" data-testid="dashboard-payment-list">
@@ -452,7 +455,7 @@ export function DashboardPage() {
             icon={<GraduationCap className="h-5 w-5" aria-hidden="true" />}
             title={t('dashboard.teachers.empty')}
             description={t('dashboard.teachers.emptyHint')}
-            className="px-5 py-7 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs"
+            className={EMPTY_STATE_CLASS}
           />
         ) : (
           <div className="overflow-x-auto">
