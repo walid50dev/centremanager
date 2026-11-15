@@ -4,7 +4,8 @@ import { Check, Printer } from 'lucide-react';
 import Button from '../ui/Button';
 import CreatableEntitySelect from '../ui/CreatableEntitySelect';
 import EmptyState from '../ui/EmptyState';
-import Modal from '../ui/Modal';
+import Modal, { scrollableModalClassName } from '../ui/Modal';
+import WizardProgress from '../ui/WizardProgress';
 import MoneyInput from '../ui/MoneyInput';
 import Input from '../ui/Input';
 import { todayIso } from '../../services/enrollments';
@@ -16,7 +17,7 @@ import { invoicesApi } from '../../services/invoices';
 import { paymentsApi } from '../../services/payments';
 import { studentsApi } from '../../services/students';
 import { useDebounce } from '../../hooks/useDebounce';
-import { cn, formatCurrency, formatPhone } from '../../utils/format';
+import { cn, formatCurrency, formatDate, formatPhone } from '../../utils/format';
 import { methodLabel, periodLabel } from '../../utils/billing';
 import type { PaymentMethod, Student, StudentInvoice } from '../../types';
 import { PAYMENT_METHODS } from '../../types';
@@ -221,14 +222,12 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
 
   const footer = (
     <>
-      {step > 1 && step < 4 ? (
+      <Button variant="secondary" onClick={onClose} disabled={saving}>
+        {t('payment.cancel')}
+      </Button>
+      {step > 1 ? (
         <Button variant="secondary" onClick={() => setStep(step - 1)} disabled={saving}>
           {t('payment.previous')}
-        </Button>
-      ) : null}
-      {step === 1 ? (
-        <Button variant="secondary" onClick={onClose}>
-          {t('payment.cancel')}
         </Button>
       ) : null}
       {step === 2 ? (
@@ -287,37 +286,11 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         title={t('payment.title')}
         description={t('payment.description')}
         size="lg"
+        className={scrollableModalClassName}
+        testId="payment-modal"
         footer={footer}
       >
-        {/* Step indicator */}
-        <ol className="mb-4 flex items-center gap-2 text-[13px]" aria-label={t('payment.title')}>
-          {STEPS.map((labelKey, index) => {
-            const number = index + 1;
-            const done = number < step;
-            const active = number === step;
-            return (
-              <li key={labelKey} className="flex flex-1 items-center gap-2">
-                <span
-                  className={cn(
-                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
-                    active && 'bg-primary text-white',
-                    done && 'bg-primary/15 text-primary',
-                    !active && !done && 'bg-slate-100 text-muted',
-                  )}
-                  aria-current={active ? 'step' : undefined}
-                >
-                  {done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : number}
-                </span>
-                <span className={cn('font-medium', active ? 'text-foreground' : 'text-muted')}>
-                  {t(labelKey)}
-                </span>
-                {number < STEPS.length ? (
-                  <span className="hidden h-px flex-1 bg-border sm:block" aria-hidden="true" />
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
+        <WizardProgress labels={STEPS.map(key => t(key))} current={step} ariaLabel={t('payment.title')} />
 
         {error ? (
           <p className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-[13px] text-destructive" role="alert">
@@ -356,22 +329,20 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         {/* ---------------------------------------------------------- step 2 */}
         {step === 2 && student ? (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-slate-50/60 p-4">
               <p className="w-full text-xs text-muted">{t('payment.historicHint')}</p>
-              <Input type="month" label={t('payment.historicMonth')} data-testid="payment-historic-month" min={activeYear?.start_date?.slice(0, 7)} max={lastHistoricMonth} value={historicMonth} onChange={e => setHistoricMonth(e.target.value)} />
+              <Input containerClassName="min-w-0 flex-1 sm:max-w-[240px]" type="month" label={t('payment.historicMonth')} data-testid="payment-historic-month" min={activeYear?.start_date?.slice(0, 7)} max={lastHistoricMonth} value={historicMonth} onChange={e => setHistoricMonth(e.target.value)} />
               <Button variant="secondary" data-testid="payment-prepare-month" disabled={!historicMonth || loading} onClick={() => { void (async () => {
                 try { setLoading(true); const [year, month] = historicMonth.split('-').map(Number); const count = await invoicesApi.generateForStudent(student.id, month, year); const rows = await invoicesApi.forStudent(student.id); setInvoices(rows); const ids = rows.filter(i => i.remaining_cents > 0 && i.kind === 'invoice' && i.period_month === month && i.period_year === year).map(i => i.id); setSelected(ids); setAmountCents(rows.filter(i => ids.includes(i.id)).reduce((sum, i) => sum + i.remaining_cents, 0)); toast.info(t('payment.prepared', { count })); }
                 catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
                 finally { setLoading(false); }
               })(); }}>{t('payment.prepareMonth')}</Button>
             </div>
-            <div className="rounded-md border border-border bg-background px-3 py-2 text-[13px]">
-              <span className="text-muted">{t('payment.studentLabel')} </span>
-              <span className="font-medium text-foreground">{student.full_name}</span>
-              {/* The separator lives *inside* the LTR run: `ms-2` on a
-                  `dir="ltr"` span resolves to its own left edge, so in RTL the
-                  phone ended up glued to the name. */}
-              <span className="text-muted" dir="ltr">{` — ${formatPhone(student.phone)}`}</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-white px-4 py-3 text-[13px]">
+              <span className="text-muted">{t('payment.studentLabel')}</span>
+              <span dir="auto" className="font-medium text-foreground">{student.full_name}</span>
+              <span className="text-muted" aria-hidden="true">—</span>
+              <span className="whitespace-nowrap text-muted" dir="ltr">{formatPhone(student.phone)}</span>
             </div>
 
             {loading ? (
@@ -389,20 +360,20 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
             ) : (
               <>
                 <p className="text-[13px] font-medium text-foreground">{t('payment.selectInvoices')}</p>
-                <ul className="divide-y divide-border rounded-md border border-border" data-testid="payment-invoices">
+                <ul className="space-y-2" data-testid="payment-invoices">
                   {unpaid.map((invoice) => {
                     const checked = selected.includes(invoice.id);
                     return (
                       <li key={invoice.id}>
                         <label
                           className={cn(
-                            'flex cursor-pointer items-center gap-3 px-3 py-2.5',
-                            checked ? 'bg-primary/5' : 'hover:bg-background',
+                            'grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 transition-colors sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]',
+                            checked ? 'border-primary/40 bg-primary/5' : 'border-border bg-white hover:bg-slate-50',
                           )}
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 accent-primary"
+                            className="h-4 w-4 shrink-0 accent-primary"
                             checked={checked}
                             onChange={() => toggleInvoice(invoice)}
                             aria-label={invoice.kind === 'enrollment_fee' ? `${t('students.enrollment_fee')} — ${invoice.school_year_label ?? ''}` : `${periodLabel(t, invoice.period_month, invoice.period_year)} — ${invoice.group_subject}`}
@@ -415,7 +386,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                               {invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : `${invoice.group_subject} — ${invoice.group_level}`}
                             </span>
                           </span>
-                          <span className="shrink-0 text-end text-[12px] text-muted">
+                          <span className="col-start-2 text-start text-[12px] leading-5 text-muted sm:col-auto sm:text-end">
                             <span className="block">
                               {t('payment.invoiceAmount')}: {formatCurrency(invoice.amount_cents)}
                             </span>
@@ -423,7 +394,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                               {t('payment.paid')}: {formatCurrency(invoice.paid_amount_cents)}
                             </span>
                           </span>
-                          <span className="w-28 shrink-0 text-end text-[13px] font-semibold text-foreground">
+                          <span className="col-start-2 whitespace-nowrap text-start text-[14px] font-semibold tabular-nums text-foreground sm:col-auto sm:min-w-[100px] sm:text-end">
                             {formatCurrency(invoice.remaining_cents)}
                           </span>
                         </label>
@@ -431,9 +402,9 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                     );
                   })}
                 </ul>
-                <div className="flex items-center justify-between rounded-md bg-primary/5 px-3 py-2 text-[13px]">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-[13px]">
                   <span className="font-medium text-foreground">{t('payment.totalSelected')}</span>
-                  <span className="font-semibold text-primary" data-testid="payment-selected-total">
+                  <span className="whitespace-nowrap text-base font-semibold tabular-nums text-primary" data-testid="payment-selected-total">
                     {formatCurrency(selectedTotal)}
                   </span>
                 </div>
@@ -481,7 +452,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                   <label
                     key={value}
                     className={cn(
-                      'flex cursor-pointer items-center justify-center gap-2 rounded-md border px-3 py-2 text-[13px]',
+                      'flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-[13px] transition-colors focus-within:ring-2 focus-within:ring-primary/30',
                       method === value
                         ? 'border-primary bg-primary/5 font-medium text-primary'
                         : 'border-border text-foreground hover:bg-background',
@@ -521,7 +492,7 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
         {/* ---------------------------------------------------------- step 4 */}
         {step === 4 && student ? (
           <div className="space-y-3">
-            <div className="rounded-lg border border-border p-4 text-[13px]">
+            <div className="rounded-xl border border-border bg-slate-50/50 p-4 text-[13px]">
               <p className="text-muted">{t('payment.studentLabel')}</p>
               <p className="mb-3 font-medium text-foreground">{student.full_name}</p>
 
@@ -532,15 +503,15 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
                     <span>
                       {invoice.kind === 'enrollment_fee' ? `${t('students.enrollment_fee')} — ${invoice.school_year_label ?? ''}` : `${periodLabel(t, invoice.period_month, invoice.period_year)} — ${invoice.group_subject}`}
                     </span>
-                    <span className="text-muted">{formatCurrency(invoice.remaining_cents)}</span>
+                    <span className="shrink-0 whitespace-nowrap text-end tabular-nums text-muted">{formatCurrency(invoice.remaining_cents)}</span>
                   </li>
                 ))}
               </ul>
 
               <p className="text-muted">{t('payment.amountLabel')}</p>
-              <p className="text-h2 font-semibold text-foreground">{formatCurrency(amountCents)}</p>
+              <p className="text-xl font-semibold tabular-nums text-primary">{formatCurrency(amountCents)}</p>
 
-              <p className="mt-3 text-muted">{t('payment.paymentDate')}</p><p className="font-medium">{paymentDate}</p>
+              <p className="mt-3 text-muted">{t('payment.paymentDate')}</p><p dir="ltr" className="w-fit font-medium">{formatDate(paymentDate)}</p>
               <p className="mt-3 text-muted">{t('payment.methodLabel')}</p>
               <p className="font-medium text-foreground">{methodLabel(t, method)}</p>
 

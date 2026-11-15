@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Download, Printer, Receipt as ReceiptIcon } from 'lucide-react';
 import Button from '../ui/Button';
-import Modal from '../ui/Modal';
+import Modal, { scrollableModalClassName } from '../ui/Modal';
 import { toast } from '../ui/Toast';
 import { paymentsApi } from '../../services/payments';
 import { settingsApi } from '../../services/settings';
@@ -45,7 +45,7 @@ function TemplateToggle({
 
   return (
     <div
-      className="inline-flex flex-wrap rounded-md border border-border bg-background p-0.5"
+      className="inline-flex flex-wrap gap-0.5 rounded-lg border border-border bg-slate-50 p-1"
       role="tablist"
       aria-label="Format"
     >
@@ -60,7 +60,7 @@ function TemplateToggle({
             data-testid={`receipt-template-${option.value}`}
             onClick={() => onChange(option.value)}
             className={cn(
-              'btn-press rounded-[5px] px-3 py-1.5 text-[13px] font-medium transition-colors',
+              'btn-press rounded-md px-3 py-2 text-[13px] font-medium transition-colors',
               selected
                 ? 'bg-white text-primary shadow-sm'
                 : 'text-muted hover:text-foreground',
@@ -202,15 +202,15 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
   );
 
   return (
-    <Modal open onClose={onClose} title={t('receipt.title')} size="lg" footer={footer}>
+    <Modal open onClose={onClose} title={t('receipt.title')} size="lg" className={scrollableModalClassName} testId="receipt-modal" footer={footer}>
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <TemplateToggle
             value={template}
             onChange={setTemplate}
           />
-          <span className="text-[12px] text-muted" data-testid="receipt-summary">
-            {data ? `${data.receipt_number} · ${formatCurrency(data.amount_cents)}` : t('receipt.loading')}
+          <span className="rounded-lg border border-border bg-white px-3 py-2 text-[13px] font-semibold tabular-nums text-foreground" data-testid="receipt-summary">
+            {data ? <><span dir="ltr">{data.receipt_number}</span><span className="mx-2 text-muted">·</span><span className="text-success">{formatCurrency(data.amount_cents)}</span></> : t('receipt.loading')}
           </span>
         </div>
 
@@ -225,7 +225,7 @@ export function ReceiptPreviewModal({ receiptId, onClose }: ReceiptPreviewModalP
 
         {/* `receipt-print` keeps the sheet printable straight from the app too. */}
         <div
-          className="receipt-print overflow-hidden rounded-md border border-border bg-white"
+          className="receipt-print overflow-hidden rounded-xl border border-border bg-slate-50 shadow-sm"
           data-testid="receipt-preview"
           data-template={template}
           style={{ height: PDF_HEIGHT }}
