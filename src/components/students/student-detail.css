@@ -1,0 +1,63 @@
+/* Tables keep their semantics while adapting to the actual sheet width. */
+.detail-table-container {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.detail-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.detail-table th,
+.detail-table td {
+  padding-inline: 0.65rem;
+  overflow-wrap: anywhere;
+}
+
+.detail-enrollments th:nth-child(1) { width: 11%; }
+.detail-enrollments th:nth-child(2) { width: 17%; }
+.detail-enrollments th:nth-child(3) { width: 11%; }
+.detail-enrollments th:nth-child(4) { width: 10%; }
+.detail-enrollments th:nth-child(5) { width: 11%; }
+.detail-enrollments th:nth-child(6) { width: 14%; }
+.detail-enrollments th:nth-child(7) { width: 11%; }
+.detail-enrollments th:nth-child(8) { width: 15%; }
+
+@container (max-width: 740px) {
+  .detail-table, .detail-table tbody, .detail-table tr, .detail-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .detail-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .detail-table tr { padding: 0.5rem 0; }
+
+  .detail-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 1rem;
+    text-align: end;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .detail-table td::before {
+    content: attr(data-label);
+    flex: 0 1 40%;
+    text-align: start;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+}
