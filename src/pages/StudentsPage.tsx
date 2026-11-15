@@ -349,7 +349,8 @@ export function StudentsPage() {
         </div>
       </div>
 
-      <Modal open={viewing !== null} onClose={() => { setViewing(null); void load(); }} title={t('students.sheetTitle')} size="xl" zIndex={40} testId="student-sheet">
+      <Modal open={viewing !== null} onClose={() => { setViewing(null); void load(); }} title={t('students.sheetTitle')} size="xl" zIndex={40} testId="student-sheet"
+        className="flex h-[min(850px,calc(100vh-2rem))] h-[min(850px,calc(100dvh-2rem))] !max-w-5xl flex-col overflow-hidden rounded-xl [&>div:first-child]:shrink-0 [&>div:nth-child(2)]:flex [&>div:nth-child(2)]:min-h-0 [&>div:nth-child(2)]:flex-1 [&>div:nth-child(2)]:!max-h-none [&>div:nth-child(2)]:!overflow-hidden [&>div:nth-child(2)]:!p-0">
         {viewing && <StudentDetailPage studentIdOverride={viewing.id} onClose={() => { setViewing(null); void load(); }} />}
       </Modal>
 

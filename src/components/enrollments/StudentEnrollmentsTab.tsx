@@ -127,35 +127,35 @@ export function StudentEnrollmentsTab({
           />
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-[13px]" data-testid="active-enrollments">
-            <thead className="bg-background text-label text-muted">
+        <div className="detail-table-container overflow-hidden rounded-xl border border-border bg-white">
+          <table className="detail-table detail-enrollments w-full text-[13px]" data-testid="active-enrollments">
+            <thead className="bg-slate-50 text-label text-muted">
               <tr>
                 <th className="px-4 py-2.5 text-start font-medium">{t('groups.subject')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.group')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('groups.teacher')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.schedule')}</th>
-                <th className="whitespace-nowrap px-4 py-2.5 text-end font-medium">{t('students.standardFee')}</th>
-                <th className="whitespace-nowrap px-4 py-2.5 text-end font-medium">{t('students.personalFee')}</th>
+                <th className="px-4 py-2.5 text-end font-medium">{t('students.standardFee')}</th>
+                <th className="px-4 py-2.5 text-end font-medium">{t('students.personalFee')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.startDate')}</th>
                 <th className="px-4 py-2.5 text-end font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {active.map((enrollment) => (
-                <tr key={enrollment.enrollment_id} className="border-t border-border">
-                  <td className="px-4 py-2.5 font-medium text-foreground">{enrollment.subject_name}</td>
-                  <td className="px-4 py-2.5 text-muted">{groupLabel(enrollment)}</td>
-                  <td className="px-4 py-2.5 text-muted">
+                <tr key={enrollment.enrollment_id} className="border-t border-border hover:bg-slate-50/50">
+                  <td data-label={t('groups.subject')} className="px-4 py-2.5 font-medium text-foreground">{enrollment.subject_name}</td>
+                  <td data-label={t('student.group')} className="px-4 py-2.5 text-muted"><Badge variant="primary" className="max-w-full whitespace-normal text-start leading-4 [overflow-wrap:anywhere]">{groupLabel(enrollment)}</Badge></td>
+                  <td data-label={t('groups.teacher')} className="px-4 py-2.5 text-muted">
                     {enrollment.teacher_name ?? t('groups.noTeacher')}
                   </td>
-                  <td className="px-4 py-2.5 text-muted">{schedule(enrollment)}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-end">{groups.find(group => group.id === enrollment.group_id) ? formatCurrency(groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents) : '—'}</td>
-                  <td className={cn('whitespace-nowrap px-4 py-2.5 text-end', groups.find(group => group.id === enrollment.group_id) && enrollment.monthly_fee_cents < groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents && 'font-semibold text-success')}>
-                    {formatCurrency(enrollment.monthly_fee_cents)}{groups.find(group => group.id === enrollment.group_id) && enrollment.monthly_fee_cents < groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents ? ` (${t('students.reducedFee')})` : ''}
+                  <td data-label={t('student.schedule')} className="px-4 py-2.5 text-muted">{schedule(enrollment)}</td>
+                  <td data-label={t('students.standardFee')} className="whitespace-nowrap px-4 py-2.5 text-end">{groups.find(group => group.id === enrollment.group_id) ? formatCurrency(groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents) : '—'}</td>
+                  <td data-label={t('students.personalFee')} className={cn('whitespace-nowrap px-4 py-2.5 text-end font-semibold text-primary', groups.find(group => group.id === enrollment.group_id) && enrollment.monthly_fee_cents < groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents && 'font-semibold text-success')}>
+                    <span className="inline-flex flex-col items-end gap-1"><span>{formatCurrency(enrollment.monthly_fee_cents)}</span>{groups.find(group => group.id === enrollment.group_id) && enrollment.monthly_fee_cents < groups.find(group => group.id === enrollment.group_id)!.monthly_fee_cents ? <Badge variant="success">{t('students.reducedFee')}</Badge> : null}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-muted">{formatDate(enrollment.start_date)}</td>
-                  <td className="px-4 py-2.5 text-end">
+                  <td data-label={t('student.startDate')} className="whitespace-nowrap px-4 py-2.5 text-muted">{formatDate(enrollment.start_date)}</td>
+                  <td data-label={t('common.actions')} className="px-4 py-2.5 text-end">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -190,9 +190,9 @@ export function StudentEnrollmentsTab({
           </button>
 
           {showEnded ? (
-            <div className="overflow-x-auto rounded-lg border border-border opacity-80">
-              <table className="w-full text-[13px]" data-testid="ended-enrollments">
-                <thead className="bg-background text-label text-muted">
+            <div className="detail-table-container overflow-hidden rounded-xl border border-border bg-white">
+              <table className="detail-table w-full text-[13px]" data-testid="ended-enrollments">
+                <thead className="bg-slate-50 text-label text-muted">
                   <tr>
                     <th className="px-4 py-2.5 text-start font-medium">{t('groups.subject')}</th>
                     <th className="px-4 py-2.5 text-start font-medium">{t('student.group')}</th>
@@ -205,14 +205,14 @@ export function StudentEnrollmentsTab({
                 <tbody>
                   {ended.map((enrollment) => (
                     <tr key={enrollment.enrollment_id} className="border-t border-border text-muted">
-                      <td className="px-4 py-2.5">{enrollment.subject_name}</td>
-                      <td className="px-4 py-2.5">{groupLabel(enrollment)}</td>
-                      <td className="px-4 py-2.5">{schedule(enrollment)}</td>
-                      <td className="px-4 py-2.5 text-end">
+                      <td data-label={t('groups.subject')} className="px-4 py-2.5">{enrollment.subject_name}</td>
+                      <td data-label={t('student.group')} className="px-4 py-2.5"><Badge variant="primary" className="max-w-full whitespace-normal text-start leading-4 [overflow-wrap:anywhere]">{groupLabel(enrollment)}</Badge></td>
+                      <td data-label={t('student.schedule')} className="px-4 py-2.5">{schedule(enrollment)}</td>
+                      <td data-label={t('groups.monthlyFee')} className="px-4 py-2.5 text-end">
                         {formatCurrency(enrollment.monthly_fee_cents)}
                       </td>
-                      <td className="px-4 py-2.5">{formatDate(enrollment.start_date)}</td>
-                      <td className="px-4 py-2.5">
+                      <td data-label={t('student.startDate')} className="px-4 py-2.5">{formatDate(enrollment.start_date)}</td>
+                      <td data-label={t('student.endDate')} className="px-4 py-2.5">
                         <span className={cn('inline-flex items-center gap-1.5')}>
                           {formatDate(enrollment.end_date)}
                           <Badge variant="muted">{t('student.ended')}</Badge>

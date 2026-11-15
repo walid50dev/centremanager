@@ -99,7 +99,7 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-h2 text-foreground">{t('students.tabFinances')}</h2>
+        <h2 className="text-h2 text-foreground">{t('student.invoicesTitle')}</h2>
         <Button
           leftIcon={<CreditCard className="h-4 w-4" aria-hidden="true" />}
           onClick={() => setPaymentOpen(true)}
@@ -112,12 +112,12 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
         {summary.map((item) => {
           const Icon = item.icon;
           return (
-            <Card key={item.key} className="p-4" data-testid={`summary-${item.key}`}>
+            <Card key={item.key} className="min-w-0 rounded-xl border border-border p-4 shadow-sm" data-testid={`summary-${item.key}`}>
               <div className="flex items-center gap-2 text-muted">
-                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="h-4 w-4" aria-hidden="true" /></span>
                 <span className="text-label">{item.label}</span>
               </div>
-              <p className={cn('mt-1 text-xl font-semibold tabular-nums', item.className)}>
+              <p className={cn('mt-3 whitespace-nowrap text-xl font-semibold tabular-nums', item.className)}>
                 {formatCurrency(item.value)}
               </p>
             </Card>
@@ -132,17 +132,17 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
           ))}
         </div>
       ) : invoices.length === 0 ? (
-        <Card>
-          <EmptyState
+        <Card className="rounded-xl border border-border bg-white">
+          <EmptyState className="py-9"
             icon={<FileText className="h-5 w-5" aria-hidden="true" />}
             title={t('student.noInvoices')}
             description={t('student.noInvoicesHint')}
           />
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-[13px]" data-testid="student-invoices">
-            <thead className="bg-background text-label text-muted">
+        <div className="detail-table-container overflow-hidden rounded-xl border border-border bg-white">
+          <table className="detail-table w-full text-[13px]" data-testid="student-invoices">
+            <thead className="bg-slate-50 text-label text-muted">
               <tr>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.invoice.period')}</th>
                 <th className="px-4 py-2.5 text-start font-medium">{t('student.invoice.group')}</th>
@@ -158,31 +158,31 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
                 const meta = statusMeta(invoice.status);
                 const overdue = isOverdue(invoice.due_date, invoice.remaining_cents);
                 return (
-                  <tr key={invoice.id} className="border-t border-border">
-                    <td className="px-4 py-2.5 font-medium text-foreground">
+                  <tr key={invoice.id} className="border-t border-border hover:bg-slate-50/50">
+                    <td data-label={t('student.invoice.period')} className="px-4 py-2.5 font-medium text-foreground">
                       {invoice.kind === 'enrollment_fee' ? invoice.school_year_label : periodLabel(t, invoice.period_month, invoice.period_year)}
                     </td>
-                    <td className="px-4 py-2.5 text-muted">
+                    <td data-label={t('student.invoice.group')} className="px-4 py-2.5 text-muted">
                       {invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : <>{invoice.group_subject} — {invoice.group_level}{invoice.group_branch ? ` · ${invoice.group_branch}` : ''}</>}
                     </td>
-                    <td className="px-4 py-2.5 text-end tabular-nums">
+                    <td data-label={t('student.invoice.amount')} className="whitespace-nowrap px-4 py-2.5 text-end tabular-nums">
                       {formatCurrency(invoice.amount_cents)}
                     </td>
-                    <td className="px-4 py-2.5 text-end tabular-nums text-success">
+                    <td data-label={t('student.invoice.paid')} className="whitespace-nowrap px-4 py-2.5 text-end tabular-nums text-success">
                       {formatCurrency(invoice.paid_amount_cents)}
                     </td>
-                    <td className="px-4 py-2.5 text-end font-semibold tabular-nums">
+                    <td data-label={t('student.invoice.remaining')} className="whitespace-nowrap px-4 py-2.5 text-end font-semibold tabular-nums">
                       {formatCurrency(invoice.remaining_cents)}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td data-label={t('student.invoice.status')} className="px-4 py-2.5">
                       <Badge variant={meta.variant}>{t(meta.labelKey)}</Badge>
 
                     </td>
-                    <td className="px-4 py-2.5 text-muted">
-                      {formatDate(invoice.due_date)}
+                    <td data-label={t('student.invoice.dueDate')} className="px-4 py-2.5 text-muted">
+                      <span className="inline-flex flex-col items-start gap-1"><span dir="ltr" className="whitespace-nowrap">{formatDate(invoice.due_date) || '—'}</span>
                       {overdue ? (
-                        <span className="ms-1 text-destructive">({t('student.invoice.overdue')})</span>
-                      ) : null}
+                        <span className="whitespace-nowrap text-destructive">({t('student.invoice.overdue')})</span>
+                      ) : null}</span>
                     </td>
                   </tr>
                 );
@@ -195,17 +195,17 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
       <div className="space-y-2">
         <h3 className="text-btn font-medium text-foreground">{t('student.paymentHistory')}</h3>
         {payments.length === 0 ? (
-          <Card>
-            <EmptyState
+          <Card className="rounded-xl border border-border bg-white">
+            <EmptyState className="py-9"
               icon={<Receipt className="h-5 w-5" aria-hidden="true" />}
               title={t('student.noPayments')}
               description={t('student.noPaymentsHint')}
             />
           </Card>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-[13px]" data-testid="student-payments">
-              <thead className="bg-background text-label text-muted">
+          <div className="detail-table-container overflow-hidden rounded-xl border border-border bg-white">
+            <table className="detail-table w-full text-[13px]" data-testid="student-payments">
+              <thead className="bg-slate-50 text-label text-muted">
                 <tr>
                   <th className="px-4 py-2.5 text-start font-medium">{t('student.paymentDate')}</th>
                   <th className="whitespace-nowrap px-4 py-2.5 text-start font-medium">{t('students.paidMonth')}</th>
@@ -219,16 +219,16 @@ export function StudentFinancesTab({ studentId, onChanged }: StudentFinancesTabP
               <tbody>
                 {payments.map((payment) => {
                   const invoice = invoices.find(item => item.id === payment.invoice_id);
-                  return <tr key={payment.id} className="border-t border-border">
-                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{formatDate(payment.created_at)}</td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{invoice ? invoice.kind === 'enrollment_fee' ? invoice.school_year_label : periodLabel(t, invoice.period_month, invoice.period_year) : '—'}</td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-muted">{invoice ? invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : invoice.group_name || `${invoice.group_subject} — ${invoice.group_level}` : '—'}</td>
-                    <td className="px-4 py-2.5 text-end font-medium tabular-nums text-success">
+                  return <tr key={payment.id} className="border-t border-border hover:bg-slate-50/50">
+                    <td data-label={t('student.paymentDate')} className="whitespace-nowrap px-4 py-2.5 text-muted">{formatDate(payment.created_at)}</td>
+                    <td data-label={t('students.paidMonth')} className="px-4 py-2.5 text-muted">{invoice ? invoice.kind === 'enrollment_fee' ? invoice.school_year_label : periodLabel(t, invoice.period_month, invoice.period_year) : '—'}</td>
+                    <td data-label={t('student.group')} className="px-4 py-2.5 text-muted">{invoice ? invoice.kind === 'enrollment_fee' ? t('students.enrollment_fee') : invoice.group_name || `${invoice.group_subject} — ${invoice.group_level}` : '—'}</td>
+                    <td data-label={t('student.amount')} className="whitespace-nowrap px-4 py-2.5 text-end font-medium tabular-nums text-success">
                       {formatCurrency(payment.amount_cents)}
                     </td>
-                    <td className="px-4 py-2.5 text-muted">{methodLabel(t, payment.payment_method)}</td>
-                    <td className="px-4 py-2.5 text-muted">{payment.notes ?? '—'}</td>
-                    <td className="px-4 py-2.5"><Button size="sm" variant="secondary" disabled={receiptBusy !== null} data-testid={`student-receipt-${payment.id}`} onClick={() => {
+                    <td data-label={t('student.paymentMethod')} className="px-4 py-2.5 text-muted">{methodLabel(t, payment.payment_method)}</td>
+                    <td data-label={t('student.notes')} className="px-4 py-2.5 text-muted">{payment.notes ?? '—'}</td>
+                    <td data-label={t('receipt.title')} className="px-4 py-2.5"><Button size="sm" variant="secondary" disabled={receiptBusy !== null} data-testid={`student-receipt-${payment.id}`} onClick={() => {
                       setReceiptBusy(payment.id);
                       void paymentsApi.createReceipt(payment.id).then(setReceiptId).catch(error => toast.error(error instanceof Error ? error.message : String(error))).finally(() => setReceiptBusy(null));
                     }}>{t('students.viewReceipt')}</Button></td>
