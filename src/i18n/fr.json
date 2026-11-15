@@ -952,9 +952,9 @@
       "empty": "Aucun paiement récent",
       "emptyHint": "Les encaissements apparaîtront ici dès le premier règlement."
     },
-    "teachers": {
-      "empty": "Aucun enseignant",
-      "emptyHint": "Ajoutez un enseignant pour commencer."
+    "teacherPayments": {
+      "empty": "Aucun paiement pour le moment",
+      "emptyHint": "Les paiements apparaîtront ici après le premier encaissement."
     }
   },
   "error": {

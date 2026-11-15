@@ -9,6 +9,7 @@ import {
   Gem,
   GraduationCap,
   HandCoins,
+  Receipt,
   TrendingUp,
   Users,
   Wallet,
@@ -452,9 +453,9 @@ export function DashboardPage() {
           </div>
         ) : teachers.length === 0 ? (
           <EmptyState
-            icon={<GraduationCap className="h-5 w-5" aria-hidden="true" />}
-            title={t('dashboard.teachers.empty')}
-            description={t('dashboard.teachers.emptyHint')}
+            icon={<Receipt className="h-5 w-5" aria-hidden="true" />}
+            title={t('dashboard.teacherPayments.empty')}
+            description={t('dashboard.teacherPayments.emptyHint')}
             className={EMPTY_STATE_CLASS}
           />
         ) : (
