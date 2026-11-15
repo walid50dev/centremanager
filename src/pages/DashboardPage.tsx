@@ -20,6 +20,7 @@ import Card, { CardHeader } from '../components/ui/Card';
 import EmptyState from '../components/ui/EmptyState';
 import KpiCard from '../components/dashboard/KpiCard';
 import { toast } from '../components/ui/Toast';
+import { useAuthStore } from '../stores/authStore';
 import { dashboardApi } from '../services/dashboard';
 import { teacherPaymentsApi, teachersApi } from '../services/teachers';
 import {
@@ -81,6 +82,7 @@ export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const language = i18n.language === 'ar' ? 'ar' : 'fr';
+  const centerName = useAuthStore((state) => state.centerName);
 
   const [period, setPeriod] = useState(currentPeriod);
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
@@ -125,21 +127,20 @@ export function DashboardPage() {
   }, [load]);
 
 
-
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
       {/* ---------------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-4">
         <div className="min-w-0">
-          <h1 className="text-h1 text-foreground" data-testid="dashboard-greeting">
-            {t('dashboard.greeting')}
+          <h1 className="break-words text-[24px] font-semibold leading-tight tracking-tight text-foreground sm:text-[27px]" data-testid="dashboard-greeting">
+            {t('dashboard.greeting')}{language === 'ar' ? '، ' : ', '}<bdi>{centerName}</bdi>
           </h1>
-          <p className="mt-0.5 text-[13px] text-muted" data-testid="dashboard-date">
+          <p className="mt-2 text-[13px] font-medium text-muted" data-testid="dashboard-date">
             {longDate(language)}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full items-center gap-2">
           <MonthPicker value={period} onChange={setPeriod} label={t('dashboard.period')} testId="dashboard-period" />
         </div>
       </div>
@@ -151,13 +152,13 @@ export function DashboardPage() {
       >
         {loading && !kpis
           ? Array.from({ length: 6 }).map((_, index) => (
-              <Card key={index} className="p-4" data-testid="dashboard-kpi-skeleton">
-                <div className="flex items-center gap-2">
-                  <div className="skeleton h-8 w-8 rounded-full" />
-                  <div className="skeleton h-3 w-20" />
+              <Card key={index} className="flex min-h-[152px] flex-col rounded-xl p-5" data-testid="dashboard-kpi-skeleton">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="skeleton mt-1 h-3 w-24" />
+                  <div className="skeleton h-10 w-10 rounded-xl" />
                 </div>
-                <div className="skeleton mt-3 h-6 w-24" />
-                <div className="skeleton mt-2 h-3 w-16" />
+                <div className="skeleton mt-auto h-7 w-24" />
+                <div className="skeleton mt-2 h-3 w-20" />
               </Card>
             ))
           : kpis && (
@@ -190,9 +191,9 @@ export function DashboardPage() {
                   valueClass={rateTextClass(kpis.collection_rate)}
                   hint={
                     kpis.theoretical_revenue_cents > 0
-                      ? `${formatCurrency(kpis.monthly_revenue_cents)} / ${formatCurrency(
+                      ? <span dir="ltr">{`${formatCurrency(kpis.monthly_revenue_cents)} / ${formatCurrency(
                           kpis.theoretical_revenue_cents,
-                        )}`
+                        )}`}</span>
                       : '—'
                   }
                   testId="kpi-rate"
@@ -201,14 +202,14 @@ export function DashboardPage() {
                   icon={BookOpen}
                   label={t('dashboard.kpi.groups')}
                   value={kpis.active_groups}
-                  iconClass="bg-violet-100 text-violet-600"
+                  iconClass="bg-primary/10 text-primary"
                   testId="kpi-groups"
                 />
                 <KpiCard
                   icon={GraduationCap}
                   label={t('dashboard.kpi.teachers')}
                   value={kpis.active_teachers}
-                  iconClass="bg-amber-100 text-amber-600"
+                  iconClass="bg-sky-50 text-sky-700"
                   testId="kpi-teachers"
                 />
                 {/* Phase 11 — the real profit: revenue − expenses − payroll. */}
@@ -239,12 +240,13 @@ export function DashboardPage() {
       </div>
 
       {/* ---------------------------------------------- alerts + last payments */}
-      <div className="grid items-start gap-5 lg:grid-cols-5">
-        <Card className="lg:col-span-3" data-testid="dashboard-alerts">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-2">
+        <Card className="flex min-w-0 flex-col overflow-hidden rounded-xl shadow-card" data-testid="dashboard-alerts">
           <CardHeader
+            className="flex-wrap items-center gap-x-3 gap-y-2 px-5 py-4 [&_h2]:text-[16px] [&_h2]:leading-6 [&_p]:mt-1 [&_p]:text-[12px] [&_p]:leading-5"
             title={
-              <span className="flex items-center gap-2">
-                <CalendarClock className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><CalendarClock className="h-[18px] w-[18px]" aria-hidden="true" /></span>
                 {t('dashboard.alerts.title')}
                 {!loading && alerts.length > 0 && (
                   <Badge variant="muted" data-testid="dashboard-alerts-count">
@@ -258,6 +260,7 @@ export function DashboardPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                className="text-primary hover:text-primary"
                 onClick={() => navigate('/payments')}
                 rightIcon={<ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />}
                 data-testid="dashboard-alerts-see-all"
@@ -285,7 +288,7 @@ export function DashboardPage() {
               icon={<CalendarCheck className="h-5 w-5" aria-hidden="true" />}
               title={t('dashboard.alerts.empty')}
               description={t('dashboard.alerts.emptyHint')}
-              className="py-10"
+              className="flex-1 px-5 py-7 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs"
             />
           ) : (
             <div className="divide-y divide-border" data-testid="dashboard-alert-list">
@@ -296,38 +299,38 @@ export function DashboardPage() {
                     key={`${alert.student_id}-${alert.due_date}-${index}`}
                     type="button"
                     onClick={() => navigate(`/students/${alert.student_id}`)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-start transition-colors hover:bg-background"
+                    className="flex w-full min-w-0 items-center gap-3 px-5 py-3 text-start transition-colors hover:bg-slate-50 focus-visible:relative motion-reduce:transition-none"
                     data-testid={`dashboard-alert-${index}`}
                     data-severity={alert.severity}
                   >
                     <span
                       className={cn(
-                        'h-2.5 w-2.5 shrink-0 rounded-full',
+                        'h-2 w-2 shrink-0 rounded-full ring-4 ring-slate-50',
                         SEVERITY_DOT[alert.severity],
                       )}
                       aria-hidden="true"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium text-foreground">
+                      <span className="block truncate text-[13px] font-semibold text-foreground">
                         {alert.student_name}
                         {alert.group_name ? (
                           <span className="font-normal text-muted"> — {alert.group_name}</span>
                         ) : null}
                       </span>
-                      <span className="block truncate text-[12px] text-muted">
+                      <span className="mt-0.5 block truncate text-[12px] text-muted">
                         {formatDate(alert.due_date)}
                       </span>
                     </span>
-                    <span className="shrink-0 text-end">
+                    <span className="min-w-0 shrink text-end">
                       <span
                         className={cn(
-                          'block text-[13px] font-semibold tabular-nums',
+                          'block break-words text-[13px] font-semibold tabular-nums',
                           SEVERITY_TEXT[alert.severity],
                         )}
                       >
                         {formatCurrency(alert.amount_cents)}
                       </span>
-                      <span className={cn('block text-[12px]', SEVERITY_TEXT[alert.severity])}>
+                      <span className={cn('mt-0.5 block text-[12px] font-medium', SEVERITY_TEXT[alert.severity])}>
                         {t(timing.key, timing.values)}
                       </span>
                     </span>
@@ -338,11 +341,12 @@ export function DashboardPage() {
           )}
         </Card>
 
-        <Card className="lg:col-span-2" data-testid="dashboard-payments">
+        <Card className="flex min-w-0 flex-col overflow-hidden rounded-xl shadow-card" data-testid="dashboard-payments">
           <CardHeader
+            className="flex-wrap items-center gap-x-3 gap-y-2 px-5 py-4 [&_h2]:text-[16px] [&_h2]:leading-6 [&_p]:mt-1 [&_p]:text-[12px] [&_p]:leading-5"
             title={
-              <span className="flex items-center gap-2">
-                <HandCoins className="h-4 w-4 text-success" aria-hidden="true" />
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success"><HandCoins className="h-[18px] w-[18px]" aria-hidden="true" /></span>
                 {t('dashboard.payments.title')}
               </span>
             }
@@ -351,6 +355,7 @@ export function DashboardPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                className="text-primary hover:text-primary"
                 onClick={() => navigate('/payments')}
                 rightIcon={<ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />}
                 data-testid="dashboard-payments-see-all"
@@ -375,28 +380,28 @@ export function DashboardPage() {
               icon={<HandCoins className="h-5 w-5" aria-hidden="true" />}
               title={t('dashboard.payments.empty')}
               description={t('dashboard.payments.emptyHint')}
-              className="py-10"
+              className="flex-1 px-5 py-7 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs"
             />
           ) : (
             <ul className="divide-y divide-border" data-testid="dashboard-payment-list">
               {payments.map((payment, index) => (
                 <li
                   key={payment.id}
-                  className="flex items-center gap-3 px-4 py-2.5"
+                  className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3"
                   data-testid={`dashboard-payment-${index}`}
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-foreground">
+                  <span className="min-w-[100px] flex-1">
+                    <span className="block truncate text-[13px] font-semibold text-foreground">
                       {payment.student_name}
                     </span>
-                    <span className="block text-[12px] text-muted">
+                    <span className="mt-0.5 block text-[12px] text-muted">
                       {formatDate(payment.created_at)}
                     </span>
                   </span>
                   <Badge variant="muted" className="shrink-0">
                     {methodLabel(t, payment.payment_method)}
                   </Badge>
-                  <span className="w-24 shrink-0 text-end text-[13px] font-semibold tabular-nums text-success">
+                  <span className="min-w-0 shrink break-words text-end text-[13px] font-semibold tabular-nums text-success sm:min-w-[5.5rem]">
                     {formatCurrency(payment.amount_cents)}
                   </span>
                 </li>
@@ -407,13 +412,13 @@ export function DashboardPage() {
       </div>
 
       {/* --------------------------------------------------------- teacher payroll */}
-      <Card data-testid="dashboard-teachers">
+      <Card className="min-w-0 overflow-hidden rounded-xl shadow-card" data-testid="dashboard-teachers">
         <CardHeader
+          className="flex-wrap items-center gap-x-3 gap-y-2 px-5 py-4 [&_h2]:text-[16px] [&_h2]:leading-6 [&_p]:mt-1 [&_p]:text-[12px] [&_p]:leading-5"
           title={
-            <span className="flex items-center gap-2">
-              <GraduationCap className="h-4 w-4 text-amber-600" aria-hidden="true" />
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><GraduationCap className="h-[18px] w-[18px]" aria-hidden="true" /></span>
               {t('teachers.payment.history')}
-
             </span>
           }
           description={`${t('teachers.payment.activeYear')} — ${monthLabel(t, period.month)} ${period.year}`}
@@ -421,6 +426,7 @@ export function DashboardPage() {
             <Button
               variant="ghost"
               size="sm"
+              className="text-primary hover:text-primary"
               onClick={() => navigate('/teachers')}
               rightIcon={<ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />}
               data-testid="dashboard-teachers-see-all"
@@ -446,11 +452,12 @@ export function DashboardPage() {
             icon={<GraduationCap className="h-5 w-5" aria-hidden="true" />}
             title={t('dashboard.teachers.empty')}
             description={t('dashboard.teachers.emptyHint')}
+            className="px-5 py-7 [&>span]:mb-2.5 [&>span]:h-9 [&>span]:w-9 [&>span]:rounded-xl [&>p]:max-w-xs"
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]" data-testid="dashboard-teacher-table">
-              <thead className="bg-background text-label text-muted">
+              <thead className="bg-slate-50/70 text-[12px] text-muted">
                 <tr>
                   <th className="px-5 py-2.5 text-start font-medium">
                     {t('payments.teacherSummary.teacher')}
@@ -460,10 +467,10 @@ export function DashboardPage() {
               </thead>
               <tbody>
                 {teachers.map(({ teacher, total }) => (
-                  <tr key={teacher.id} className="cursor-pointer border-t border-border hover:bg-background"
+                  <tr key={teacher.id} className="cursor-pointer border-t border-border transition-colors hover:bg-slate-50 motion-reduce:transition-none"
                     onClick={() => navigate(`/teachers/${teacher.id}`)} data-testid={`dashboard-teacher-${teacher.id}`}>
-                    <td className="px-5 py-2.5 font-medium text-foreground">{teacher.full_name}</td>
-                    <td className="px-5 py-2.5 text-end tabular-nums text-success">{formatCurrency(total)}</td>
+                    <td className="break-words px-5 py-3 font-semibold text-foreground">{teacher.full_name}</td>
+                    <td className="px-5 py-3 text-end font-semibold tabular-nums text-success">{formatCurrency(total)}</td>
                   </tr>
                 ))}
               </tbody>
