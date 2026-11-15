@@ -98,27 +98,44 @@ export function StudentModal({ open, student = null, onClose, onSaved, onCreated
     finally { setSubmitting(false); }
   };
   return <>
-    <Modal open={open} onClose={onClose} size="lg" zIndex={zIndex} title={<span className="flex items-center gap-2"><UserRound className="h-4 w-4 text-primary" />{t(student ? 'students.editTitle' : 'students.new')}</span>}
+    <Modal open={open} onClose={onClose} size="lg" zIndex={zIndex} testId="student-form-modal"
+      className="flex max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl [&>div:first-child]:shrink-0 [&>div:nth-child(2)]:min-h-0 [&>div:nth-child(2)]:flex-1 [&>div:nth-child(2)]:!max-h-none [&>div:nth-child(2)]:overscroll-contain [&>div:nth-child(3)]:shrink-0 [&>div:nth-child(3)]:bg-white"
+      title={<span className="flex items-center gap-3 text-[18px]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><UserRound className="h-[18px] w-[18px]" aria-hidden="true" /></span>{t(student ? 'students.editTitle' : 'students.new')}</span>}
       footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button><Button data-testid="student-save" onClick={() => void save()} loading={submitting} disabled={submitting}>{t('students.save')}</Button></>}>
-      <form noValidate className="space-y-6" onSubmit={event => { event.preventDefault(); void save(); }}>
+      <form noValidate className="space-y-5" onSubmit={event => { event.preventDefault(); void save(); }}>
         <DuplicateWarnings open={open} type="student" id={student?.id} first={form.first} last={form.last} phone={form.phone} />
-        <div data-testid="student-section-essential" className="grid gap-4 sm:grid-cols-2">
-          <Input label={t('students.last_name')} data-testid="student-last-name" error={showErrors && !form.last.trim() ? t('common.required') : undefined} required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
-          <Input label={t('students.first_name')} data-testid="student-first-name" error={showErrors && !form.first.trim() ? t('common.required') : undefined} required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />
-          <CreatableEntitySelect testId="student-level" error={showErrors && !form.level ? t('common.required') : undefined} required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} disableCreate={zIndex >= 70} searchable />
-          <Input type="tel" dir="ltr" label={t('students.student_phone')} required data-testid="student-phone" value={form.studentPhone} onChange={e => update('studentPhone', e.target.value)} error={showErrors && !form.studentPhone.trim() ? t('common.required') : form.studentPhone && !isValidPhone(form.studentPhone) ? t('students.validation.phoneFormat') : undefined} />
-          <Input label={t('students.guardian_name')} data-testid="student-guardian-name" error={showErrors && !form.guardian.trim() ? t('common.required') : undefined} required placeholder="Rachid El Mansouri" value={form.guardian} onChange={e => update('guardian', e.target.value)} />
-          <Input type="tel" dir="ltr" label={t('students.guardian_phone')} data-testid="student-guardian-phone" required placeholder="06 61 23 45 67" value={form.phone} onChange={e => update('phone', e.target.value)} onBlur={() => { if (isValidPhone(form.phone)) update('phone', formatPhone(form.phone)); }} error={showErrors && !form.phone.trim() ? t('common.required') : form.phone && !isValidPhone(form.phone) ? t('students.validation.phoneFormat') : undefined} />
-          <MoneyInput label={t('students.enrollment_fee_dh')} hint={t('students.enrollment_fee_future')} data-testid="student-enrollment-fee" valueCents={form.fee} onChange={value => update('fee', value)} />
-          <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
-          <Select label={t('students.status')} data-testid="student-status" required value={form.status} options={[{ value: 'actif', label: t('students.active') }, { value: 'inactif', label: t('students.inactive') }]} onChange={e => update('status', e.target.value)} />
+        <div data-testid="student-section-essential" className="space-y-5">
+          <section className="space-y-3">
+            <h3 className="text-[13px] font-semibold text-foreground">{t('students.section_identity')}</h3>
+            <div className="grid min-w-0 gap-x-4 gap-y-4 sm:grid-cols-2">
+              <Input label={t('students.last_name')} data-testid="student-last-name" error={showErrors && !form.last.trim() ? t('common.required') : undefined} required autoFocus placeholder="El Mansouri / المنصوري" value={form.last} onChange={e => update('last', e.target.value)} />
+              <Input label={t('students.first_name')} data-testid="student-first-name" error={showErrors && !form.first.trim() ? t('common.required') : undefined} required placeholder="Salma / سلمى" value={form.first} onChange={e => update('first', e.target.value)} />
+              <CreatableEntitySelect testId="student-level" error={showErrors && !form.level ? t('common.required') : undefined} required label={t('students.level')} placeholder={t('students.selectLevel')} options={levels} value={levels.find(l => String(l.id) === form.level) ?? null} onChange={l => update('level', l ? String(l.id) : '')} getOptionLabel={l => `${l.name} (${l.category})`} getOptionValue={l => l.id} onCreate={() => setQuickLevel(true)} disableCreate={zIndex >= 70} searchable />
+              <Input type="tel" dir="ltr" label={t('students.student_phone')} required data-testid="student-phone" value={form.studentPhone} onChange={e => update('studentPhone', e.target.value)} error={showErrors && !form.studentPhone.trim() ? t('common.required') : form.studentPhone && !isValidPhone(form.studentPhone) ? t('students.validation.phoneFormat') : undefined} />
+            </div>
+          </section>
+          <section className="space-y-3 border-t border-border pt-4">
+            <h3 className="text-[13px] font-semibold text-foreground">{t('students.section_guardian')}</h3>
+            <div className="grid min-w-0 gap-x-4 gap-y-4 sm:grid-cols-2">
+              <Input label={t('students.guardian_name')} data-testid="student-guardian-name" error={showErrors && !form.guardian.trim() ? t('common.required') : undefined} required placeholder="Rachid El Mansouri" value={form.guardian} onChange={e => update('guardian', e.target.value)} />
+              <Input type="tel" dir="ltr" label={t('students.guardian_phone')} data-testid="student-guardian-phone" required placeholder="06 61 23 45 67" value={form.phone} onChange={e => update('phone', e.target.value)} onBlur={() => { if (isValidPhone(form.phone)) update('phone', formatPhone(form.phone)); }} error={showErrors && !form.phone.trim() ? t('common.required') : form.phone && !isValidPhone(form.phone) ? t('students.validation.phoneFormat') : undefined} />
+            </div>
+          </section>
+          <section className="space-y-3 border-t border-border pt-4">
+            <h3 className="text-[13px] font-semibold text-foreground">{t('students.section_admin')}</h3>
+            <div className="grid min-w-0 gap-x-4 gap-y-4 sm:grid-cols-2">
+              <MoneyInput label={t('students.enrollment_fee_dh')} hint={t('students.enrollment_fee_future')} data-testid="student-enrollment-fee" valueCents={form.fee} onChange={value => update('fee', value)} />
+              <Input type="date" required label={t('students.enrollment_date')} data-testid="student-enrollment-date" error={showErrors && !form.enrollment ? t('common.required') : undefined} value={form.enrollment} onChange={e => update('enrollment', e.target.value)} />
+              <Select label={t('students.status')} data-testid="student-status" required value={form.status} options={[{ value: 'actif', label: t('students.active') }, { value: 'inactif', label: t('students.inactive') }]} onChange={e => update('status', e.target.value)} />
+            </div>
+          </section>
         </div>
-        <section className="rounded-lg border border-border">
-          <button type="button" data-testid="student-complementary-toggle" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen(open => !open)} className="flex w-full items-center gap-2 rounded-lg px-4 py-3 text-start font-semibold text-primary hover:bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+        <section className="overflow-hidden rounded-xl border border-border bg-slate-50/40">
+          <button type="button" data-testid="student-complementary-toggle" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen(open => !open)} className="flex w-full items-center gap-2.5 px-4 py-3 text-start text-[13px] font-semibold text-primary transition-colors hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary motion-reduce:transition-none">
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />{t('students.complementary')}<ChevronDown className={`ms-auto h-4 w-4 shrink-0 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
-          <div id={detailsId} data-testid="student-complementary-fields" hidden={!detailsOpen}>
-            <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
+          <div id={detailsId} data-testid="student-complementary-fields" hidden={!detailsOpen} className={detailsOpen ? 'popup-enter' : undefined}>
+            <div className="grid min-w-0 gap-x-4 gap-y-4 border-t border-border bg-white p-4 sm:grid-cols-2">
               <CreatableEntitySelect testId="student-branch" label={t('students.branch')} placeholder={t('students.selectBranch')}
                 options={branches} value={branches.find(branch => String(branch.id) === form.branch) ?? null}
                 onChange={branch => update('branch', branch ? String(branch.id) : '')} getOptionLabel={branch => branch.name}

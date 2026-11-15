@@ -147,26 +147,29 @@ export function StudentsPage() {
   const hasFilters = Boolean(debouncedSearch || levelId || status !== 'actif');
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-5">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h1>{t('pages.students.title')}</h1>
-          <Badge variant="primary" aria-label={t('students.count', { count: result.total })}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <h1 className="text-[24px] font-semibold tracking-tight text-foreground">{t('pages.students.title')}</h1>
+          <Badge variant="primary" className="px-2.5 py-1 tabular-nums" aria-label={t('students.count', { count: result.total })}>
             {result.total}
           </Badge>
         </div>
-        <div className="flex flex-wrap gap-2"><ImportButton kind="students" onImported={onSaved} />
-        <Button onClick={openCreate} leftIcon={<UserPlus className="h-4 w-4" aria-hidden="true" />}>
-          {t('students.new')}
-        </Button></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportButton kind="students" onImported={onSaved} />
+          <Button className="rounded-lg px-4" onClick={openCreate} leftIcon={<UserPlus className="h-4 w-4" aria-hidden="true" />}>
+            {t('students.new')}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-white p-3 shadow-card sm:flex-row sm:flex-wrap sm:items-center">
         <Input
           ref={searchRef}
-          containerClassName="sm:w-80 sm:max-w-full sm:flex-none"
+          containerClassName="min-w-0 sm:min-w-[220px] sm:flex-1"
+          className="rounded-lg bg-slate-50/60"
           data-testid="students-search"
           type="search"
           value={search}
@@ -179,7 +182,8 @@ export function StudentsPage() {
           leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
         />
         <Select
-          containerClassName="sm:w-[220px] sm:max-w-full sm:flex-none"
+          containerClassName="sm:w-[190px] sm:max-w-full sm:flex-none"
+          className="rounded-lg"
           value={levelId}
           options={levelOptions}
           placeholder={t('students.allLevels')}
@@ -190,7 +194,8 @@ export function StudentsPage() {
           }}
         />
         <Select
-          containerClassName="sm:w-[180px] sm:max-w-full sm:flex-none"
+          containerClassName="sm:w-[160px] sm:max-w-full sm:flex-none"
+          className="rounded-lg"
           value={status}
           options={statusOptions}
           aria-label={t('students.statusFilter')}
@@ -202,21 +207,21 @@ export function StudentsPage() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card min-w-0 overflow-hidden rounded-xl shadow-card">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-body" data-testid="students-table">
-            <thead className="bg-background">
+          <table className="w-full min-w-[930px] border-collapse text-body" data-testid="students-table">
+            <thead className="bg-slate-50/80">
               <tr>
                 {[
-                  ['students.columns.name', 'min-w-[180px]'],
-                  ['students.columns.level', 'min-w-[120px]'],
-                  ['students.studentContact', 'min-w-[300px]'],
-                  ['students.groupsColumn', 'min-w-[140px]'],
-                  ['students.monthStatus', 'min-w-[120px]'],
-                  ['students.statusColumn', 'min-w-[120px]'],
-                  ['trash.actions', 'min-w-[100px]'],
+                  ['students.columns.name', 'min-w-[160px]'],
+                  ['students.columns.level', 'min-w-[90px]'],
+                  ['students.studentContact', 'min-w-[150px]'],
+                  ['students.groupsColumn', 'min-w-[110px]'],
+                  ['students.monthStatus', 'min-w-[90px]'],
+                  ['students.statusColumn', 'min-w-[100px]'],
+                  ['trash.actions', 'min-w-[118px]'],
                 ].map(([key, width]) => (
-                  <th key={key} scope="col" className={cn('border-b border-border px-4 py-2.5 text-start text-label font-medium text-muted', width)}>{t(key)}</th>
+                  <th key={key} scope="col" className={cn('border-b border-border px-3 py-3 text-start text-[12px] font-semibold text-muted', key === 'trash.actions' && 'text-end', width)}>{t(key)}</th>
                 ))}
               </tr>
             </thead>
@@ -225,11 +230,11 @@ export function StudentsPage() {
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={`skeleton-${index}`} className="border-b border-border last:border-b-0">
                     {Array.from({ length: 7 }).map((__, cell) => (
-                      <td key={`skeleton-${index}-${cell}`} className="px-4 py-3">
+                      <td key={`skeleton-${index}-${cell}`} className="px-3 py-3">
                         <span
                           className={cn(
                             'block h-3.5 animate-pulse rounded bg-slate-100',
-                            cell === 0 ? 'w-40' : cell === 1 ? 'w-28' : 'w-24',
+                            cell === 0 ? 'w-32' : cell === 1 ? 'w-16' : 'w-14',
                           )}
                         />
                       </td>
@@ -285,15 +290,20 @@ export function StudentsPage() {
                       }
                     }}
                     tabIndex={0}
-                    className="group cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                    className="group cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-slate-50/80 focus:bg-slate-50 focus:outline-none"
                   >
-                    <td className="px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span><span className="whitespace-nowrap font-medium text-foreground group-hover:underline">{student.full_name}</span></div></td>
-                    <td className="px-4 py-3 text-foreground">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
-                    <td className="px-4 py-3"><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><span dir="ltr" className="shrink-0 whitespace-nowrap tabular-nums" data-testid={`student-phone-text-${student.id}`}>{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink compact label={t('students.student_phone')} testId={`student-whatsapp-${student.id}`} phone={student.phone} /></div></td>
-                    <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary">{name}</Badge>) : '—'}</div></td>
-                    <td className="px-4 py-3"><Badge variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'partial' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
-                    <td className="px-4 py-3"><Badge variant={student.status === 'actif' ? 'success' : 'muted'}>{student.status === 'actif' ? t('students.active') : t('students.inactive')}</Badge></td>
-                    <td className="px-4 py-3"><div className="flex justify-end gap-1">
+                    <td className="px-3 py-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{student.full_name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span>
+                        <span dir="auto" className="min-w-0 font-semibold leading-5 text-foreground [overflow-wrap:anywhere] group-hover:underline">{student.full_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-[13px] leading-5 text-foreground [overflow-wrap:anywhere]">{student.level_name ?? '—'}{student.branch_name ? ` — ${student.branch_name}` : ''}</td>
+                    <td className="px-3 py-3"><div className="flex flex-nowrap items-center gap-2 whitespace-nowrap"><span dir="ltr" className="shrink-0 whitespace-nowrap text-[13px] tabular-nums text-foreground" data-testid={`student-phone-text-${student.id}`}>{student.phone ? formatPhone(student.phone) : '—'}</span><WhatsAppLink compact label={t('students.student_phone')} testId={`student-whatsapp-${student.id}`} phone={student.phone} /></div></td>
+                    <td className="px-3 py-3"><div className="flex flex-wrap items-center gap-1.5">{money[student.id]?.groups.length ? money[student.id].groups.map((name, index) => <Badge key={`${name}-${index}`} variant="primary" className="max-w-full whitespace-normal text-start leading-4 [overflow-wrap:anywhere]">{name}</Badge>) : <span className="text-muted">—</span>}</div></td>
+                    <td className="px-3 py-3"><Badge className="whitespace-nowrap" variant={money[student.id]?.status === 'paid' ? 'success' : money[student.id]?.status === 'late' ? 'destructive' : money[student.id]?.status === 'partial' ? 'warning' : 'muted'}>{t(`students.monthStatuses.${money[student.id]?.status ?? 'none'}`)}</Badge></td>
+                    <td className="px-3 py-3"><Badge className="whitespace-nowrap" variant={student.status === 'actif' ? 'success' : 'muted'}>{student.status === 'actif' ? t('students.active') : t('students.inactive')}</Badge></td>
+                    <td className="px-2 py-3"><div className="flex flex-nowrap justify-end gap-0.5">
                       <ViewButton name={student.full_name} testId={`view-student-${student.id}`} onView={() => setViewing(student)} />
                       <span onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Button variant="ghost" size="icon" title={t('students.edit')} aria-label={t('students.edit')} data-testid={`edit-student-${student.id}`} onClick={() => { setEditing(student); setModalOpen(true); }}><Pencil className="h-4 w-4" /></Button></span>
                       <TrashButton type="student" id={student.id} name={student.full_name} onDeleted={() => void load()} />
