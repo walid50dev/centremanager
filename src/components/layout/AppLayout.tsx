@@ -44,11 +44,11 @@ export function AppLayout() {
   useLatePaymentBadge();
 
   return (
-    <div dir={dir} className="flex h-screen w-full overflow-hidden bg-background">
+    <div dir={dir} className="flex h-dvh w-full overflow-hidden bg-background">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header />
-        <main className="flex-1 overflow-y-auto px-6 py-5">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
           {unattributed > 0 && <div role="alert" className="mb-4 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">{t('schoolYearSwitch.unattributed', { count: unattributed })}</div>}
           <Outlet key={activeSchoolYear?.id ?? 'loading'} />
         </main>
