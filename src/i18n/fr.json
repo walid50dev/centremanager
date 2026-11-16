@@ -680,7 +680,7 @@
   "expenses": {
     "title": "Frais du mois",
     "intro": "Les charges fixes du centre, mois par mois — elles se déduisent des revenus pour donner le résultat net.",
-    "new": "+ Nouvelle dépense",
+    "new": "Nouvelle dépense",
     "add": "Ajouter une dépense",
     "editTitle": "Modifier la dépense",
     "createTitle": "Nouvelle dépense",

@@ -226,6 +226,7 @@ export function ExpenseModal({
             valueCents={form.amountCents}
             onChange={(cents) => set('amountCents', cents)}
             error={errors.amountCents}
+            containerClassName="sm:col-span-2 sm:max-w-sm"
             data-testid="expense-amount"
           />
 
