@@ -134,45 +134,52 @@ export function PaymentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-h1 text-foreground">
-          {t('pages.payments.title')}
-          {tab === 'collections' && <span className="ms-2 rounded-full bg-primary/10 px-2 py-0.5 align-middle text-[13px] font-medium text-primary">
-            {monthLabel(t, month)} {year}
-          </span>}
-        </h1>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h1 className="text-h1 text-foreground">{t('pages.payments.title')}</h1>
+          {tab === 'collections' ? (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[13px] font-medium text-primary">
+              {monthLabel(t, month)} {year}
+            </span>
+          ) : null}
+        </div>
 
-        {tab === 'collections' && <div className="flex flex-wrap items-end gap-2">
-          <MonthPicker value={period} onChange={setPeriod} label={t('dashboard.period')} testId="payments-period" />
-          <Tooltip content={t('common.refresh')} label={t('common.refresh')}>
+        {tab === 'collections' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <MonthPicker inline value={period} onChange={setPeriod} label={t('dashboard.period')} testId="payments-period" />
+            <Tooltip content={t('common.refresh')} label={t('common.refresh')}>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={() => void load()}
+                aria-label={t('common.refresh')}
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Tooltip>
+            {/* Phase 12: opens the wizard on its first step, where a student can
+                be searched — or created — before any invoice exists. */}
             <Button
+              className="shrink-0"
               variant="secondary"
-              size="icon"
-              onClick={() => void load()}
-              aria-label={t('common.refresh')}
+              leftIcon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
+              onClick={() => startPayment(null)}
+              data-testid="payments-new"
             >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              {t('payments.newPayment')}
             </Button>
-          </Tooltip>
-          {/* Phase 12: opens the wizard on its first step, where a student can
-              be searched — or created — before any invoice exists. */}
-          <Button
-            variant="secondary"
-            leftIcon={<UserPlus className="h-4 w-4" aria-hidden="true" />}
-            onClick={() => startPayment(null)}
-            data-testid="payments-new"
-          >
-            {t('payments.newPayment')}
-          </Button>
-          <Button
-            leftIcon={<FilePlus2 className="h-4 w-4" aria-hidden="true" />}
-            onClick={() => void generate()}
-            loading={generating}
-            data-testid="payments-generate"
-          >
-            {t('payments.generateInvoices')}
-          </Button>
-        </div>}
+            <Button
+              className="shrink-0"
+              leftIcon={<FilePlus2 className="h-4 w-4" aria-hidden="true" />}
+              onClick={() => void generate()}
+              loading={generating}
+              data-testid="payments-generate"
+            >
+              {t('payments.generateInvoices')}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* Tabs */}
