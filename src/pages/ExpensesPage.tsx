@@ -122,7 +122,7 @@ export function ExpensesPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* ---------------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-h1 text-foreground" data-testid="expenses-title">
             {t('expenses.title')}
@@ -135,14 +135,15 @@ export function ExpensesPage() {
           <p className="mt-0.5 text-[13px] text-muted">{t('expenses.intro')}</p>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <MonthPicker
+            inline
             value={period}
             onChange={(value) => { setPeriod(value); setFilter(''); }}
             label={t('expenses.period')}
             testId="expenses-period"
           />
-          <Button leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={openCreate} data-testid="expense-new">
+          <Button className="shrink-0" leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />} onClick={openCreate} data-testid="expense-new">
             {t('expenses.new')}
           </Button>
         </div>
