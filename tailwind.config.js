@@ -26,7 +26,13 @@ export default {
         h1: ['24px', { lineHeight: '32px', fontWeight: '600' }],
       },
       boxShadow: {
-        card: '0 1px 2px 0 rgb(15 23 42 / 0.05)',
+        card: '0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.04)',
+        popover: '0 18px 50px rgba(15, 23, 42, 0.16)',
+        modal: '0 24px 80px rgba(15, 23, 42, 0.22)',
+      },
+      borderRadius: {
+        xl: '14px',
+        '2xl': '18px',
       },
     },
   },

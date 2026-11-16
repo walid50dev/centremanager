@@ -18,6 +18,7 @@ import {
 import { useAppStore } from '../../stores/appStore';
 import { cn } from '../../utils/format';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import Select from '../ui/Select';
 import { toast } from '../ui/Toast';
 
 interface NavItem {
@@ -94,13 +95,16 @@ export function Sidebar() {
       </div>
 
       <div className="border-b border-border px-2 py-2">
-        <label className="sr-only" htmlFor="sidebar-school-year">{t('settings.schoolYear.activeYear')}</label>
-        <select id="sidebar-school-year" data-testid="sidebar-school-year" value={activeYear?.id ?? ''}
+        <Select
+          id="sidebar-school-year"
+          data-testid="sidebar-school-year"
+          aria-label={t('settings.schoolYear.activeYear')}
+          value={activeYear?.id ?? ''}
           onChange={event => { const id = Number(event.target.value); if (id && id !== activeYear?.id) setPendingYear(id); }}
-          disabled={switching || !activeYear} className="w-full rounded border border-border bg-white px-1 py-2 text-[12px] font-semibold text-foreground">
-          {!activeYear && <option value="">{t('settings.schoolYear.none')}</option>}
-          {years.map(year => <option key={year.id} value={year.id}>{year.label}</option>)}
-        </select>
+          disabled={switching || !activeYear}
+          placeholder={t('settings.schoolYear.none')}
+          options={years.map(year => ({ value: year.id, label: year.label }))}
+        />
         {activeYear && sidebarOpen && <span className="mt-1 hidden items-center gap-1 text-[10px] font-medium text-emerald-700 lg:flex"><span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />{t('settings.schoolYear.active')}</span>}
       </div>
       <ConfirmDialog open={pendingYear !== null} title={t('schoolYearSwitch.title')}

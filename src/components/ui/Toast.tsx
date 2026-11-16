@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { create } from 'zustand';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { cn } from '../../utils/format';
@@ -69,6 +70,7 @@ const variantStyles: Record<ToastVariant, { container: string; icon: typeof Info
 };
 
 function ToastItem({ item }: { item: ToastMessage }) {
+  const { t } = useTranslation();
   const dismiss = useToastStore((state) => state.dismiss);
   const { container, icon: Icon } = variantStyles[item.variant];
 
@@ -91,7 +93,7 @@ function ToastItem({ item }: { item: ToastMessage }) {
       <button
         type="button"
         onClick={() => dismiss(item.id)}
-        aria-label="Fermer"
+        aria-label={t('common.close')}
         className="rounded p-0.5 text-muted transition-colors hover:text-foreground"
       >
         <X className="h-3.5 w-3.5" aria-hidden="true" />

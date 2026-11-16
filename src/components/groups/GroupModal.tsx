@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { BookOpen } from 'lucide-react';
 import Button from '../ui/Button';
 import CreatableEntitySelect from '../ui/CreatableEntitySelect';
+import FormSection from '../ui/FormSection';
 import Input from '../ui/Input';
 import MoneyInput from '../ui/MoneyInput';
 import Modal from '../ui/Modal';
@@ -270,70 +271,71 @@ export function GroupModal({ open, group = null, onClose, onSaved, onCreated, zI
         id="group-form"
         onSubmit={handleSubmit}
         noValidate
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+        className="space-y-4"
       >
-        <Input label={t('groups.name')} required error={errors.name} data-testid="group-name" value={form.name} onChange={event => set('name', event.target.value)} />
-        <CreatableEntitySelect
-          testId="group-subject"
-          label={t('groups.subject')}
-          required
-          placeholder={t('groups.selectSubject')}
-          options={subjects}
-          value={selectedSubject}
-          onChange={(subject) => set('subjectId', subject ? String(subject.id) : '')}
-          getOptionLabel={(subject) => subject.name}
-          getOptionValue={(subject) => subject.id}
-          onCreate={() => setQuickCreate('subject')}
-          disableCreate={zIndex >= 70}
-          searchable
-          error={errors.subjectId}
-        />
+        <FormSection>
+          <Input containerClassName="sm:col-span-2" label={t('groups.name')} required error={errors.name} data-testid="group-name" value={form.name} onChange={event => set('name', event.target.value)} />
+          <CreatableEntitySelect
+            testId="group-subject"
+            label={t('groups.subject')}
+            required
+            placeholder={t('groups.selectSubject')}
+            options={subjects}
+            value={selectedSubject}
+            onChange={(subject) => set('subjectId', subject ? String(subject.id) : '')}
+            getOptionLabel={(subject) => subject.name}
+            getOptionValue={(subject) => subject.id}
+            onCreate={() => setQuickCreate('subject')}
+            disableCreate={zIndex >= 70}
+            searchable
+            error={errors.subjectId}
+          />
 
-        <CreatableEntitySelect
-          testId="group-level"
-          label={t('groups.level')}
-          required
-          placeholder={t('groups.selectLevel')}
-          options={levels}
-          value={selectedLevel}
-          onChange={(level) => {
-            set('levelId', level ? String(level.id) : '');
-            set('branchId', '');
-          }}
-          getOptionLabel={(level) => level.name}
-          getOptionValue={(level) => level.id}
-          onCreate={() => setQuickCreate('level')}
-          disableCreate={zIndex >= 70}
-          searchable
-          error={errors.levelId}
-        />
+          <CreatableEntitySelect
+            testId="group-level"
+            label={t('groups.level')}
+            required
+            placeholder={t('groups.selectLevel')}
+            options={levels}
+            value={selectedLevel}
+            onChange={(level) => {
+              set('levelId', level ? String(level.id) : '');
+              set('branchId', '');
+            }}
+            getOptionLabel={(level) => level.name}
+            getOptionValue={(level) => level.id}
+            onCreate={() => setQuickCreate('level')}
+            disableCreate={zIndex >= 70}
+            searchable
+            error={errors.levelId}
+          />
 
-        <CreatableEntitySelect
-          testId="group-teacher"
-          label={t('groups.teacher')}
-          placeholder={teachers.length === 0 ? t('groups.noTeacherAvailable') : t('groups.noTeacher')}
-          options={teachers}
-          value={selectedTeacher}
-          onChange={(teacher) => set('teacherId', teacher ? String(teacher.id) : '')}
-          getOptionLabel={(teacher) => teacher.full_name}
-          getOptionValue={(teacher) => teacher.id}
-          onCreate={() => setQuickCreate('teacher')}
-          disableCreate={zIndex >= 70}
-          searchable
-          clearable
-        />
+          <CreatableEntitySelect
+            testId="group-teacher"
+            label={t('groups.teacher')}
+            placeholder={teachers.length === 0 ? t('groups.noTeacherAvailable') : t('groups.noTeacher')}
+            options={teachers}
+            value={selectedTeacher}
+            onChange={(teacher) => set('teacherId', teacher ? String(teacher.id) : '')}
+            getOptionLabel={(teacher) => teacher.full_name}
+            getOptionValue={(teacher) => teacher.id}
+            onCreate={() => setQuickCreate('teacher')}
+            disableCreate={zIndex >= 70}
+            searchable
+            clearable
+          />
 
-        <MoneyInput
-          label={t('groups.monthlyFee')}
-          required
-          data-testid="group-fee"
-          valueCents={amountToCents(form.fee)}
-          step={50}
-          onChange={(cents) => set('fee', cents === 0 ? '' : String(cents / 100))}
-          error={errors.fee}
-          hint={t('groups.feeHint')}
-        />
-
+          <MoneyInput
+            label={t('groups.monthlyFee')}
+            required
+            data-testid="group-fee"
+            valueCents={amountToCents(form.fee)}
+            step={50}
+            onChange={(cents) => set('fee', cents === 0 ? '' : String(cents / 100))}
+            error={errors.fee}
+            hint={t('groups.feeHint')}
+          />
+        </FormSection>
         </form>
       </Modal>
 

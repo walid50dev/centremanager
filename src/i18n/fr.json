@@ -50,7 +50,9 @@
     "creating": "Création…",
     "create": "Créer",
     "noOptions": "Aucune option",
-    "clear": "Effacer"
+    "clear": "Effacer",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe"
   },
   "quickCreate": {
     "created": "{{entity}} créé(e) ✓",

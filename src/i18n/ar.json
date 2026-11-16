@@ -50,7 +50,9 @@
     "creating": "جاري الإنشاء…",
     "create": "إنشاء",
     "noOptions": "لا توجد خيارات",
-    "clear": "مسح"
+    "clear": "مسح",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور"
   },
   "quickCreate": {
     "created": "تم إنشاء {{entity}} ✓",

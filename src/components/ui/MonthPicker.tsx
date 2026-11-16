@@ -1,4 +1,5 @@
 import type { ChangeEvent } from 'react';
+import Input from './Input';
 
 export interface CalendarPeriod {
   month: number;
@@ -6,7 +7,12 @@ export interface CalendarPeriod {
 }
 
 /** Calendar billing period, not a school-year selector. */
-export default function MonthPicker({ value, onChange, label, testId }: {
+export default function MonthPicker({
+  value,
+  onChange,
+  label,
+  testId,
+}: {
   value: CalendarPeriod;
   onChange: (value: CalendarPeriod) => void;
   label: string;
@@ -23,15 +29,15 @@ export default function MonthPicker({ value, onChange, label, testId }: {
     }
   };
   return (
-    <input
+    <Input
       type="month"
       min="2000-01"
       max="2100-12"
       value={formatted}
       onChange={handleChange}
       aria-label={label}
+      label={label}
       data-testid={testId}
-      className="h-9 rounded-md border border-border bg-white px-3 text-body text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
     />
   );
 }

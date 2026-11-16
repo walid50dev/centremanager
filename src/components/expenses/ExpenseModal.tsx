@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Receipt } from 'lucide-react';
 import Button from '../ui/Button';
+import FormSection from '../ui/FormSection';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import MoneyInput from '../ui/MoneyInput';
@@ -185,7 +186,7 @@ export function ExpenseModal({
       }
     >
       <form id="expense-form" onSubmit={handleSubmit} noValidate className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormSection>
           <div>
             <CreatableEntitySelect
               testId="expense-category"
@@ -217,27 +218,28 @@ export function ExpenseModal({
             placeholder={t('expenses.labelPlaceholder')}
             data-testid="expense-label"
           />
-        </div>
 
-        <MoneyInput
-          label={t('expenses.amount')}
-          required
-          step={50}
-          valueCents={form.amountCents}
-          onChange={(cents) => set('amountCents', cents)}
-          error={errors.amountCents}
-          data-testid="expense-amount"
-        />
+          <MoneyInput
+            label={t('expenses.amount')}
+            required
+            step={50}
+            valueCents={form.amountCents}
+            onChange={(cents) => set('amountCents', cents)}
+            error={errors.amountCents}
+            data-testid="expense-amount"
+          />
 
-        <Textarea
-          label={t('expenses.notes')}
-          rows={2}
-          value={form.notes}
-          onChange={(event) => set('notes', event.target.value)}
-          placeholder={t('expenses.notesPlaceholder')}
-          hint={t('students.optional')}
-          data-testid="expense-notes"
-        />
+          <Textarea
+            containerClassName="sm:col-span-2"
+            label={t('expenses.notes')}
+            rows={2}
+            value={form.notes}
+            onChange={(event) => set('notes', event.target.value)}
+            placeholder={t('expenses.notesPlaceholder')}
+            hint={t('students.optional')}
+            data-testid="expense-notes"
+          />
+        </FormSection>
       </form>
     </Modal>
 

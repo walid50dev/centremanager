@@ -226,14 +226,14 @@ export function LoginPage() {
   if (isSetup && isAuthenticated) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,_rgba(37,99,235,0.08),_transparent_55%)] bg-background">
       <div className="flex justify-end p-4">
         <LanguageToggle />
       </div>
 
       <div className="flex flex-1 items-start justify-center px-4 pb-16 pt-4 sm:items-center sm:pt-0">
         <div className="w-full max-w-md">
-          <div className="card p-6 sm:p-8">{isSetup ? <LoginForm /> : <SetupForm />}</div>
+          <div className="card p-6 sm:p-8 shadow-modal">{isSetup ? <LoginForm /> : <SetupForm />}</div>
           <p className="mt-4 text-center text-[12px] text-muted">{t('app.tagline')}</p>
         </div>
       </div>

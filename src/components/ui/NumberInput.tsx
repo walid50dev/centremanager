@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../utils/format';
+import {
+  FieldMessage,
+  FieldRequiredMark,
+  fieldShellClass,
+} from './fieldStyles';
 
 export interface NumberInputProps {
   /** Numeric value; `NaN` is treated as an empty field. */
@@ -71,7 +76,7 @@ const HOLD_REPEAT_MS = 100;
  * * clamps to `min` / `max` on blur,
  * * offers +/- buttons inside the field (hidden when `disabled` or `step <= 0`),
  *   with hold-to-repeat every 100 ms,
- * * keeps the digits **LTR** even in Arabic: the wrapper carries `dir="ltr"`,
+ * * keeps the digits **LTR** even in Arabic: the inner track carries `dir="ltr"`,
  *   so in RTL the buttons and the suffix simply move to the left edge.
  */
 export function NumberInput({
@@ -234,165 +239,156 @@ export function NumberInput({
 
   return (
     <div className={cn('w-full', containerClassName)}>
-      {label && (
-        <label htmlFor={inputId} className="mb-1.5 block text-label text-muted">
+      {label ? (
+        <label
+          htmlFor={inputId}
+          className={cn(
+            'mb-1.5 block text-[13px] font-medium',
+            error ? 'text-destructive' : 'text-muted',
+          )}
+        >
           {label}
-          {required && <span className="ms-0.5 text-red-500" aria-hidden="true">*</span>}
+          {required ? <FieldRequiredMark /> : null}
         </label>
-      )}
-
-      {/* `dir="ltr"` keeps digits and the +/− column in reading order in Arabic;
-          the wrapper itself mirrors because it is a normal flex row. */}
+      ) : null}
       <div
-        dir="ltr"
-        className={cn(
-          'flex h-9 w-full items-center rounded-md border bg-white',
-          'focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20',
-          disabled && 'bg-background',
-          error ? 'border-destructive' : 'border-border',
-        )}
+        className={cn(fieldShellClass({ error: Boolean(error), disabled, labeled: false }), 'pe-0')}
         data-number-input=""
       >
-        {prefix && (
-          <span className="shrink-0 ps-3 text-[13px] text-muted" aria-hidden="true">
-            {prefix}
-          </span>
-        )}
-        <input
-          ref={inputRef}
-          id={inputId}
-          data-testid={testId}
-          type="text"
-          inputMode={decimals > 0 ? 'decimal' : 'numeric'}
-          // No native spinner, no wheel hijack, no autocomplete noise.
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          role="spinbutton"
-          aria-valuenow={Number.isFinite(value) ? value : undefined}
-          aria-valuemin={min}
-          aria-valuemax={max}
-          aria-label={ariaLabel ?? label}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
-          autoFocus={autoFocus}
-          disabled={disabled}
-          required={required}
-          placeholder={placeholder}
-          value={display}
-          onMouseDown={() => { selectOnMouseUp.current = document.activeElement !== inputRef.current; }}
-          onMouseUp={(event) => {
-            if (selectOnMouseUp.current) event.currentTarget.select();
-            selectOnMouseUp.current = false;
-          }}
-          onFocus={(event) => {
-            const raw = Number.isFinite(value) ? String(value) : '';
-            selectionAfterRender.current = { start: 0, end: raw.length };
-            setFocused(true);
-            setTyped(raw);
-            event.currentTarget.select();
-          }}
-          onBlur={commit}
-          onChange={handleChange}
-          onWheel={(event) => {
-            // Scrolling the page must never change a fee or a capacity.
-            if (document.activeElement === inputRef.current) {
-              event.currentTarget.blur();
-            }
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowUp') {
-              event.preventDefault();
-              nudge(1);
-            } else if (event.key === 'ArrowDown') {
-              event.preventDefault();
-              nudge(-1);
-            } else if (event.key === 'Enter') {
-              event.currentTarget.blur();
-            }
-          }}
-          className={cn(
-            'h-full min-w-0 flex-1 bg-transparent text-end text-body tabular-nums text-foreground',
-            'placeholder:text-muted/70 focus:outline-none',
-            'disabled:cursor-not-allowed disabled:text-muted',
-            'ps-3',
-            showButtons || suffix ? 'pe-1' : 'pe-3',
-            className,
+        {/* `dir="ltr"` keeps digits and the +/− column in reading order in Arabic. */}
+        <div dir="ltr" className="flex h-full min-w-0 flex-1 items-center">
+          {prefix && (
+            <span className="shrink-0 ps-3.5 text-[12px] font-medium text-muted" aria-hidden="true">
+              {prefix}
+            </span>
           )}
-        />
+          <input
+            ref={inputRef}
+            id={inputId}
+            data-testid={testId}
+            type="text"
+            inputMode={decimals > 0 ? 'decimal' : 'numeric'}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            role="spinbutton"
+            aria-valuenow={Number.isFinite(value) ? value : undefined}
+            aria-valuemin={min}
+            aria-valuemax={max}
+            aria-label={ariaLabel ?? label}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
+            autoFocus={autoFocus}
+            disabled={disabled}
+            required={required}
+            placeholder={placeholder}
+            value={display}
+            onMouseDown={() => { selectOnMouseUp.current = document.activeElement !== inputRef.current; }}
+            onMouseUp={(event) => {
+              if (selectOnMouseUp.current) event.currentTarget.select();
+              selectOnMouseUp.current = false;
+            }}
+            onFocus={(event) => {
+              const raw = Number.isFinite(value) ? String(value) : '';
+              selectionAfterRender.current = { start: 0, end: raw.length };
+              setFocused(true);
+              setTyped(raw);
+              event.currentTarget.select();
+            }}
+            onBlur={commit}
+            onChange={handleChange}
+            onWheel={(event) => {
+              // Scrolling the page must never change a fee or a capacity.
+              if (document.activeElement === inputRef.current) {
+                event.currentTarget.blur();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                nudge(1);
+              } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                nudge(-1);
+              } else if (event.key === 'Enter') {
+                event.currentTarget.blur();
+              }
+            }}
+            className={cn(
+              'h-full min-w-0 flex-1 bg-transparent text-end text-body tabular-nums text-foreground',
+              'placeholder:text-muted/70 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+              'disabled:cursor-not-allowed disabled:text-muted',
+              'px-3',
+              showButtons || suffix ? 'pe-1' : 'pe-3',
+              className,
+            )}
+          />
 
-        {suffix && (
-          <span
-            className="shrink-0 select-none pe-1 text-[13px] font-medium text-muted"
-            aria-hidden="true"
-          >
-            {suffix}
-          </span>
-        )}
+          {suffix && (
+            <span
+              className="shrink-0 select-none pe-2 text-[12px] font-semibold tracking-wide text-muted"
+              aria-hidden="true"
+            >
+              {suffix}
+            </span>
+          )}
 
-        {showButtons && (
-          <span className="flex h-full shrink-0 flex-col border-s border-border">
-            <button
-              type="button"
-              tabIndex={-1}
-              data-testid={testId ? `${testId}-up` : undefined}
-              aria-label="+"
-              disabled={atMax}
-              onMouseDown={(event) => {
-                event.preventDefault(); // keep the input focused
-                startHold(1);
-              }}
-              onMouseUp={stopHold}
-              onMouseLeave={stopHold}
-              onTouchStart={(event) => {
-                event.preventDefault();
-                startHold(1);
-              }}
-              onTouchEnd={stopHold}
-              className={cn(
-                'flex h-1/2 w-7 items-center justify-center text-muted transition-colors',
-                'hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
-              )}
-            >
-              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              tabIndex={-1}
-              data-testid={testId ? `${testId}-down` : undefined}
-              aria-label="-"
-              disabled={atMin}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                startHold(-1);
-              }}
-              onMouseUp={stopHold}
-              onMouseLeave={stopHold}
-              onTouchStart={(event) => {
-                event.preventDefault();
-                startHold(-1);
-              }}
-              onTouchEnd={stopHold}
-              className={cn(
-                'flex h-1/2 w-7 items-center justify-center border-t border-border text-muted transition-colors',
-                'hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
-              )}
-            >
-              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </span>
-        )}
+          {showButtons && (
+            <span className="ms-1 flex h-full shrink-0 flex-col overflow-hidden rounded-e-[13px] border-s border-slate-200/80 bg-slate-50/70">
+              <button
+                type="button"
+                tabIndex={-1}
+                data-testid={testId ? `${testId}-up` : undefined}
+                aria-label="+"
+                disabled={atMax}
+                onMouseDown={(event) => {
+                  event.preventDefault(); // keep the input focused
+                  startHold(1);
+                }}
+                onMouseUp={stopHold}
+                onMouseLeave={stopHold}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  startHold(1);
+                }}
+                onTouchEnd={stopHold}
+                className={cn(
+                  'flex h-1/2 w-8 items-center justify-center text-muted transition-colors',
+                  'hover:bg-white hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
+                )}
+              >
+                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                tabIndex={-1}
+                data-testid={testId ? `${testId}-down` : undefined}
+                aria-label="-"
+                disabled={atMin}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  startHold(-1);
+                }}
+                onMouseUp={stopHold}
+                onMouseLeave={stopHold}
+                onTouchStart={(event) => {
+                  event.preventDefault();
+                  startHold(-1);
+                }}
+                onTouchEnd={stopHold}
+                className={cn(
+                  'flex h-1/2 w-8 items-center justify-center border-t border-slate-200/80 text-muted transition-colors',
+                  'hover:bg-white hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
+                )}
+              >
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          )}
+        </div>
       </div>
 
-      {error ? (
-        <p id={`${inputId}-error`} className="mt-1 text-[13px] text-destructive">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={`${inputId}-hint`} className="mt-1 text-[13px] text-muted">
-          {hint}
-        </p>
-      ) : null}
+      <FieldMessage id={inputId} error={error} hint={hint} />
     </div>
   );
 }
