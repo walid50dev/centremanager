@@ -4,6 +4,7 @@ import { CalendarDays, Loader2, RotateCcw } from 'lucide-react';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Select from '../components/ui/Select';
+import Tooltip from '../components/ui/Tooltip';
 import GroupDetailModal from '../components/groups/GroupDetailModal';
 import TimetableEditor from '../components/groups/TimetableEditor';
 import { toast } from '../components/ui/Toast';
@@ -26,14 +27,15 @@ import type { Level, Subject, Teacher, TimetableEntry, TimetableFilters } from '
 
 type WeekDay = (typeof WEEK_DAYS)[number];
 
-/** Column set: Sunday is hidden by default (most centres do not teach it). */
+/** Row set: Sunday is hidden by default (most centres do not teach it). */
 const WEEKDAY_COLUMNS: WeekDay[] = WEEK_DAYS.slice(0, 6);
 const SUNDAY: WeekDay = WEEK_DAYS[6];
 
-/** One grid row is half an hour; this is its height in pixels. */
-const ROW_MINUTES = 30;
-// 60 pixels per hour leaves room for a legible range even in a 15-minute slot.
-const SLOT_PX = 30;
+/** One hour column width, in pixels. */
+const HOUR_PX = 128;
+/** Minimum height of a day row when there is no overlap. */
+const LANE_PX = 88;
+const DAY_LABEL_PX = 108;
 
 const EMPTY_FILTERS: TimetableFilters = {
   level_id: null,
@@ -47,10 +49,14 @@ type FilterKey = keyof TimetableFilters;
 /** Ignore incomplete legacy rows rather than rendering them at midnight. */
 function isScheduledEntry(entry: TimetableEntry): boolean {
   const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
-  return WEEK_DAYS.some(day => day === entry.day_of_week)
+  return WEEK_DAYS.some((day) => day === entry.day_of_week)
     && typeof entry.start_time === 'string' && time.test(entry.start_time)
     && typeof entry.end_time === 'string' && (time.test(entry.end_time) || entry.end_time === '24:00')
     && minutesOf(entry.end_time) > minutesOf(entry.start_time);
+}
+
+function isToday(day: WeekDay): boolean {
+  return WEEK_DAYS[(new Date().getDay() + 6) % 7] === day;
 }
 
 export interface TimetablePageProps {
@@ -61,9 +67,8 @@ export interface TimetablePageProps {
 /**
  * Weekly timetable (`/timetable`).
  *
- * One fetch returns every block of the week (filters are applied server-side),
- * so switching a filter never re-renders more than the grid. The hour rows are
- * derived from the data itself: from the earliest start to the latest end.
+ * Hours run left → right; days run top → bottom. Event width is proportional
+ * to duration; overlapping classes stack vertically inside the day row.
  */
 export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
   const { t } = useTranslation();
@@ -140,13 +145,13 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
 
   const filtered = useMemo(() => filters && Object.values(filters).some((v) => v !== null), [filters]);
 
-  /** Columns actually rendered. */
+  /** Rows actually rendered. */
   const days = useMemo(
     () => (showSunday ? [...WEEKDAY_COLUMNS, SUNDAY] : [...WEEKDAY_COLUMNS]),
     [showSunday],
   );
 
-  /** Hour grid: from the earliest start to the latest end, in 30-minute rows. */
+  /** Hour grid: from the earliest start to the latest end. */
   const grid = useMemo(() => {
     const starts = entries.map((entry) => minutesOf(entry.start_time));
     const ends = entries.map((entry) => minutesOf(entry.end_time));
@@ -156,7 +161,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
     const endHour = Math.max(startHour + 1, Math.ceil(maxMinutes / 60));
     const hours: number[] = [];
     for (let hour = startHour; hour < endHour; hour += 1) hours.push(hour);
-    return { startHour, endHour, hours, rows: (endHour - startHour) * (60 / ROW_MINUTES) };
+    return { startHour, endHour, hours };
   }, [entries]);
 
   const refresh = useCallback(async () => {
@@ -189,15 +194,19 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
     return map;
   }, [byDay]);
 
-  // Expand busy day columns to keep every overlap lane wide enough for a full
-  // time range. The week scrolls as a whole instead of clipping a day internally.
-  const dayMinWidths = days.map(day => Math.max(1, ...(lanesByDay.get(day) ?? []).map(lane => lane.laneCount)) * 112);
-  const gridMinWidth = Math.max(820, 56 + dayMinWidths.reduce((sum, width) => sum + width, 0) + days.length * 4);
+  const dayHeights = days.map((day) => {
+    const lanes = lanesByDay.get(day) ?? [];
+    const maxLanes = Math.max(1, ...lanes.map((lane) => lane.laneCount));
+    return maxLanes * LANE_PX;
+  });
+
+  const gridMinWidth = DAY_LABEL_PX + grid.hours.length * HOUR_PX;
   const totalClasses = entries.length;
+  const rangeMinutes = (grid.endHour - grid.startHour) * 60;
 
   const filtersBar = (
-    <div className="flex flex-wrap items-end gap-2" data-testid="timetable-filters">
-      <div className="w-[150px]">
+    <div className="flex flex-wrap items-center gap-2" data-testid="timetable-filters">
+      <div className="w-[168px]">
         <Select
           aria-label={t('timetable.filters.level')}
           value={filters.level_id === null ? '' : String(filters.level_id)}
@@ -207,7 +216,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
           data-testid="timetable-filter-level"
         />
       </div>
-      <div className="w-[160px]">
+      <div className="w-[176px]">
         <Select
           aria-label={t('timetable.filters.subject')}
           value={filters.subject_id === null ? '' : String(filters.subject_id)}
@@ -217,7 +226,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
           data-testid="timetable-filter-subject"
         />
       </div>
-      <div className="w-[170px]">
+      <div className="w-[188px]">
         <Select
           aria-label={t('timetable.filters.teacher')}
           value={filters.teacher_id === null ? '' : String(filters.teacher_id)}
@@ -227,7 +236,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
           data-testid="timetable-filter-teacher"
         />
       </div>
-      <div className="w-[130px]">
+      <div className="w-[148px]">
         <Select
           aria-label={t('timetable.filters.room')}
           value={filters.room ?? ''}
@@ -246,67 +255,121 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
       >
         {t('timetable.filters.reset')}
       </Button>
-      <label className="mb-1.5 flex cursor-pointer items-center gap-2 text-[13px] text-muted">
+      <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted">
         <input
           type="checkbox"
-          className="h-4 w-4 accent-primary"
+          className="peer sr-only"
           checked={showSunday}
           onChange={(event) => setShowSunday(event.target.checked)}
           data-testid="timetable-show-sunday"
         />
+        <span
+          className={cn(
+            'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors',
+            showSunday ? 'border-primary bg-primary' : 'border-slate-200 bg-slate-200',
+          )}
+          aria-hidden="true"
+        >
+          <span
+            className={cn(
+              'h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
+              showSunday ? 'translate-x-[22px] rtl:-translate-x-[22px]' : 'translate-x-0.5 rtl:-translate-x-0.5',
+            )}
+          />
+        </span>
         {t('timetable.showSunday')}
       </label>
     </div>
   );
 
   /** One precisely positioned block; clicking it opens the group sheet. */
-  const block = ({ entry, laneIndex, laneCount }: TimetableLane) => {
+  const block = (lane: TimetableLane, rowHeight: number) => {
+    const { entry, laneIndex, laneCount } = lane;
     const color = subjectColor(entry.subject_name);
     const groupName = groupTitle(t, entry) + (entry.branch_name ? ` · ${entry.branch_name}` : '');
-    const tooltip = [
+    const tooltipLines = [
       `${t('timetable.tooltipGroup')}: ${groupName}`,
       `${t('groups.subject')}: ${entry.subject_name}`,
       `${t('groups.teacher')}: ${entry.teacher_name ?? t('groups.noTeacher')}`,
       `${t('groups.room')}: ${entry.room || '—'}`,
       `${dayLabel(t, entry.day_of_week)} ${entry.start_time}–${entry.end_time}`,
       `${t('groups.enrolled')}: ${entry.enrolled_count}/${entry.capacity}`,
-    ].join('\n');
-    const top = (minutesOf(entry.start_time) - grid.startHour * 60) * SLOT_PX / ROW_MINUTES;
-    const height = (minutesOf(entry.end_time) - minutesOf(entry.start_time)) * SLOT_PX / ROW_MINUTES;
-    // The day column is wide enough for its busiest cluster.
-    const clusterWidth = '100%';
+    ];
+    const tooltip = tooltipLines.join('\n');
+    const startOffset = minutesOf(entry.start_time) - grid.startHour * 60;
+    const duration = minutesOf(entry.end_time) - minutesOf(entry.start_time);
+    const left = (startOffset / rangeMinutes) * 100;
+    const width = Math.max((duration / rangeMinutes) * 100, 1.4);
+    const top = (laneIndex / laneCount) * rowHeight;
+    const height = rowHeight / laneCount;
+
     return (
       <div
         key={`${entry.group_id}-${entry.day_of_week}-${entry.start_time}`}
-        className="pointer-events-none absolute inset-y-0 start-0"
-        style={{ width: clusterWidth }}
+        className="timetable-lane absolute"
+        style={{
+          top: top + 4,
+          height: Math.max(height - 8, 28),
+          left: `${left}%`,
+          width: `${width}%`,
+          containerType: 'size',
+        }}
+        data-lane-index={laneIndex}
+        data-lane-count={laneCount}
       >
-        <div
-          className="timetable-lane absolute"
-          style={{ top, height, left: `${laneIndex / laneCount * 100}%`, width: `${100 / laneCount}%`, containerType: 'size' }}
-          data-lane-index={laneIndex}
-          data-lane-count={laneCount}
+        <Tooltip
+          label={tooltip}
+          content={
+            <div className="space-y-1">
+              <p className="font-semibold text-foreground" dir="auto">{groupName}</p>
+              <p className="text-muted">{entry.subject_name}</p>
+              <p className="tabular-nums" dir="ltr">{entry.start_time} – {entry.end_time}</p>
+              <p className="text-muted" dir="auto">
+                {entry.teacher_name ?? t('groups.noTeacher')}
+                {entry.room ? ` · ${entry.room}` : ''}
+              </p>
+              <p className="text-muted">{t('groups.enrolled')}: {entry.enrolled_count}/{entry.capacity}</p>
+            </div>
+          }
         >
           <button
             type="button"
             onClick={() => setDetailId(entry.group_id)}
-            title={tooltip}
             aria-label={tooltip}
             data-testid={`timetable-block-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}
             data-subject={entry.subject_name}
             style={{ backgroundColor: subjectTint(color), borderColor: color, color }}
             className={cn(
-              'timetable-card pointer-events-auto flex h-full w-full flex-col gap-0.5 overflow-hidden rounded-md border border-s-4 p-1 text-start',
-              'transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/40',
+              'timetable-card flex h-full w-full overflow-hidden rounded-xl border border-s-[3px] text-start',
+              'shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-md',
+              'focus:outline-none focus:ring-2 focus:ring-primary/40',
             )}
           >
-            <span className="timetable-lane-name w-full shrink-0 truncate text-[12px] font-semibold leading-tight" dir="auto">{groupName}</span>
-            <span className="timetable-lane-time shrink-0 whitespace-nowrap text-[11px] font-semibold leading-tight tabular-nums" dir="ltr" data-testid={`timetable-time-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}>{entry.start_time} – {entry.end_time}</span>
-            <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-90" dir="auto">{entry.subject_name}</span>
-            {entry.room ? <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-80" dir="auto">{entry.room}</span> : null}
-            {entry.teacher_name ? <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-80" dir="auto">{entry.teacher_name}</span> : null}
+            <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-2 py-1">
+              <span className="flex items-start justify-between gap-2">
+                <span className="timetable-lane-name min-w-0 truncate text-[12px] font-semibold leading-tight" dir="auto">
+                  {groupName}
+                </span>
+                <span
+                  className="timetable-lane-time shrink-0 whitespace-nowrap text-[11px] font-semibold leading-tight tabular-nums"
+                  dir="ltr"
+                  data-testid={`timetable-time-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}
+                >
+                  {entry.start_time} – {entry.end_time}
+                </span>
+              </span>
+              <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-90" dir="auto">
+                {entry.subject_name}
+                {entry.room ? ` · ${entry.room}` : ''}
+              </span>
+              {entry.teacher_name ? (
+                <span className="timetable-lane-details w-full truncate text-[10px] leading-tight opacity-80" dir="auto">
+                  {entry.teacher_name}
+                </span>
+              ) : null}
+            </span>
           </button>
-        </div>
+        </Tooltip>
       </div>
     );
   };
@@ -334,7 +397,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
       {filtersBar}
 
       {/* -------------------------------------------------------------- grid */}
-      <div className="relative rounded-xl border border-border bg-white p-3">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-card">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-muted">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -342,88 +405,95 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
           </div>
         ) : null}
 
-        {/* Tablet and up: the full week. Below `lg` it scrolls horizontally. */}
-        <div dir="ltr" className={cn('overflow-x-auto', loading && 'hidden')}>
-          {/* `dir="ltr"` on purpose: in Arabic the labels are mirrored but Lundi
-              stays the left-most column, so the week reads the same both ways. */}
+        <div dir="ltr" className={cn('overflow-x-auto max-sm:hidden', loading && 'hidden')}>
+          {/* `dir="ltr"` on purpose: hours always run 08:00 → evening, in both languages. */}
           <div
             dir="ltr"
-            className="relative grid gap-x-1"
+            className="relative grid"
             style={{
               minWidth: gridMinWidth,
-              gridTemplateColumns: `56px ${dayMinWidths.map(width => `minmax(${width}px, 1fr)`).join(' ')}`,
-              gridTemplateRows: `36px repeat(${grid.rows}, ${SLOT_PX}px) 12px`,
+              gridTemplateColumns: `${DAY_LABEL_PX}px repeat(${grid.hours.length}, ${HOUR_PX}px)`,
+              gridTemplateRows: `44px ${dayHeights.map((height) => `${height}px`).join(' ')}`,
             }}
             data-testid="timetable-grid"
             data-days={days.length}
             data-hours={grid.hours.length}
           >
-            {/* sticky day header */}
-            <div className="sticky top-0 z-10 bg-white" aria-hidden="true" />
-            {days.map((day) => (
-              <div
-                key={day}
-                className="sticky top-0 z-10 flex items-center justify-center border-b border-border bg-white text-[12px] font-semibold text-foreground"
-                style={{ gridColumn: days.indexOf(day) + 2, gridRow: 1 }}
-                data-testid={`timetable-header-${DAY_KEYS[day]}`}
-              >
-                <span dir="auto" title={dayLabel(t, day)}>
-                  {shortDayLabel(t, day)}
-                </span>
-              </div>
-            ))}
+            {/* sticky corner */}
+            <div className="sticky start-0 top-0 z-20 border-b border-slate-200/80 bg-white" aria-hidden="true" />
 
-            {/* sticky time column: one label per hour, on the first half-hour row */}
+            {/* sticky hour header */}
             {grid.hours.map((hour, index) => (
               <div
-                key={`label-${hour}`}
-                className="sticky start-0 z-10 flex items-start justify-end bg-white pe-1.5 pt-0.5 text-[11px] text-muted"
-                style={{
-                  gridColumn: 1,
-                  gridRow: `${index * (60 / ROW_MINUTES) + 2} / span ${60 / ROW_MINUTES}`,
-                }}
+                key={`header-${hour}`}
+                className="sticky top-0 z-10 flex items-center border-b border-s border-slate-200/80 bg-white/95 px-2 text-[11px] font-semibold tabular-nums text-muted backdrop-blur"
+                style={{ gridColumn: index + 2, gridRow: 1 }}
               >
                 {String(hour).padStart(2, '0')}:00
               </div>
             ))}
 
-            {/* hour rules, one per hour across every day column */}
+            {/* hour stripes behind every day row */}
             {grid.hours.map((hour, index) => (
-              <div key={`rule-${hour}`} className="contents">
-                {days.map((day) => (
-                  <div
-                    key={`${day}-${hour}`}
-                    className="border-t border-border/60"
-                    style={{
-                      gridColumn: days.indexOf(day) + 2,
-                      gridRow: `${index * (60 / ROW_MINUTES) + 2} / span ${60 / ROW_MINUTES}`,
-                    }}
-                  />
-                ))}
-              </div>
+              <div
+                key={`stripe-${hour}`}
+                className={cn('border-s border-slate-100', index % 2 === 0 ? 'bg-slate-50/50' : 'bg-white')}
+                style={{ gridColumn: index + 2, gridRow: `2 / span ${days.length}` }}
+                aria-hidden="true"
+              />
             ))}
 
-            {/* Day widths grow with overlap; the week scrolls as a whole. */}
+            {days.map((day, dayIndex) => {
+              const today = isToday(day);
+              return (
+                <div
+                  key={`label-${day}`}
+                  className={cn(
+                    'sticky start-0 z-10 flex items-center border-b border-e border-slate-200/80 bg-white px-3',
+                    today && 'bg-primary/[0.04]',
+                  )}
+                  style={{ gridColumn: 1, gridRow: dayIndex + 2 }}
+                  data-testid={`timetable-header-${DAY_KEYS[day]}`}
+                >
+                  <span className="flex flex-col">
+                    <span
+                      dir="auto"
+                      title={dayLabel(t, day)}
+                      className={cn('text-[12px] font-semibold', today ? 'text-primary' : 'text-foreground')}
+                    >
+                      {shortDayLabel(t, day)}
+                    </span>
+                    <span className="text-[10px] text-muted">{byDay.get(day)?.length ?? 0}</span>
+                  </span>
+                </div>
+              );
+            })}
+
             {days.map((day, dayIndex) => (
               <div
-                key={`column-${day}`}
-                className="min-w-0"
-                style={{ gridColumn: dayIndex + 2, gridRow: `2 / span ${grid.rows + 1}` }}
+                key={`row-${day}`}
+                className={cn(
+                  'relative min-w-0 border-b border-slate-200/70',
+                  isToday(day) && 'bg-primary/[0.03]',
+                )}
+                style={{
+                  gridColumn: `2 / span ${grid.hours.length}`,
+                  gridRow: dayIndex + 2,
+                }}
                 data-testid={`timetable-day-column-${DAY_KEYS[day]}`}
               >
-                <div className="relative w-full" style={{ height: grid.rows * SLOT_PX }}>
-                  {(lanesByDay.get(day) ?? []).map(block)}
+                <div className="absolute inset-0" style={{ height: dayHeights[dayIndex] }}>
+                  {(lanesByDay.get(day) ?? []).map((lane) => block(lane, dayHeights[dayIndex]))}
                 </div>
               </div>
             ))}
 
-            {/* empty state sits over the grid, headers stay visible */}
             {totalClasses === 0 ? (
               <div
-                className="pointer-events-none flex items-start justify-center pt-6"
-                style={{ gridColumn: `1 / span ${days.length + 1}`, gridRow: `2 / span ${grid.rows}` }}
+                className="pointer-events-none flex items-center justify-center"
+                style={{ gridColumn: `1 / span ${grid.hours.length + 1}`, gridRow: `2 / span ${days.length}` }}
               >
-                <div className="pointer-events-auto rounded-lg border border-dashed border-border bg-white/95 px-5 py-4 text-center">
+                <div className="pointer-events-auto rounded-2xl border border-dashed border-slate-200 bg-white/95 px-5 py-4 text-center shadow-card">
                   <p className="text-[14px] font-medium text-foreground" data-testid="timetable-empty">
                     {t('timetable.empty')}
                   </p>
@@ -437,7 +507,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
         </div>
 
         {/* Mobile: one day at a time, selected with tabs. */}
-        <div className="lg:hidden">
+        <div className={cn('mt-1 sm:hidden', loading && 'hidden')}>
           <div
             dir="ltr"
             className="mb-3 flex flex-wrap gap-1.5"
@@ -474,7 +544,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
                   type="button"
                   onClick={() => setDetailId(entry.group_id)}
                   style={{ borderColor: color, backgroundColor: subjectTint(color), color }}
-                  className="flex w-full flex-col gap-0.5 rounded-md border border-s-4 p-2 text-start"
+                  className="flex w-full flex-col gap-0.5 rounded-xl border border-s-4 p-2.5 text-start"
                   data-testid={`timetable-mobile-${entry.group_id}-${DAY_KEYS[entry.day_of_week]}`}
                 >
                   <span className="flex w-full min-w-0 items-center justify-between gap-2 text-[12px] font-semibold">

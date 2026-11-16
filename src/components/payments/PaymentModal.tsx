@@ -8,6 +8,7 @@ import Modal, { scrollableModalClassName } from '../ui/Modal';
 import WizardProgress from '../ui/WizardProgress';
 import MoneyInput from '../ui/MoneyInput';
 import Input from '../ui/Input';
+import Textarea from '../ui/Textarea';
 import { todayIso } from '../../services/enrollments';
 import { toast } from '../ui/Toast';
 import { LATE_PAYMENTS_EVENT, useAppStore } from '../../stores/appStore';
@@ -473,19 +474,14 @@ export function PaymentModal({ open, studentId = null, onClose, onSaved }: Payme
               </div>
             </fieldset>
 
-            <div>
-              <label htmlFor="payment-notes" className="mb-1.5 block text-label text-muted">
-                {t('payment.notes')}
-              </label>
-              <textarea
-                id="payment-notes"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder={t('payment.notesPlaceholder')}
-                rows={2}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 text-body text-foreground placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+            <Textarea
+              id="payment-notes"
+              label={t('payment.notes')}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder={t('payment.notesPlaceholder')}
+              rows={2}
+            />
           </div>
         ) : null}
 

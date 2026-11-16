@@ -21,9 +21,9 @@ export interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 't
 
 export function CardHeader({ title, description, actions, className, children, ...props }: CardHeaderProps) {
   return (
-    <div className={cn('flex items-start justify-between gap-4 border-b border-border px-5 py-4', className)} {...props}>
+    <div className={cn('flex items-start justify-between gap-4 border-b border-slate-200/80 px-5 py-4', className)} {...props}>
       <div className="min-w-0">
-        {title && <h2 className="text-h2 text-foreground">{title}</h2>}
+        {title && <h2 className="text-h2 tracking-tight text-foreground">{title}</h2>}
         {description && <p className="mt-0.5 text-[13px] text-muted">{description}</p>}
         {children}
       </div>

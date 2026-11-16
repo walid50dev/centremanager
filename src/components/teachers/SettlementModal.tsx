@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HandCoins } from 'lucide-react';
 import Button from '../ui/Button';
+import FormSection from '../ui/FormSection';
 import Modal from '../ui/Modal';
 import MoneyInput from '../ui/MoneyInput';
 import Input from '../ui/Input';
@@ -54,15 +55,17 @@ export function SettlementModal({ open, teacherId, teacherName, onClose, onSaved
       footer={<><Button variant="secondary" onClick={onClose} disabled={submitting}>{t('common.cancel')}</Button>
         <Button type="submit" form={formId} loading={submitting} disabled={submitting} data-testid="settlement-confirm">{t('common.save')}</Button></>}>
       <form id={formId} noValidate onSubmit={event => { event.preventDefault(); void submit(); }} className="space-y-4">
-        <MoneyInput label={t('teachers.settlement.amount')} required valueCents={amountCents} onChange={setAmountCents}
-          error={showErrors && amountCents <= 0 ? t('payment.validation.amountRequired') : undefined} autoFocus data-testid="settlement-amount" />
-        <Input label={t('teachers.settlement.date')} type="date" required value={date} onChange={event => setDate(event.target.value)}
-          error={showErrors && !date ? t('common.required') : undefined} data-testid="settlement-date" />
-        <Select label={t('teachers.settlement.method')} required value={method} onChange={event => setMethod(event.target.value)}
-          error={showErrors && !method ? t('common.required') : undefined} placeholder={t('teachers.payment.selectMethod')} data-testid="settlement-method"
-          options={[{value:'espèces',label:t('payment.cash')},{value:'virement',label:t('payment.transfer')},{value:'chèque',label:t('payment.check')}]} />
-        <Textarea label={t('teachers.settlement.notes')} rows={2} value={notes} onChange={event => setNotes(event.target.value)}
-          placeholder={t('payment.notesPlaceholder')} data-testid="settlement-notes" />
+        <FormSection>
+          <MoneyInput label={t('teachers.settlement.amount')} required valueCents={amountCents} onChange={setAmountCents}
+            error={showErrors && amountCents <= 0 ? t('payment.validation.amountRequired') : undefined} autoFocus data-testid="settlement-amount" />
+          <Input label={t('teachers.settlement.date')} type="date" required value={date} onChange={event => setDate(event.target.value)}
+            error={showErrors && !date ? t('common.required') : undefined} data-testid="settlement-date" />
+          <Select label={t('teachers.settlement.method')} required value={method} onChange={event => setMethod(event.target.value)}
+            error={showErrors && !method ? t('common.required') : undefined} placeholder={t('teachers.payment.selectMethod')} data-testid="settlement-method"
+            options={[{value:'espèces',label:t('payment.cash')},{value:'virement',label:t('payment.transfer')},{value:'chèque',label:t('payment.check')}]} />
+          <Textarea containerClassName="sm:col-span-2" label={t('teachers.settlement.notes')} rows={2} value={notes} onChange={event => setNotes(event.target.value)}
+            placeholder={t('payment.notesPlaceholder')} data-testid="settlement-notes" />
+        </FormSection>
       </form>
     </Modal>
   );

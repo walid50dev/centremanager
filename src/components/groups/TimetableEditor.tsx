@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Plus, Trash2 } from 'lucide-react';
 import Button from '../ui/Button';
+import FormSection from '../ui/FormSection';
 import Input from '../ui/Input';
 import Modal from '../ui/Modal';
 import Select from '../ui/Select';
@@ -50,17 +52,21 @@ export default function TimetableEditor({ onClose, onSaved }: { onClose: () => v
     <Button onClick={() => void save()} disabled={!group} loading={busy} data-testid="timetable-save">{t('common.save')}</Button>
   </>}>
     <div className="space-y-4">
-      <Select label={t('groups.title')} value={id} onChange={e => choose(e.target.value)} placeholder={t('timetable.selectGroup')} options={groups.map(g => ({ value: g.id, label: groupTitle(t, g) }))} data-testid="timetable-group" />
+      <Select label={t('groups.title')} value={id} onChange={e => choose(e.target.value)} placeholder={t('timetable.selectGroup')} options={groups.map(g => ({ value: g.id, label: groupTitle(t, g) }))} data-testid="timetable-group" searchable />
       {group && <>
-        {slots.map((slot, index) => <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] items-end" data-testid="timetable-slot">
+        {slots.map((slot, index) => <FormSection key={index} className="!p-3" data-testid="timetable-slot">
           <Select label={t('timetable.day')} value={slot.day_of_week} onChange={e => update(index, 'day_of_week', e.target.value)} options={WEEK_DAYS.map(day => ({value:day,label:t(`groups.dayNames.${day}`)}))} />
           <Input type="time" label={t('groups.startTime')} value={slot.start_time} onChange={e => update(index, 'start_time', e.target.value)} />
           <Input type="time" label={t('groups.endTime')} value={slot.end_time} onChange={e => update(index, 'end_time', e.target.value)} />
           <Input label={t('groups.room')} value={slot.room ?? group.room ?? ''} onChange={e => update(index, 'room', e.target.value)} data-testid="timetable-room" />
-          <ScheduleConflictWarnings open groupId={group.id} teacherId={group.teacher_id} room={slot.room ?? group.room ?? ''} schoolYearId={group.school_year_id} schedules={[{day:slot.day_of_week,start_time:slot.start_time,end_time:slot.end_time}]} />
-          <Button variant="secondary" onClick={() => setSlots(current => current.filter((_, i) => i !== index))}>{t('common.delete')}</Button>
-        </div>)}
-        <Button variant="secondary" onClick={() => setSlots(current => [...current, {id: 0, day_of_week: WEEK_DAYS.find(day => !current.some(slot => slot.day_of_week === day)) ?? 'Lundi', start_time:'16:00', end_time:'18:00', room:''}])} data-testid="timetable-add-slot">{t('timetable.addSlot')}</Button>
+          <div className="sm:col-span-2">
+            <ScheduleConflictWarnings open groupId={group.id} teacherId={group.teacher_id} room={slot.room ?? group.room ?? ''} schoolYearId={group.school_year_id} schedules={[{day:slot.day_of_week,start_time:slot.start_time,end_time:slot.end_time}]} />
+          </div>
+          <div className="sm:col-span-2 flex justify-end">
+            <Button variant="secondary" leftIcon={<Trash2 className="h-3.5 w-3.5" aria-hidden="true" />} onClick={() => setSlots(current => current.filter((_, i) => i !== index))}>{t('common.delete')}</Button>
+          </div>
+        </FormSection>)}
+        <Button variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />} onClick={() => setSlots(current => [...current, {id: 0, day_of_week: WEEK_DAYS.find(day => !current.some(slot => slot.day_of_week === day)) ?? 'Lundi', start_time:'16:00', end_time:'18:00', room:''}])} data-testid="timetable-add-slot">{t('timetable.addSlot')}</Button>
       </>}
     </div>
   </Modal>;

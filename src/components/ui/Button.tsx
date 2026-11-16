@@ -14,18 +14,21 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-white hover:bg-primary/90',
-  secondary: 'bg-white text-foreground border border-border hover:bg-background',
-  destructive: 'bg-destructive text-white hover:bg-destructive/90',
-  ghost: 'bg-transparent text-muted hover:bg-background hover:text-foreground',
-  outline: 'border border-primary text-primary bg-transparent hover:bg-primary/5',
+  primary:
+    'bg-primary text-white shadow-[0_1px_2px_rgba(37,99,235,0.35)] hover:bg-primary/90 hover:shadow-[0_6px_16px_rgba(37,99,235,0.28)]',
+  secondary:
+    'bg-white text-foreground border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-slate-300 hover:bg-slate-50',
+  destructive:
+    'bg-destructive text-white shadow-[0_1px_2px_rgba(220,38,38,0.3)] hover:bg-destructive/90',
+  ghost: 'bg-transparent text-muted hover:bg-slate-100 hover:text-foreground',
+  outline: 'border border-primary/30 text-primary bg-primary/[0.03] hover:bg-primary/10',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-[13px]',
-  md: 'h-9 px-4 text-btn',
-  lg: 'h-11 px-5 text-btn',
-  icon: 'h-9 w-9 p-0',
+  sm: 'h-8 px-3 text-[13px] rounded-lg',
+  md: 'h-11 px-4 text-btn rounded-xl',
+  lg: 'h-12 px-5 text-btn rounded-xl',
+  icon: 'h-10 w-10 p-0 rounded-xl',
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
