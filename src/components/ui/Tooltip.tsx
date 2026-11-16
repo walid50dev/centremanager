@@ -29,12 +29,14 @@ export function Tooltip({ content, children, label, className, delay = 80 }: Too
     }
   };
 
+  const compact = typeof content === 'string';
+
   const show = () => {
     clear();
     timer.current = window.setTimeout(() => {
       const box = triggerRef.current?.getBoundingClientRect();
       if (!box) return;
-      const width = 260;
+      const width = compact ? 200 : 260;
       const left = Math.min(Math.max(8, box.left + box.width / 2 - width / 2), window.innerWidth - width - 8);
       const above = box.top > 180;
       setPos({ top: above ? box.top - 8 : box.bottom + 8, left, above });
@@ -55,7 +57,7 @@ export function Tooltip({ content, children, label, className, delay = 80 }: Too
     <>
       <div
         ref={triggerRef}
-        className={cn('h-full w-full', className)}
+        className={cn(compact ? 'inline-flex' : 'h-full w-full', className)}
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocus={show}
@@ -69,9 +71,17 @@ export function Tooltip({ content, children, label, className, delay = 80 }: Too
               id={id}
               role="tooltip"
               aria-label={label}
-              style={{ top: pos.top, left: pos.left, width: 260 }}
+              style={{
+                top: pos.top,
+                left: pos.left,
+                width: compact ? undefined : 260,
+                maxWidth: 260,
+              }}
               className={cn(
-                'pointer-events-none fixed z-[80] rounded-xl border border-slate-200/80 bg-white/95 p-3 text-[12px] leading-5 text-foreground shadow-[0_18px_40px_rgba(15,23,42,0.16)] backdrop-blur-md',
+                'pointer-events-none fixed z-[80] border border-slate-200/80 bg-white/95 text-[12px] leading-5 text-foreground backdrop-blur-md',
+                compact
+                  ? 'w-max rounded-lg px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.12)]'
+                  : 'rounded-xl p-3 shadow-[0_18px_40px_rgba(15,23,42,0.16)]',
                 pos.above && '-translate-y-full',
               )}
             >

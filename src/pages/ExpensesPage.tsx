@@ -10,6 +10,7 @@ import Card from '../components/ui/Card';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 import Select from '../components/ui/Select';
+import Tooltip from '../components/ui/Tooltip';
 import ExpenseModal from '../components/expenses/ExpenseModal';
 import {
   CategorySummaryCard,
@@ -121,7 +122,7 @@ export function ExpensesPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* ---------------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-h1 text-foreground" data-testid="expenses-title">
             {t('expenses.title')}
@@ -134,7 +135,7 @@ export function ExpensesPage() {
           <p className="mt-0.5 text-[13px] text-muted">{t('expenses.intro')}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <MonthPicker
             value={period}
             onChange={(value) => { setPeriod(value); setFilter(''); }}
@@ -148,7 +149,13 @@ export function ExpensesPage() {
       </div>
 
       {/* --------------------------------------------------------------- summary */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="expenses-summary">
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-3 sm:grid-cols-2',
+          summary.by_category.length > 0 && 'lg:grid-cols-3',
+        )}
+        data-testid="expenses-summary"
+      >
         <Card className="p-4" data-testid="expenses-total-card">
           <div className="flex items-center gap-2">
             <span
@@ -294,24 +301,28 @@ export function ExpensesPage() {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <ViewButton name={expense.label || categoryLabel(t, expense.category)} testId={`view-expense-${expense.id}`} onView={() => setViewing(expense)} />
-                        <button
-                          type="button"
-                          onClick={() => openEdit(expense)}
-                          aria-label={t('expenses.editTitle')}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-primary/10 hover:text-primary"
-                          data-testid={`expense-edit-${expense.id}`}
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleting(expense)}
-                          aria-label={t('expenses.delete')}
-                          className="rounded-md p-1.5 text-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          data-testid={`expense-delete-${expense.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
+                        <Tooltip content={t('expenses.editTitle')} label={t('expenses.editTitle')}>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(expense)}
+                            aria-label={t('expenses.editTitle')}
+                            className="rounded-md p-1.5 text-muted transition-colors hover:bg-primary/10 hover:text-primary"
+                            data-testid={`expense-edit-${expense.id}`}
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content={t('expenses.delete')} label={t('expenses.delete')}>
+                          <button
+                            type="button"
+                            onClick={() => setDeleting(expense)}
+                            aria-label={t('expenses.delete')}
+                            className="rounded-md p-1.5 text-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            data-testid={`expense-delete-${expense.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </td>
                   </tr>
