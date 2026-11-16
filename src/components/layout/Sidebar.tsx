@@ -74,7 +74,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex h-screen shrink-0 flex-col border-e border-border bg-white transition-[width] duration-200',
+        'flex h-full shrink-0 flex-col border-e border-border bg-white transition-[width] duration-200',
         // Below `lg` the labels are hidden and the rail stays icon-only, so a
         // narrow window (or a phone) keeps a usable content area.
         sidebarOpen ? 'w-[72px] lg:w-[250px]' : 'w-[72px]',

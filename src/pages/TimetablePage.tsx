@@ -283,7 +283,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
   );
 
   /** One precisely positioned block; clicking it opens the group sheet. */
-  const block = (lane: TimetableLane, rowHeight: number) => {
+  const block = (lane: TimetableLane) => {
     const { entry, laneIndex, laneCount } = lane;
     const color = subjectColor(entry.subject_name);
     const groupName = groupTitle(t, entry) + (entry.branch_name ? ` · ${entry.branch_name}` : '');
@@ -300,16 +300,17 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
     const duration = minutesOf(entry.end_time) - minutesOf(entry.start_time);
     const left = (startOffset / rangeMinutes) * 100;
     const width = Math.max((duration / rangeMinutes) * 100, 1.4);
-    const top = (laneIndex / laneCount) * rowHeight;
-    const height = rowHeight / laneCount;
+    const lanes = Math.max(laneCount, 1);
+    const topPct = (laneIndex / lanes) * 100;
+    const heightPct = 100 / lanes;
 
     return (
       <div
         key={`${entry.group_id}-${entry.day_of_week}-${entry.start_time}`}
         className="timetable-lane absolute"
         style={{
-          top: top + 4,
-          height: Math.max(height - 8, 28),
+          top: `calc(${topPct}% + 4px)`,
+          height: `calc(${heightPct}% - 8px)`,
           left: `${left}%`,
           width: `${width}%`,
           containerType: 'size',
@@ -375,9 +376,9 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ------------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-h1 text-foreground">
             <CalendarDays className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -394,26 +395,26 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
         <Button onClick={() => setEditorOpen(true)} data-testid="timetable-manage">{t('timetable.manage')}</Button>
       </div>
 
-      {filtersBar}
+      <div className="shrink-0">{filtersBar}</div>
 
       {/* -------------------------------------------------------------- grid */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-card">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-card">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-muted">
+          <div className="flex min-h-0 flex-1 items-center justify-center gap-2 py-16 text-[13px] text-muted">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             {t('timetable.loading')}
           </div>
         ) : null}
 
-        <div dir="ltr" className={cn('overflow-x-auto max-sm:hidden', loading && 'hidden')}>
+        <div dir="ltr" className={cn('min-h-0 flex-1 overflow-auto max-sm:hidden', loading && 'hidden')}>
           {/* `dir="ltr"` on purpose: hours always run 08:00 → evening, in both languages. */}
           <div
             dir="ltr"
-            className="relative grid"
+            className="relative grid h-full min-h-max"
             style={{
               minWidth: gridMinWidth,
               gridTemplateColumns: `${DAY_LABEL_PX}px repeat(${grid.hours.length}, ${HOUR_PX}px)`,
-              gridTemplateRows: `44px ${dayHeights.map((height) => `${height}px`).join(' ')}`,
+              gridTemplateRows: `44px ${dayHeights.map((height) => `minmax(${height}px, 1fr)`).join(' ')}`,
             }}
             data-testid="timetable-grid"
             data-days={days.length}
@@ -482,8 +483,8 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
                 }}
                 data-testid={`timetable-day-column-${DAY_KEYS[day]}`}
               >
-                <div className="absolute inset-0" style={{ height: dayHeights[dayIndex] }}>
-                  {(lanesByDay.get(day) ?? []).map((lane) => block(lane, dayHeights[dayIndex]))}
+                <div className="absolute inset-0">
+                  {(lanesByDay.get(day) ?? []).map((lane) => block(lane))}
                 </div>
               </div>
             ))}
@@ -507,7 +508,7 @@ export function TimetablePage({ initialFilters }: TimetablePageProps = {}) {
         </div>
 
         {/* Mobile: one day at a time, selected with tabs. */}
-        <div className={cn('mt-1 sm:hidden', loading && 'hidden')}>
+        <div className={cn('min-h-0 flex-1 overflow-auto sm:hidden', loading && 'hidden')}>
           <div
             dir="ltr"
             className="mb-3 flex flex-wrap gap-1.5"
